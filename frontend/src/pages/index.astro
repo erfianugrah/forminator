@@ -1,0 +1,23 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SubmissionForm from '../components/SubmissionForm';
+---
+
+<Layout title="Turnstile Demo">
+	<main class="container mx-auto px-4 py-8">
+		<div class="text-center mb-8">
+			<h1 class="text-4xl font-bold mb-2">Cloudflare Turnstile Demo</h1>
+			<p class="text-muted-foreground">Form submission with Turnstile verification and fraud detection</p>
+		</div>
+
+		<SubmissionForm client:load />
+
+		<div class="mt-8 text-center">
+			<a href="/analytics" class="text-primary hover:underline">
+				View Analytics Dashboard
+			</a>
+		</div>
+	</main>
+</Layout>
+
+<script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>

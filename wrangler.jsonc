@@ -1,0 +1,40 @@
+{
+	"name": "turnstile-flow",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-11-12",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	// Static assets from Astro build
+	"assets": {
+		"binding": "ASSETS",
+		"directory": "./frontend/dist"
+	},
+	// D1 Database binding
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "DB",
+			"database_id": "32b62f8d-14ad-48cf-9464-7fc4b154a4f3"
+		}
+	],
+	// Environment variables
+	"vars": {
+		"ENVIRONMENT": "production"
+	},
+	// Observability
+	"observability": {
+		"enabled": true
+	},
+	// Custom domain routing
+	"routes": [
+		{
+			"pattern": "form.erfi.dev",
+			"custom_domain": true
+		}
+	]
+	// Note: Secrets should be set via CLI:
+	// wrangler secret put TURNSTILE-SECRET-KEY
+	// wrangler secret put TURNSTILE-SITE-KEY
+}

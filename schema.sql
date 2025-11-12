@@ -1,0 +1,104 @@
+-- Submissions table: stores form submission data with rich metadata
+CREATE TABLE IF NOT EXISTS submissions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	-- Form fields
+	first_name TEXT NOT NULL,
+	last_name TEXT NOT NULL,
+	email TEXT NOT NULL,
+	phone TEXT NOT NULL,
+	address TEXT NOT NULL,
+	date_of_birth TEXT NOT NULL,
+	-- Turnstile & fraud detection
+	ephemeral_id TEXT,
+	-- Request metadata
+	remote_ip TEXT,
+	user_agent TEXT,
+	country TEXT,
+	region TEXT,
+	city TEXT,
+	postal_code TEXT,
+	timezone TEXT,
+	latitude TEXT,
+	longitude TEXT,
+	continent TEXT,
+	is_eu_country TEXT,
+	-- Network metadata
+	asn INTEGER,
+	as_organization TEXT,
+	colo TEXT,
+	http_protocol TEXT,
+	tls_version TEXT,
+	tls_cipher TEXT,
+	-- Bot detection
+	bot_score INTEGER,
+	client_trust_score INTEGER,
+	verified_bot BOOLEAN DEFAULT FALSE,
+	detection_ids TEXT, -- JSON array
+	-- Fingerprints
+	ja3_hash TEXT,
+	ja4 TEXT,
+	ja4_signals TEXT, -- JSON object
+	-- Timestamps
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Turnstile validations table: stores validation attempts and prevents token replay
+CREATE TABLE IF NOT EXISTS turnstile_validations (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	-- Turnstile validation
+	token_hash TEXT NOT NULL,
+	success BOOLEAN NOT NULL,
+	allowed BOOLEAN NOT NULL,
+	block_reason TEXT,
+	challenge_ts TEXT,
+	hostname TEXT,
+	action TEXT,
+	ephemeral_id TEXT,
+	risk_score INTEGER DEFAULT 0,
+	error_codes TEXT,
+	submission_id INTEGER,
+	-- Request metadata
+	remote_ip TEXT,
+	user_agent TEXT,
+	country TEXT,
+	region TEXT,
+	city TEXT,
+	postal_code TEXT,
+	timezone TEXT,
+	continent TEXT,
+	is_eu_country TEXT,
+	-- Network metadata
+	asn INTEGER,
+	as_organization TEXT,
+	colo TEXT,
+	http_protocol TEXT,
+	tls_version TEXT,
+	-- Bot detection (from request.cf.botManagement)
+	bot_score INTEGER,
+	client_trust_score INTEGER,
+	verified_bot BOOLEAN DEFAULT FALSE,
+	js_detection_passed BOOLEAN DEFAULT FALSE,
+	detection_ids TEXT, -- JSON array
+	-- Fingerprints
+	ja3_hash TEXT,
+	ja4 TEXT,
+	ja4_signals TEXT, -- JSON object with h2h3_ratio_1h, heuristic_ratio_1h, etc.
+	-- Timestamps
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (submission_id) REFERENCES submissions(id)
+);
+
+-- Indexes for performance
+CREATE UNIQUE INDEX IF NOT EXISTS idx_token_hash ON turnstile_validations(token_hash);
+CREATE INDEX IF NOT EXISTS idx_ephemeral_id ON turnstile_validations(ephemeral_id);
+CREATE INDEX IF NOT EXISTS idx_created_at ON turnstile_validations(created_at);
+CREATE INDEX IF NOT EXISTS idx_submissions_created_at ON submissions(created_at);
+CREATE INDEX IF NOT EXISTS idx_submissions_ephemeral_id ON submissions(ephemeral_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_email ON submissions(email);
+CREATE INDEX IF NOT EXISTS idx_submissions_country ON submissions(country);
+CREATE INDEX IF NOT EXISTS idx_submissions_ja3 ON submissions(ja3_hash);
+CREATE INDEX IF NOT EXISTS idx_submissions_ja4 ON submissions(ja4);
+CREATE INDEX IF NOT EXISTS idx_validations_country ON turnstile_validations(country);
+CREATE INDEX IF NOT EXISTS idx_validations_bot_score ON turnstile_validations(bot_score);
+CREATE INDEX IF NOT EXISTS idx_validations_ja3 ON turnstile_validations(ja3_hash);
+CREATE INDEX IF NOT EXISTS idx_validations_ja4 ON turnstile_validations(ja4);
