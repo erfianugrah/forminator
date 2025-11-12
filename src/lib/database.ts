@@ -184,7 +184,8 @@ export async function getRecentSubmissions(
 		const result = await db
 			.prepare(
 				`SELECT id, first_name, last_name, email, country, city, bot_score,
-				 created_at FROM submissions
+				 created_at, remote_ip, user_agent, tls_version, asn, ja3_hash, ephemeral_id
+				 FROM submissions
 				 ORDER BY created_at DESC
 				 LIMIT ? OFFSET ?`
 			)
@@ -277,6 +278,92 @@ export async function getBotScoreDistribution(db: D1Database) {
 		return result.results;
 	} catch (error) {
 		logger.error({ error }, 'Error fetching bot score distribution');
+		throw error;
+	}
+}
+
+/**
+ * Get ASN distribution (for analytics)
+ */
+export async function getAsnDistribution(db: D1Database) {
+	try {
+		const result = await db
+			.prepare(
+				`SELECT asn, as_organization, COUNT(*) as count
+				 FROM submissions
+				 WHERE asn IS NOT NULL
+				 GROUP BY asn, as_organization
+				 ORDER BY count DESC
+				 LIMIT 10`
+			)
+			.all();
+
+		return result.results;
+	} catch (error) {
+		logger.error({ error }, 'Error fetching ASN distribution');
+		throw error;
+	}
+}
+
+/**
+ * Get TLS version distribution (for analytics)
+ */
+export async function getTlsVersionDistribution(db: D1Database) {
+	try {
+		const result = await db
+			.prepare(
+				`SELECT tls_version, tls_cipher, COUNT(*) as count
+				 FROM submissions
+				 WHERE tls_version IS NOT NULL
+				 GROUP BY tls_version, tls_cipher
+				 ORDER BY count DESC
+				 LIMIT 10`
+			)
+			.all();
+
+		return result.results;
+	} catch (error) {
+		logger.error({ error }, 'Error fetching TLS version distribution');
+		throw error;
+	}
+}
+
+/**
+ * Get JA3 fingerprint distribution (for analytics)
+ */
+export async function getJa3Distribution(db: D1Database) {
+	try {
+		const result = await db
+			.prepare(
+				`SELECT ja3_hash, COUNT(*) as count
+				 FROM submissions
+				 WHERE ja3_hash IS NOT NULL
+				 GROUP BY ja3_hash
+				 ORDER BY count DESC
+				 LIMIT 10`
+			)
+			.all();
+
+		return result.results;
+	} catch (error) {
+		logger.error({ error }, 'Error fetching JA3 distribution');
+		throw error;
+	}
+}
+
+/**
+ * Get single submission by ID with all fields
+ */
+export async function getSubmissionById(db: D1Database, id: number) {
+	try {
+		const submission = await db
+			.prepare('SELECT * FROM submissions WHERE id = ?')
+			.bind(id)
+			.first();
+
+		return submission;
+	} catch (error) {
+		logger.error({ error, id }, 'Error fetching submission by ID');
 		throw error;
 	}
 }

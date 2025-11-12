@@ -1,120 +1,72 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { PhoneInput, type CountryIso2, defaultCountries, parseCountry } from 'react-international-phone';
+import 'react-international-phone/style.css';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import TurnstileWidget from './TurnstileWidget';
-
-interface FormData {
-	firstName: string;
-	lastName: string;
-	email: string;
-	phone: string;
-	address: string;
-	dateOfBirth: string;
-}
-
-interface FormErrors {
-	[key: string]: string;
-}
+import TurnstileWidget, { type TurnstileWidgetHandle } from './TurnstileWidget';
+import { formSchema, type FormData } from '../lib/validation';
 
 export default function SubmissionForm() {
-	const [formData, setFormData] = useState<FormData>({
-		firstName: '',
-		lastName: '',
-		email: '',
-		phone: '',
-		address: '',
-		dateOfBirth: '',
-	});
-
-	const [errors, setErrors] = useState<FormErrors>({});
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [submitResult, setSubmitResult] = useState<{
 		type: 'success' | 'error';
 		message: string;
 	} | null>(null);
+	const [defaultCountry, setDefaultCountry] = useState<CountryIso2>('us');
 
-	const turnstileRef = useRef<HTMLDivElement>(null);
+	const turnstileRef = useRef<TurnstileWidgetHandle>(null);
+	const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const hasSubmittedRef = useRef(false);
 
-	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const { name, value } = e.target;
-		setFormData((prev) => ({
-			...prev,
-			[name]: value,
-		}));
-		// Clear error for this field
-		if (errors[name]) {
-			setErrors((prev) => {
-				const newErrors = { ...prev };
-				delete newErrors[name];
-				return newErrors;
-			});
-		}
-	};
-
-	const validateForm = (): boolean => {
-		const newErrors: FormErrors = {};
-
-		if (!formData.firstName.trim()) {
-			newErrors.firstName = 'First name is required';
-		}
-
-		if (!formData.lastName.trim()) {
-			newErrors.lastName = 'Last name is required';
-		}
-
-		if (!formData.email.trim()) {
-			newErrors.email = 'Email is required';
-		} else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-			newErrors.email = 'Invalid email address';
-		}
-
-		if (!formData.phone.trim()) {
-			newErrors.phone = 'Phone is required';
-		}
-
-		if (!formData.address.trim()) {
-			newErrors.address = 'Address is required';
-		}
-
-		if (!formData.dateOfBirth) {
-			newErrors.dateOfBirth = 'Date of birth is required';
-		} else {
-			const birthDate = new Date(formData.dateOfBirth);
-			const today = new Date();
-			const age = today.getFullYear() - birthDate.getFullYear();
-			if (age < 18 || age > 120) {
-				newErrors.dateOfBirth = 'You must be at least 18 years old';
+	// Detect user's country on mount
+	useEffect(() => {
+		const detectCountry = async () => {
+			try {
+				const response = await fetch('/api/geo');
+				const data = await response.json();
+				if (data.success && data.countryCode) {
+					setDefaultCountry(data.countryCode as CountryIso2);
+				}
+			} catch (error) {
+				console.error('Failed to detect country:', error);
+				// Keep default 'us' if detection fails
 			}
-		}
+		};
 
-		setErrors(newErrors);
-		return Object.keys(newErrors).length === 0;
-	};
+		detectCountry();
+	}, []);
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
+	const {
+		register,
+		handleSubmit: handleFormSubmit,
+		formState: { errors, isSubmitting },
+		reset,
+		setValue,
+		watch,
+	} = useForm<FormData>({
+		resolver: zodResolver(formSchema),
+		mode: 'onBlur', // Validate on blur
+	});
+
+	const phoneValue = watch('phone');
+
+	const onSubmit = async (data: FormData) => {
 		setSubmitResult(null);
 
-		// Validate form
-		if (!validateForm()) {
-			return;
-		}
-
-		// Trigger Turnstile challenge
+		// Trigger Turnstile challenge if no token yet
 		if (!turnstileToken) {
-			if (turnstileRef.current && (turnstileRef.current as any).execute) {
-				(turnstileRef.current as any).execute();
+			if (turnstileRef.current) {
+				turnstileRef.current.execute();
 			}
 			return;
 		}
 
 		// Submit form
-		setIsSubmitting(true);
-
 		try {
 			const response = await fetch('/api/submissions', {
 				method: 'POST',
@@ -122,7 +74,7 @@ export default function SubmissionForm() {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
-					...formData,
+					...data,
 					turnstileToken,
 				}),
 			});
@@ -135,18 +87,12 @@ export default function SubmissionForm() {
 					message: result.message || 'Form submitted successfully!',
 				});
 				// Reset form
-				setFormData({
-					firstName: '',
-					lastName: '',
-					email: '',
-					phone: '',
-					address: '',
-					dateOfBirth: '',
-				});
+				reset();
 				setTurnstileToken(null);
+				hasSubmittedRef.current = false;
 				// Reset Turnstile
-				if (turnstileRef.current && (turnstileRef.current as any).reset) {
-					(turnstileRef.current as any).reset();
+				if (turnstileRef.current) {
+					turnstileRef.current.reset();
 				}
 			} else {
 				setSubmitResult({
@@ -154,9 +100,10 @@ export default function SubmissionForm() {
 					message: result.message || 'Submission failed. Please try again.',
 				});
 				setTurnstileToken(null);
+				hasSubmittedRef.current = false;
 				// Reset Turnstile
-				if (turnstileRef.current && (turnstileRef.current as any).reset) {
-					(turnstileRef.current as any).reset();
+				if (turnstileRef.current) {
+					turnstileRef.current.reset();
 				}
 			}
 		} catch (error) {
@@ -166,16 +113,29 @@ export default function SubmissionForm() {
 				message: 'An error occurred. Please try again.',
 			});
 			setTurnstileToken(null);
-		} finally {
-			setIsSubmitting(false);
+			hasSubmittedRef.current = false;
 		}
 	};
 
 	const handleTurnstileValidated = (token: string) => {
 		console.log('Turnstile validated, token received');
+
+		// Prevent duplicate submissions
+		if (hasSubmittedRef.current) {
+			console.log('Already submitted, ignoring duplicate validation');
+			return;
+		}
+
+		// Clear any pending submission timeout
+		if (submitTimeoutRef.current) {
+			clearTimeout(submitTimeoutRef.current);
+		}
+
 		setTurnstileToken(token);
+		hasSubmittedRef.current = true;
+
 		// Automatically submit form after Turnstile validation
-		setTimeout(() => {
+		submitTimeoutRef.current = setTimeout(() => {
 			const form = document.getElementById('submission-form') as HTMLFormElement;
 			if (form) {
 				form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -192,106 +152,179 @@ export default function SubmissionForm() {
 	};
 
 	return (
-		<Card className="w-full max-w-2xl mx-auto">
-			<CardHeader>
-				<CardTitle>User Registration</CardTitle>
-				<CardDescription>
-					Complete the form below to submit your information
+		<Card className="w-full max-w-2xl mx-auto shadow-xl border-border/50">
+			<CardHeader className="space-y-2 pb-8">
+				<CardTitle className="text-3xl font-bold tracking-tight">User Registration</CardTitle>
+				<CardDescription className="text-base text-muted-foreground">
+					Please fill in your details to complete the registration process
 				</CardDescription>
 			</CardHeader>
-			<CardContent>
-				<form id="submission-form" onSubmit={handleSubmit} className="space-y-4">
-					<div className="grid grid-cols-2 gap-4">
-						<div className="space-y-2">
-							<Label htmlFor="firstName">First Name</Label>
+			<CardContent className="pb-8">
+				<form id="submission-form" onSubmit={handleFormSubmit(onSubmit)} className="space-y-8">
+					{/* Personal Information Section */}
+					<div className="space-y-5">
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
+							Personal Information
+						</h3>
+						<div className="bg-muted/30 rounded-lg p-5 space-y-5">
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+								<div className="space-y-2">
+									<Label htmlFor="firstName" className="text-sm font-medium">
+										First Name <span className="text-destructive">*</span>
+									</Label>
+									<Input
+										id="firstName"
+										{...register('firstName')}
+										placeholder="John"
+										disabled={isSubmitting}
+										className={errors.firstName ? 'border-destructive' : ''}
+										aria-invalid={!!errors.firstName}
+										aria-describedby={errors.firstName ? 'firstName-error' : undefined}
+									/>
+									{errors.firstName && (
+										<p id="firstName-error" className="text-sm text-destructive mt-1">
+											{errors.firstName.message}
+										</p>
+									)}
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="lastName" className="text-sm font-medium">
+										Last Name <span className="text-destructive">*</span>
+									</Label>
+									<Input
+										id="lastName"
+										{...register('lastName')}
+										placeholder="Doe"
+										disabled={isSubmitting}
+										className={errors.lastName ? 'border-destructive' : ''}
+										aria-invalid={!!errors.lastName}
+										aria-describedby={errors.lastName ? 'lastName-error' : undefined}
+									/>
+									{errors.lastName && (
+										<p id="lastName-error" className="text-sm text-destructive mt-1">
+											{errors.lastName.message}
+										</p>
+									)}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Contact Information Section */}
+					<div className="space-y-5">
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
+							Contact Information
+						</h3>
+						<div className="bg-muted/30 rounded-lg p-5 space-y-5">
+							<div className="space-y-2">
+								<Label htmlFor="email" className="text-sm font-medium">
+									Email Address <span className="text-destructive">*</span>
+								</Label>
+								<Input
+									id="email"
+									type="email"
+									{...register('email')}
+									placeholder="john.doe@example.com"
+									disabled={isSubmitting}
+									className={errors.email ? 'border-destructive' : ''}
+									aria-invalid={!!errors.email}
+									aria-describedby={errors.email ? 'email-error' : undefined}
+								/>
+								{errors.email && (
+									<p id="email-error" className="text-sm text-destructive mt-1">
+										{errors.email.message}
+									</p>
+								)}
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="phone" className="text-sm font-medium">
+									Phone Number <span className="text-destructive">*</span>
+								</Label>
+								<PhoneInput
+									defaultCountry={defaultCountry}
+									value={phoneValue}
+									onChange={(phone) => setValue('phone', phone, { shouldValidate: true })}
+									disabled={isSubmitting}
+									inputClassName={errors.phone ? 'border-destructive' : ''}
+									className={errors.phone ? 'react-international-phone-error' : ''}
+									flagComponent={({ iso2 }) => {
+										const country = parseCountry(defaultCountries.find((c) => c[1] === iso2));
+										return (
+											<span
+												className="react-international-phone-flag-emoji"
+												style={{ fontSize: '1.25rem' }}
+											>
+												{country?.emoji || '🌐'}
+											</span>
+										);
+									}}
+								/>
+								{errors.phone && (
+									<p id="phone-error" className="text-sm text-destructive mt-1">
+										{errors.phone.message}
+									</p>
+								)}
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="address" className="text-sm font-medium">
+									Street Address <span className="text-destructive">*</span>
+								</Label>
+								<Input
+									id="address"
+									{...register('address')}
+									placeholder="123 Main St, City, State, ZIP"
+									disabled={isSubmitting}
+									className={errors.address ? 'border-destructive' : ''}
+									aria-invalid={!!errors.address}
+									aria-describedby={errors.address ? 'address-error' : undefined}
+								/>
+								{errors.address && (
+									<p id="address-error" className="text-sm text-destructive mt-1">
+										{errors.address.message}
+									</p>
+								)}
+							</div>
+						</div>
+					</div>
+
+					{/* Additional Information Section */}
+					<div className="space-y-5">
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
+							Additional Information
+						</h3>
+						<div className="bg-muted/30 rounded-lg p-5 space-y-2">
+							<Label htmlFor="dateOfBirth" className="text-sm font-medium">
+								Date of Birth <span className="text-destructive">*</span>
+								<span className="text-xs text-muted-foreground ml-2">(Must be 18+)</span>
+							</Label>
 							<Input
-								id="firstName"
-								name="firstName"
-								value={formData.firstName}
-								onChange={handleInputChange}
-								placeholder="John"
+								id="dateOfBirth"
+								type="date"
+								{...register('dateOfBirth')}
 								disabled={isSubmitting}
+								className={errors.dateOfBirth ? 'border-destructive' : ''}
+								aria-invalid={!!errors.dateOfBirth}
+								aria-describedby={errors.dateOfBirth ? 'dateOfBirth-error' : undefined}
 							/>
-							{errors.firstName && (
-								<p className="text-sm text-destructive">{errors.firstName}</p>
+							{errors.dateOfBirth && (
+								<p id="dateOfBirth-error" className="text-sm text-destructive mt-1">
+									{errors.dateOfBirth.message}
+								</p>
 							)}
 						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="lastName">Last Name</Label>
-							<Input
-								id="lastName"
-								name="lastName"
-								value={formData.lastName}
-								onChange={handleInputChange}
-								placeholder="Doe"
-								disabled={isSubmitting}
-							/>
-							{errors.lastName && (
-								<p className="text-sm text-destructive">{errors.lastName}</p>
-							)}
-						</div>
 					</div>
 
-					<div className="space-y-2">
-						<Label htmlFor="email">Email</Label>
-						<Input
-							id="email"
-							name="email"
-							type="email"
-							value={formData.email}
-							onChange={handleInputChange}
-							placeholder="john.doe@example.com"
-							disabled={isSubmitting}
-						/>
-						{errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-					</div>
-
-					<div className="space-y-2">
-						<Label htmlFor="phone">Phone</Label>
-						<Input
-							id="phone"
-							name="phone"
-							type="tel"
-							value={formData.phone}
-							onChange={handleInputChange}
-							placeholder="+1234567890"
-							disabled={isSubmitting}
-						/>
-						{errors.phone && <p className="text-sm text-destructive">{errors.phone}</p>}
-					</div>
-
-					<div className="space-y-2">
-						<Label htmlFor="address">Address</Label>
-						<Input
-							id="address"
-							name="address"
-							value={formData.address}
-							onChange={handleInputChange}
-							placeholder="123 Main St, City, State, ZIP"
-							disabled={isSubmitting}
-						/>
-						{errors.address && <p className="text-sm text-destructive">{errors.address}</p>}
-					</div>
-
-					<div className="space-y-2">
-						<Label htmlFor="dateOfBirth">Date of Birth</Label>
-						<Input
-							id="dateOfBirth"
-							name="dateOfBirth"
-							type="date"
-							value={formData.dateOfBirth}
-							onChange={handleInputChange}
-							disabled={isSubmitting}
-						/>
-						{errors.dateOfBirth && (
-							<p className="text-sm text-destructive">{errors.dateOfBirth}</p>
-						)}
-					</div>
-
-					<div className="space-y-2">
-						<div ref={turnstileRef}>
+					{/* Verification Section */}
+					<div className="space-y-5">
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
+							Security Verification
+						</h3>
+						<div className="bg-muted/30 rounded-lg p-5">
 							<TurnstileWidget
+								ref={turnstileRef}
 								onValidated={handleTurnstileValidated}
 								onError={handleTurnstileError}
 							/>
@@ -299,17 +332,65 @@ export default function SubmissionForm() {
 					</div>
 
 					{submitResult && (
-						<Alert variant={submitResult.type === 'success' ? 'success' : 'destructive'}>
-							<AlertTitle>
-								{submitResult.type === 'success' ? 'Success!' : 'Error'}
+						<Alert
+							variant={submitResult.type === 'success' ? 'success' : 'destructive'}
+							className="animate-in fade-in slide-in-from-top-2"
+						>
+							<AlertTitle className="font-semibold">
+								{submitResult.type === 'success' ? '✓ Success!' : '✗ Error'}
 							</AlertTitle>
 							<AlertDescription>{submitResult.message}</AlertDescription>
 						</Alert>
 					)}
 
-					<Button type="submit" className="w-full" disabled={isSubmitting}>
-						{isSubmitting ? 'Submitting...' : 'Submit'}
-					</Button>
+					<div className="border-t pt-8 mt-8 space-y-4">
+						<Button
+							type="submit"
+							className="w-full h-12 text-base font-semibold shadow-md hover:shadow-lg active:shadow-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+							disabled={isSubmitting}
+						>
+							{isSubmitting ? (
+								<span className="flex items-center justify-center gap-2">
+									<svg
+										className="animate-spin h-5 w-5"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+									>
+										<circle
+											className="opacity-25"
+											cx="12"
+											cy="12"
+											r="10"
+											stroke="currentColor"
+											strokeWidth="4"
+										></circle>
+										<path
+											className="opacity-75"
+											fill="currentColor"
+											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+										></path>
+									</svg>
+									Processing...
+								</span>
+							) : (
+								<span className="flex items-center justify-center gap-2">
+									<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+										/>
+									</svg>
+									Submit Application
+								</span>
+							)}
+						</Button>
+						<p className="text-xs text-center text-muted-foreground">
+							By submitting, you agree to our data collection practices
+						</p>
+					</div>
 				</form>
 			</CardContent>
 		</Card>

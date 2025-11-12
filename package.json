@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "build": "cd frontend && npm run build && cd ..",
+    "deploy": "npm run build && wrangler deploy",
     "tail": "wrangler tail",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed"
   },
   "dependencies": {
     "hono": "^4.7.12",
@@ -16,6 +20,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250107.0",
-    "wrangler": "^3.105.0"
+    "@playwright/test": "^1.56.1",
+    "wrangler": "^4.47.0"
   }
 }

@@ -1,0 +1,433 @@
+import { useState, useRef } from 'react';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Button } from './ui/button';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import TurnstileWidget, { type TurnstileWidgetHandle } from './TurnstileWidget';
+
+interface FormData {
+	firstName: string;
+	lastName: string;
+	email: string;
+	phone: string;
+	address: string;
+	dateOfBirth: string;
+}
+
+interface FormErrors {
+	[key: string]: string;
+}
+
+export default function SubmissionForm() {
+	const [formData, setFormData] = useState<FormData>({
+		firstName: '',
+		lastName: '',
+		email: '',
+		phone: '',
+		address: '',
+		dateOfBirth: '',
+	});
+
+	const [errors, setErrors] = useState<FormErrors>({});
+	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [submitResult, setSubmitResult] = useState<{
+		type: 'success' | 'error';
+		message: string;
+	} | null>(null);
+
+	const turnstileRef = useRef<TurnstileWidgetHandle>(null);
+
+	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const { name, value } = e.target;
+
+		// For phone, allow only digits, spaces, parentheses, hyphens, and plus sign
+		let processedValue = value;
+		if (name === 'phone') {
+			processedValue = value.replace(/[^\d\s()+-]/g, '');
+		}
+
+		// For names, prevent numbers and special characters (except apostrophe and hyphen)
+		if (name === 'firstName' || name === 'lastName') {
+			processedValue = value.replace(/[^a-zA-Z\s'-]/g, '');
+		}
+
+		setFormData((prev) => ({
+			...prev,
+			[name]: processedValue,
+		}));
+
+		// Clear error for this field when user starts typing
+		if (errors[name]) {
+			setErrors((prev) => {
+				const newErrors = { ...prev };
+				delete newErrors[name];
+				return newErrors;
+			});
+		}
+	};
+
+	const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+		const { name, value } = e.target;
+
+		// Validate field on blur
+		const error = validateField(name, value);
+		if (error) {
+			setErrors((prev) => ({
+				...prev,
+				[name]: error,
+			}));
+		}
+	};
+
+	const validateField = (name: string, value: string): string | null => {
+		switch (name) {
+			case 'firstName':
+				if (!value.trim()) return 'First name is required';
+				if (value.length > 50) return 'First name must be less than 50 characters';
+				if (!/^[a-zA-Z\s'-]+$/.test(value)) return 'Only letters, spaces, hyphens, and apostrophes allowed';
+				return null;
+
+			case 'lastName':
+				if (!value.trim()) return 'Last name is required';
+				if (value.length > 50) return 'Last name must be less than 50 characters';
+				if (!/^[a-zA-Z\s'-]+$/.test(value)) return 'Only letters, spaces, hyphens, and apostrophes allowed';
+				return null;
+
+			case 'email':
+				if (!value.trim()) return 'Email is required';
+				if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Invalid email address';
+				if (value.length > 100) return 'Email must be less than 100 characters';
+				return null;
+
+			case 'phone':
+				if (!value.trim()) return 'Phone is required';
+				const digits = value.replace(/\D/g, '');
+				if (digits.length < 7) return 'Phone must have at least 7 digits';
+				if (digits.length > 15) return 'Phone must have at most 15 digits';
+				return null;
+
+			case 'address':
+				if (!value.trim()) return 'Address is required';
+				if (value.length > 200) return 'Address must be less than 200 characters';
+				return null;
+
+			case 'dateOfBirth':
+				if (!value) return 'Date of birth is required';
+				const birthDate = new Date(value);
+				const today = new Date();
+				const age = today.getFullYear() - birthDate.getFullYear();
+				const monthDiff = today.getMonth() - birthDate.getMonth();
+				const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) ? age - 1 : age;
+				if (actualAge < 18) return 'You must be at least 18 years old';
+				if (actualAge > 120) return 'Please enter a valid date of birth';
+				return null;
+
+			default:
+				return null;
+		}
+	};
+
+	const validateForm = (): boolean => {
+		const newErrors: FormErrors = {};
+
+		Object.keys(formData).forEach((key) => {
+			const error = validateField(key, formData[key as keyof FormData]);
+			if (error) {
+				newErrors[key] = error;
+			}
+		});
+
+		setErrors(newErrors);
+		return Object.keys(newErrors).length === 0;
+	};
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setSubmitResult(null);
+
+		// Validate form
+		if (!validateForm()) {
+			return;
+		}
+
+		// Trigger Turnstile challenge
+		if (!turnstileToken) {
+			if (turnstileRef.current) {
+				turnstileRef.current.execute();
+			}
+			return;
+		}
+
+		// Submit form
+		setIsSubmitting(true);
+
+		try {
+			const response = await fetch('/api/submissions', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					...formData,
+					turnstileToken,
+				}),
+			});
+
+			const result = await response.json();
+
+			if (response.ok) {
+				setSubmitResult({
+					type: 'success',
+					message: result.message || 'Form submitted successfully!',
+				});
+				// Reset form
+				setFormData({
+					firstName: '',
+					lastName: '',
+					email: '',
+					phone: '',
+					address: '',
+					dateOfBirth: '',
+				});
+				setTurnstileToken(null);
+				// Reset Turnstile
+				if (turnstileRef.current) {
+					turnstileRef.current.reset();
+				}
+			} else {
+				setSubmitResult({
+					type: 'error',
+					message: result.message || 'Submission failed. Please try again.',
+				});
+				setTurnstileToken(null);
+				// Reset Turnstile
+				if (turnstileRef.current) {
+					turnstileRef.current.reset();
+				}
+			}
+		} catch (error) {
+			console.error('Submission error:', error);
+			setSubmitResult({
+				type: 'error',
+				message: 'An error occurred. Please try again.',
+			});
+			setTurnstileToken(null);
+		} finally {
+			setIsSubmitting(false);
+		}
+	};
+
+	const handleTurnstileValidated = (token: string) => {
+		console.log('Turnstile validated, token received');
+		setTurnstileToken(token);
+		// Automatically submit form after Turnstile validation
+		setTimeout(() => {
+			const form = document.getElementById('submission-form') as HTMLFormElement;
+			if (form) {
+				form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+			}
+		}, 100);
+	};
+
+	const handleTurnstileError = (error?: string) => {
+		console.error('Turnstile error:', error);
+		setSubmitResult({
+			type: 'error',
+			message: 'Verification failed. Please try again.',
+		});
+	};
+
+	return (
+		<Card className="w-full max-w-2xl mx-auto shadow-xl border-border/50">
+			<CardHeader className="space-y-1 pb-6">
+				<CardTitle className="text-3xl font-bold tracking-tight">User Registration</CardTitle>
+				<CardDescription className="text-base text-muted-foreground">
+					Please fill in your details to complete the registration process
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="pb-8">
+				<form id="submission-form" onSubmit={handleSubmit} className="space-y-6">
+					{/* Personal Information Section */}
+					<div className="space-y-4">
+						<div>
+							<h3 className="text-sm font-medium text-foreground mb-4">Personal Information</h3>
+							<div className="grid grid-cols-2 gap-4">
+								<div className="space-y-2">
+									<Label htmlFor="firstName" className="text-sm font-medium">
+										First Name <span className="text-destructive">*</span>
+									</Label>
+									<Input
+										id="firstName"
+										name="firstName"
+										value={formData.firstName}
+										onChange={handleInputChange}
+										onBlur={handleBlur}
+										placeholder="John"
+										disabled={isSubmitting}
+										className={errors.firstName ? 'border-destructive' : ''}
+										aria-invalid={!!errors.firstName}
+										aria-describedby={errors.firstName ? 'firstName-error' : undefined}
+									/>
+									{errors.firstName && (
+										<p id="firstName-error" className="text-sm text-destructive mt-1">{errors.firstName}</p>
+									)}
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="lastName" className="text-sm font-medium">
+										Last Name <span className="text-destructive">*</span>
+									</Label>
+									<Input
+										id="lastName"
+										name="lastName"
+										value={formData.lastName}
+										onChange={handleInputChange}
+										onBlur={handleBlur}
+										placeholder="Doe"
+										disabled={isSubmitting}
+										className={errors.lastName ? 'border-destructive' : ''}
+										aria-invalid={!!errors.lastName}
+										aria-describedby={errors.lastName ? 'lastName-error' : undefined}
+									/>
+									{errors.lastName && (
+										<p id="lastName-error" className="text-sm text-destructive mt-1">{errors.lastName}</p>
+									)}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Contact Information Section */}
+					<div className="space-y-4">
+						<h3 className="text-sm font-medium text-foreground">Contact Information</h3>
+						<div className="space-y-4">
+							<div className="space-y-2">
+								<Label htmlFor="email" className="text-sm font-medium">
+									Email Address <span className="text-destructive">*</span>
+								</Label>
+								<Input
+									id="email"
+									name="email"
+									type="email"
+									value={formData.email}
+									onChange={handleInputChange}
+									placeholder="john.doe@example.com"
+									disabled={isSubmitting}
+									className={errors.email ? 'border-destructive' : ''}
+								/>
+								{errors.email && <p className="text-sm text-destructive mt-1">{errors.email}</p>}
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="phone" className="text-sm font-medium">
+									Phone Number <span className="text-destructive">*</span>
+								</Label>
+								<Input
+									id="phone"
+									name="phone"
+									type="tel"
+									value={formData.phone}
+									onChange={handleInputChange}
+									placeholder="+1 (555) 123-4567"
+									disabled={isSubmitting}
+									className={errors.phone ? 'border-destructive' : ''}
+								/>
+								{errors.phone && <p className="text-sm text-destructive mt-1">{errors.phone}</p>}
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="address" className="text-sm font-medium">
+									Street Address <span className="text-destructive">*</span>
+								</Label>
+								<Input
+									id="address"
+									name="address"
+									value={formData.address}
+									onChange={handleInputChange}
+									placeholder="123 Main St, City, State, ZIP"
+									disabled={isSubmitting}
+									className={errors.address ? 'border-destructive' : ''}
+								/>
+								{errors.address && <p className="text-sm text-destructive mt-1">{errors.address}</p>}
+							</div>
+						</div>
+					</div>
+
+					{/* Additional Information Section */}
+					<div className="space-y-4">
+						<h3 className="text-sm font-medium text-foreground">Additional Information</h3>
+						<div className="space-y-2">
+							<Label htmlFor="dateOfBirth" className="text-sm font-medium">
+								Date of Birth <span className="text-destructive">*</span>
+								<span className="text-xs text-muted-foreground ml-2">(Must be 18+)</span>
+							</Label>
+							<Input
+								id="dateOfBirth"
+								name="dateOfBirth"
+								type="date"
+								value={formData.dateOfBirth}
+								onChange={handleInputChange}
+								disabled={isSubmitting}
+								className={errors.dateOfBirth ? 'border-destructive' : ''}
+							/>
+							{errors.dateOfBirth && (
+								<p className="text-sm text-destructive mt-1">{errors.dateOfBirth}</p>
+							)}
+						</div>
+					</div>
+
+					{/* Verification Section */}
+					<div className="space-y-4 pt-2">
+						<div className="border-t pt-6">
+							<h3 className="text-sm font-medium text-foreground mb-4">Security Verification</h3>
+							<TurnstileWidget
+								ref={turnstileRef}
+								onValidated={handleTurnstileValidated}
+								onError={handleTurnstileError}
+							/>
+						</div>
+					</div>
+
+					{submitResult && (
+						<Alert variant={submitResult.type === 'success' ? 'success' : 'destructive'} className="animate-in fade-in slide-in-from-top-2">
+							<AlertTitle className="font-semibold">
+								{submitResult.type === 'success' ? '✓ Success!' : '✗ Error'}
+							</AlertTitle>
+							<AlertDescription>{submitResult.message}</AlertDescription>
+						</Alert>
+					)}
+
+					<div className="border-t pt-6">
+						<Button
+							type="submit"
+							className="w-full h-12 text-base font-semibold shadow-md hover:shadow-lg active:shadow-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+							disabled={isSubmitting}
+						>
+							{isSubmitting ? (
+								<span className="flex items-center justify-center gap-2">
+									<svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+										<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+									Processing...
+								</span>
+							) : (
+								<span className="flex items-center justify-center gap-2">
+									<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+									Submit Application
+								</span>
+							)}
+						</Button>
+						<p className="text-xs text-center text-muted-foreground mt-3">
+							By submitting, you agree to our data collection practices
+						</p>
+					</div>
+				</form>
+			</CardContent>
+		</Card>
+	);
+}

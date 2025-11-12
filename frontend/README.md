@@ -1,109 +1,102 @@
-# Cloudflare Turnstile Demo
+# Frontend - Cloudflare Turnstile Demo
 
-A full-stack Turnstile demo application built with Astro, shadcn/ui, Cloudflare Workers, D1, and Pino.js. Features comprehensive fraud detection using Cloudflare's Bot Management signals, JA3/JA4 fingerprinting, and ephemeral IDs.
+Astro static site with React components (shadcn/ui) for the Turnstile demo application.
 
-## Features
+## Tech Stack
 
-- **Turnstile Integration**: Explicit rendering with interaction-only appearance
-- **Rich Request Metadata**: Captures IP, geolocation, ASN, bot scores, JA3/JA4 fingerprints, detection IDs, and more
-- **Fraud Detection**: Multi-layered fraud prevention using ephemeral IDs and IP-based checks
-- **Form Validation**: Client and server-side validation with Zod
-- **Analytics Dashboard**: Real-time visualization of submissions and validation statistics
-- **Dark Mode**: Full dark mode support with shadcn/ui components
-- **Security Hardened**: Token replay protection, SQL injection prevention, rate limiting
+- **Astro**: Static site generator
+- **React**: Component library (islands)
+- **TypeScript**: Type safety
+- **Tailwind CSS**: Styling
+- **shadcn/ui**: UI components
+- **Cloudflare Turnstile**: Bot protection widget
 
-## Quick Start
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── components/        # React components
+│   │   ├── TurnstileWidget.tsx    # Turnstile integration
+│   │   ├── SubmissionForm.tsx     # Main form
+│   │   └── AnalyticsDashboard.tsx # Analytics UI
+│   ├── layouts/           # Astro layouts
+│   │   └── Layout.astro   # Base layout with dark mode
+│   ├── pages/             # Static pages
+│   │   └── index.astro    # Landing page
+│   └── styles/            # Global CSS
+└── public/                # Static assets
+    └── favicon.svg        # Security-themed favicon
+```
+
+## Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Create .dev.vars for local secrets
-cat > .dev.vars << EOF
-TURNSTILE-SECRET-KEY=your_secret_key
-TURNSTILE-SITE-KEY=0x4AAAAAACAjw0bmUZ7V7fh2
-EOF
-
-# Initialize local D1 database
-wrangler d1 execute turnstile-demo --local --file=../schema.sql
-
-# Start development server
+# Start dev server (http://localhost:4321)
 npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
 ```
 
-Visit `http://localhost:4321` to see the form.
+## Components
 
-## Setup Instructions
+### TurnstileWidget
+Handles Cloudflare Turnstile integration with:
+- Explicit rendering
+- Execution mode: `execute` (manual trigger)
+- Appearance: `interaction-only` (hidden until needed)
+- All callbacks implemented (success, error, expired, timeout, unsupported)
+- Dark mode sync with system preferences
 
-### 1. D1 Database Setup
+### SubmissionForm
+Contact form with:
+- Client-side validation
+- Turnstile integration
+- Automatic token submission
+- Error handling and user feedback
 
-If you haven't created the D1 database yet:
+### AnalyticsDashboard
+Visualizes:
+- Validation statistics
+- Recent submissions
+- Geographic distribution
+- Bot score analytics
 
-```bash
-# Create database
-wrangler d1 create turnstile-demo
+## Configuration
 
-# Update wrangler.jsonc with the database_id from the output
-
-# Initialize schema (local)
-wrangler d1 execute turnstile-demo --local --file=../schema.sql
-
-# Initialize schema (production)
-wrangler d1 execute turnstile-demo --file=../schema.sql
+### Turnstile Sitekey
+Located in `src/components/TurnstileWidget.tsx`:
+```typescript
+const TURNSTILE_SITEKEY = '0x4AAAAAACAjw0bmUZ7V7fh2';
 ```
 
-### 2. Configure Secrets
+Update this with your actual sitekey for production.
 
-```bash
-# Local development: create .dev.vars
-cat > .dev.vars << EOF
-TURNSTILE-SECRET-KEY=your_secret_key_here
-TURNSTILE-SITE-KEY=0x4AAAAAACAjw0bmUZ7V7fh2
-EOF
+## Build Process
 
-# Production: use wrangler
-wrangler secret put TURNSTILE-SECRET-KEY
-wrangler secret put TURNSTILE-SITE-KEY
-```
+The frontend is built and deployed as part of the main Worker deployment:
 
-## Commands
+1. `npm run build` generates static files to `dist/`
+2. Worker serves static files via ASSETS binding
+3. API routes handled by Worker backend
 
-| Command | Action |
-|---------|--------|
-| `npm install` | Install dependencies |
-| `npm run dev` | Start local dev server |
-| `npm run build` | Build for production |
-| `npm run preview` | Preview production build |
-| `npm run deploy` | Deploy to Cloudflare |
+## Notes
 
-## API Endpoints
-
-- `POST /api/submissions` - Submit form with Turnstile validation
-- `GET /api/analytics/stats` - Get validation statistics
-- `GET /api/analytics/submissions` - Get recent submissions
-- `GET /api/analytics/countries` - Get submissions by country
-- `GET /api/analytics/bot-scores` - Get bot score distribution
-
-## Security Features
-
-1. **Token Replay Protection**: SHA256 hash tracking
-2. **Fraud Detection**: Ephemeral ID + IP-based checks
-3. **SQL Injection Prevention**: Parameterized queries
-4. **Input Sanitization**: HTML stripping and normalization
-5. **Rate Limiting**: Built-in fraud detection thresholds
+- This is a **static site only** - no API routes in Astro
+- All backend logic handled by Cloudflare Worker (../src/)
+- Built files served by Worker's ASSETS binding
+- Dark mode persists via localStorage
 
 ## Documentation
 
-See parent directory for detailed documentation:
-- `PLAN.md` - Implementation plan
-- `TURNSTILE-IMPLEMENTATION.md` - Turnstile strategy
-- `SECURITY-FIXES.md` - Security details
-- `EPHEMERAL-ID-STRATEGY.md` - Fraud detection approach
-
-## Troubleshooting
-
-**D1 not found**: Run `wrangler d1 list` and verify database_id in wrangler.jsonc
-
-**Turnstile not loading**: Check browser console and verify sitekey in TurnstileWidget.tsx
-
-**Bot scores null**: Requires Cloudflare Enterprise with Bot Management enabled
+For complete documentation, see the parent directory:
+- [Root README](../README.md) - Complete project documentation
+- [GAPS.md](../GAPS.md) - Implementation status
+- [docs/](../docs/) - Technical documentation

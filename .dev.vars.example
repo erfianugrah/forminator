@@ -1,0 +1,27 @@
+# Cloudflare Turnstile Secrets for Local Development
+# Copy this file to .dev.vars and replace with your actual keys
+
+# Production Keys (replace with your actual keys from Cloudflare Dashboard)
+TURNSTILE-SECRET-KEY=your_secret_key_here
+TURNSTILE-SITE-KEY=0x4AAAAAACAjw0bmUZ7V7fh2
+
+# ============================================
+# TESTING KEYS (Optional - for development)
+# ============================================
+# Uncomment below to use testing keys that don't require real Cloudflare validation
+# These keys work on any domain including localhost
+
+# Testing Keys - Always Pass (Visible Widget)
+# TURNSTILE-SECRET-KEY=1x0000000000000000000000000000000AA
+# TURNSTILE-SITE-KEY=1x00000000000000000000AA
+
+# Testing Keys - Always Fail (Visible Widget)
+# TURNSTILE-SECRET-KEY=2x0000000000000000000000000000000AA
+# TURNSTILE-SITE-KEY=2x00000000000000000000AB
+
+# Testing Keys - Force Interactive Challenge (Visible Widget)
+# TURNSTILE-SECRET-KEY=1x0000000000000000000000000000000AA
+# TURNSTILE-SITE-KEY=3x00000000000000000000FF
+
+# Note: Testing keys generate XXXX.DUMMY.TOKEN.XXXX tokens
+# Production secret keys will reject dummy tokens and vice versa

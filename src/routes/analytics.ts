@@ -5,6 +5,10 @@ import {
 	getRecentSubmissions,
 	getSubmissionsByCountry,
 	getBotScoreDistribution,
+	getAsnDistribution,
+	getTlsVersionDistribution,
+	getJa3Distribution,
+	getSubmissionById,
 } from '../lib/database';
 import logger from '../lib/logger';
 
@@ -114,6 +118,116 @@ app.get('/bot-scores', async (c) => {
 			{
 				error: 'Internal server error',
 				message: 'Failed to fetch bot score distribution',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/asn - Get ASN distribution
+app.get('/asn', async (c) => {
+	try {
+		const db = c.env.DB;
+		const distribution = await getAsnDistribution(db);
+
+		logger.info('ASN distribution retrieved');
+
+		return c.json({
+			success: true,
+			data: distribution,
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error fetching ASN distribution');
+
+		return c.json(
+			{
+				error: 'Internal server error',
+				message: 'Failed to fetch ASN distribution',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/tls - Get TLS version distribution
+app.get('/tls', async (c) => {
+	try {
+		const db = c.env.DB;
+		const distribution = await getTlsVersionDistribution(db);
+
+		logger.info('TLS version distribution retrieved');
+
+		return c.json({
+			success: true,
+			data: distribution,
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error fetching TLS distribution');
+
+		return c.json(
+			{
+				error: 'Internal server error',
+				message: 'Failed to fetch TLS distribution',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/ja3 - Get JA3 fingerprint distribution
+app.get('/ja3', async (c) => {
+	try {
+		const db = c.env.DB;
+		const distribution = await getJa3Distribution(db);
+
+		logger.info('JA3 distribution retrieved');
+
+		return c.json({
+			success: true,
+			data: distribution,
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error fetching JA3 distribution');
+
+		return c.json(
+			{
+				error: 'Internal server error',
+				message: 'Failed to fetch JA3 distribution',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/submissions/:id - Get single submission details
+app.get('/submissions/:id', async (c) => {
+	try {
+		const db = c.env.DB;
+		const id = parseInt(c.req.param('id'), 10);
+
+		if (isNaN(id)) {
+			return c.json({ error: 'Invalid ID' }, 400);
+		}
+
+		const submission = await getSubmissionById(db, id);
+
+		if (!submission) {
+			return c.json({ error: 'Submission not found' }, 404);
+		}
+
+		logger.info({ id }, 'Submission details retrieved');
+
+		return c.json({
+			success: true,
+			data: submission,
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error fetching submission details');
+
+		return c.json(
+			{
+				error: 'Internal server error',
+				message: 'Failed to fetch submission details',
 			},
 			500
 		);

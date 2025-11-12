@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 
 // Turnstile configuration
 const TURNSTILE_SITEKEY = '0x4AAAAAACAjw0bmUZ7V7fh2';
@@ -46,15 +46,17 @@ interface TurnstileWidgetProps {
 	action?: string;
 }
 
-export default function TurnstileWidget({
-	onValidated,
-	onError,
-	action = 'submit-form',
-}: TurnstileWidgetProps) {
-	const containerRef = useRef<HTMLDivElement>(null);
-	const widgetIdRef = useRef<string | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+export interface TurnstileWidgetHandle {
+	execute: () => void;
+	reset: () => void;
+}
+
+const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
+	({ onValidated, onError, action = 'submit-form' }, ref) => {
+		const containerRef = useRef<HTMLDivElement>(null);
+		const widgetIdRef = useRef<string | null>(null);
+		const [isLoading, setIsLoading] = useState(true);
+		const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		// Check if Turnstile script is loaded
@@ -128,38 +130,40 @@ export default function TurnstileWidget({
 				}
 			}
 		};
-	}, [action, onValidated, onError]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []); // Only run once on mount - callbacks are captured in closure
 
-	// Expose execute method
-	const execute = () => {
-		if (widgetIdRef.current && window.turnstile) {
-			window.turnstile.execute(widgetIdRef.current);
-		}
-	};
+	// Expose methods to parent component via ref
+	useImperativeHandle(ref, () => ({
+		execute: () => {
+			console.log('Execute called, widgetId:', widgetIdRef.current);
+			if (widgetIdRef.current && window.turnstile) {
+				window.turnstile.execute(widgetIdRef.current);
+			} else {
+				console.error('Cannot execute: widgetId not available');
+			}
+		},
+		reset: () => {
+			console.log('Reset called, widgetId:', widgetIdRef.current);
+			if (widgetIdRef.current && window.turnstile) {
+				window.turnstile.reset(widgetIdRef.current);
+				setError(null);
+			}
+		},
+	}));
 
-	// Expose reset method
-	const reset = () => {
-		if (widgetIdRef.current && window.turnstile) {
-			window.turnstile.reset(widgetIdRef.current);
-			setError(null);
-		}
-	};
+		return (
+			<div className="turnstile-container" data-testid="turnstile-widget">
+				<div ref={containerRef} />
+				{isLoading && (
+					<div className="text-sm text-muted-foreground">Loading verification...</div>
+				)}
+				{error && <div className="text-sm text-destructive mt-2">{error}</div>}
+			</div>
+		);
+	}
+);
 
-	// Attach methods to ref for parent access
-	useEffect(() => {
-		if (containerRef.current) {
-			(containerRef.current as any).execute = execute;
-			(containerRef.current as any).reset = reset;
-		}
-	}, []);
+TurnstileWidget.displayName = 'TurnstileWidget';
 
-	return (
-		<div className="turnstile-container">
-			<div ref={containerRef} />
-			{isLoading && (
-				<div className="text-sm text-muted-foreground">Loading verification...</div>
-			)}
-			{error && <div className="text-sm text-destructive mt-2">{error}</div>}
-		</div>
-	);
-}
+export default TurnstileWidget;

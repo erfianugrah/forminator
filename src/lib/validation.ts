@@ -20,9 +20,17 @@ export const formSubmissionSchema = z.object({
 	phone: z
 		.string()
 		.min(1, 'Phone is required')
-		.regex(
-			/^\+?[1-9]\d{1,14}$/,
-			'Phone must be in E.164 format (e.g., +12345678900)'
+		.transform((val) => {
+			// Normalize phone: remove all non-digit characters except leading +
+			const cleaned = val.replace(/[^\d+]/g, '');
+			// If doesn't start with +, assume US and add +1
+			return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
+		})
+		.pipe(
+			z.string().regex(
+				/^\+[1-9]\d{1,14}$/,
+				'Phone must contain 7-15 digits'
+			)
 		),
 	address: z
 		.string()
@@ -51,26 +59,13 @@ export function sanitizeString(input: string): string {
 		.trim();
 }
 
-// Normalize phone number to E.164 format
-export function normalizePhone(phone: string): string {
-	// Remove all non-digit characters except leading +
-	const cleaned = phone.replace(/[^\d+]/g, '');
-
-	// If doesn't start with +, assume US and add +1
-	if (!cleaned.startsWith('+')) {
-		return `+1${cleaned}`;
-	}
-
-	return cleaned;
-}
-
 // Sanitize all form inputs
 export function sanitizeFormData(data: FormSubmissionInput) {
 	return {
 		firstName: sanitizeString(data.firstName),
 		lastName: sanitizeString(data.lastName),
 		email: sanitizeString(data.email.toLowerCase()),
-		phone: normalizePhone(sanitizeString(data.phone)),
+		phone: data.phone, // Already normalized by schema transform
 		address: sanitizeString(data.address),
 		dateOfBirth: sanitizeString(data.dateOfBirth),
 		turnstileToken: data.turnstileToken, // Don't sanitize token

@@ -102,13 +102,12 @@ Edit `wrangler.jsonc`:
 ### 5. Build & Deploy
 
 ```bash
-# Build frontend static assets
-cd frontend
-npm run build
-cd ..
+# Deploy (automatically builds frontend first)
+npm run deploy
 
-# Deploy worker (serves static assets + API)
-wrangler deploy
+# Or manually:
+# npm run build  # Build frontend only
+# wrangler deploy  # Deploy worker only
 ```
 
 ## Development
@@ -294,11 +293,31 @@ wrangler deploy
 
 ## Documentation
 
-Additional planning docs:
-- `PLAN.md` - Complete implementation plan and architecture
-- `TURNSTILE-IMPLEMENTATION.md` - Turnstile integration strategy
-- `EPHEMERAL-ID-STRATEGY.md` - Fraud detection approach
-- `SECURITY-FIXES.md` - Security hardening details
+### Core Documentation
+- **[GAPS.md](./GAPS.md)** - Implementation status (100% complete, production ready)
+- **[.dev.vars.example](./.dev.vars.example)** - Local development secrets template
+- **[docs/README.md](./docs/README.md)** - Complete documentation index
+
+### System Architecture (`docs/`)
+- **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Complete architecture and design decisions
+- **[docs/SECURITY.md](./docs/SECURITY.md)** - Security implementation details
+- **[docs/API-REFERENCE.md](./docs/API-REFERENCE.md)** - Complete API documentation for all endpoints
+
+### Features (`docs/`)
+- **[docs/FORM-VALIDATION.md](./docs/FORM-VALIDATION.md)** - Exhaustive form validation system guide
+- **[docs/PHONE-INPUT.md](./docs/PHONE-INPUT.md)** - International phone input system
+- **[docs/GEOLOCATION.md](./docs/GEOLOCATION.md)** - Country detection via Cloudflare
+- **[docs/TURNSTILE.md](./docs/TURNSTILE.md)** - Turnstile integration guide
+- **[docs/FRAUD-DETECTION.md](./docs/FRAUD-DETECTION.md)** - Ephemeral ID fraud detection strategy
+- **[docs/TURNSTILE-ENHANCEMENTS.md](./docs/TURNSTILE-ENHANCEMENTS.md)** - Optional enhancement opportunities
+
+> **New:** Documentation now includes exhaustive guides with diagrams, examples, and troubleshooting sections for every system component.
+
+## Project Status
+
+✅ **Production Ready** - All core features implemented and security hardened
+
+See [GAPS.md](./GAPS.md) for detailed implementation status and checklist.
 
 ## License
 

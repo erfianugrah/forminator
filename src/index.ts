@@ -4,21 +4,68 @@ import { logger } from 'hono/logger';
 import type { Env } from './lib/types';
 import submissionsRoute from './routes/submissions';
 import analyticsRoute from './routes/analytics';
+import geoRoute from './routes/geo';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Allowed origins for CORS
+const ALLOWED_ORIGINS = [
+	'https://form.erfi.dev',
+	'https://erfi.dev',
+	'https://erfianugrah.com',
+];
+
+// Allow localhost in development
+if (process.env.NODE_ENV === 'development') {
+	ALLOWED_ORIGINS.push('http://localhost:8787', 'http://localhost:4321');
+}
+
 // Middleware
 app.use('*', logger());
+
+// CORS with restricted origins
 app.use('/api/*', cors({
-	origin: (origin) => origin, // Allow all origins for demo (restrict in production)
+	origin: ALLOWED_ORIGINS,
 	allowMethods: ['GET', 'POST', 'OPTIONS'],
 	allowHeaders: ['Content-Type'],
 	maxAge: 86400,
 }));
 
+// Security headers middleware
+app.use('*', async (c, next) => {
+	await next();
+
+	// Prevent MIME sniffing
+	c.header('X-Content-Type-Options', 'nosniff');
+
+	// Prevent clickjacking
+	c.header('X-Frame-Options', 'DENY');
+
+	// Enable XSS protection
+	c.header('X-XSS-Protection', '1; mode=block');
+
+	// Referrer policy
+	c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+	// Permissions policy
+	c.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+
+	// Content Security Policy
+	c.header(
+		'Content-Security-Policy',
+		"default-src 'self'; " +
+		"script-src 'self' https://challenges.cloudflare.com; " +
+		"frame-src https://challenges.cloudflare.com; " +
+		"connect-src 'self' https://challenges.cloudflare.com; " +
+		"style-src 'self' 'unsafe-inline'; " +
+		"img-src 'self' data: https:;"
+	);
+});
+
 // API Routes
 app.route('/api/submissions', submissionsRoute);
 app.route('/api/analytics', analyticsRoute);
+app.route('/api/geo', geoRoute);
 
 // Health check
 app.get('/api/health', (c) => {

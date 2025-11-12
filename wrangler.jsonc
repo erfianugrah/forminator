@@ -27,7 +27,6 @@
 	"observability": {
 		"enabled": true
 	},
-	// Custom domain routing
 	"routes": [
 		{
 			"pattern": "form.erfi.dev",

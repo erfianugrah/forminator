@@ -16,6 +16,7 @@ const { title, description = 'Cloudflare Turnstile Demo' } = Astro.props;
 		<meta name="description" content={description} />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://challenges.cloudflare.com" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
 		<script is:inline>
@@ -26,6 +27,19 @@ const { title, description = 'Cloudflare Turnstile Demo' } = Astro.props;
 			} else {
 				document.documentElement.classList.remove('dark');
 			}
+
+			// Suppress harmless Feature Policy warnings from Cloudflare Turnstile
+			// These are deprecated warnings from Turnstile's iframe that can't be fixed on our end
+			const originalWarn = console.warn;
+			console.warn = function(...args) {
+				const message = args[0];
+				if (typeof message === 'string' &&
+					(message.includes('Feature Policy') ||
+					 message.includes('Partitioned cookie or storage access'))) {
+					return; // Suppress these specific warnings
+				}
+				originalWarn.apply(console, args);
+			};
 		</script>
 	</head>
 	<body class="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-50">
