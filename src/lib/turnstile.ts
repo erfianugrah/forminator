@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { TurnstileValidationResult, FraudCheckResult } from './types';
 import logger from './logger';
+import { addToBlacklist } from './fraud-prevalidation';
 
 /**
  * Validate Turnstile token with Cloudflare's siteverify API
@@ -170,6 +171,37 @@ export async function checkEphemeralIdFraud(
 
 		const allowed = riskScore < 70;
 
+		// Auto-blacklist high-risk ephemeral IDs
+		if (!allowed && riskScore >= 70) {
+			const confidence = riskScore >= 100 ? 'high' : riskScore >= 85 ? 'medium' : 'low';
+			const expiresIn = riskScore >= 100 ? 86400 * 7 : riskScore >= 85 ? 86400 * 3 : 86400; // 7 days, 3 days, or 1 day
+
+			await addToBlacklist(db, {
+				ephemeralId,
+				blockReason: `Automated: Risk score ${riskScore} - ${warnings.join(', ')}`,
+				confidence,
+				expiresIn,
+				submissionCount: recentSubmissions?.count || 0,
+				detectionMetadata: {
+					risk_score: riskScore,
+					warnings,
+					recent_submissions: recentSubmissions?.count || 0,
+					recent_validations: recentValidations?.count || 0,
+					detected_at: new Date().toISOString(),
+				},
+			});
+
+			logger.warn(
+				{
+					ephemeralId,
+					riskScore,
+					confidence,
+					expiresIn,
+				},
+				'Ephemeral ID auto-blacklisted'
+			);
+		}
+
 		logger.info(
 			{
 				ephemeralId,
@@ -235,6 +267,36 @@ export async function checkIpFraud(
 		}
 
 		const allowed = riskScore < 70;
+
+		// Auto-blacklist high-risk IPs
+		if (!allowed && riskScore >= 70) {
+			const confidence = riskScore >= 100 ? 'high' : riskScore >= 85 ? 'medium' : 'low';
+			const expiresIn = riskScore >= 100 ? 86400 * 7 : riskScore >= 85 ? 86400 * 3 : 86400; // 7 days, 3 days, or 1 day
+
+			await addToBlacklist(db, {
+				ipAddress: remoteIp,
+				blockReason: `Automated: Risk score ${riskScore} - ${warnings.join(', ')}`,
+				confidence,
+				expiresIn,
+				submissionCount: recentSubmissions?.count || 0,
+				detectionMetadata: {
+					risk_score: riskScore,
+					warnings,
+					recent_submissions: recentSubmissions?.count || 0,
+					detected_at: new Date().toISOString(),
+				},
+			});
+
+			logger.warn(
+				{
+					remoteIp,
+					riskScore,
+					confidence,
+					expiresIn,
+				},
+				'IP address auto-blacklisted'
+			);
+		}
 
 		logger.info(
 			{
