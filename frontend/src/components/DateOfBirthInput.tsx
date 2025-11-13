@@ -89,13 +89,16 @@ export function DateOfBirthInput({ value, onChange, disabled, error }: DateOfBir
 		w-full h-11 pl-3 pr-10 text-sm
 		appearance-none
 		rounded-lg border border-input
-		bg-background
+		bg-background text-foreground
 		ring-offset-background
 		transition-colors
 		focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
 		disabled:cursor-not-allowed disabled:opacity-50
 		hover:bg-accent/50
-		dark:hover:bg-accent/20
+		dark:hover:bg-accent/30
+		dark:bg-background dark:text-foreground dark:border-input
+		[&>option]:bg-background [&>option]:text-foreground
+		dark:[&>option]:bg-background dark:[&>option]:text-foreground
 		${error ? 'border-destructive focus-visible:ring-destructive' : ''}
 		${disabled ? '' : 'cursor-pointer'}
 	`.trim().replace(/\s+/g, ' ');
