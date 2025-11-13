@@ -173,7 +173,7 @@ export async function getSubmission(db: D1Database, id: number) {
 }
 
 /**
- * Get recent submissions for analytics
+ * Get recent submissions for analytics (legacy - use getSubmissions for advanced features)
  */
 export async function getRecentSubmissions(
 	db: D1Database,
@@ -195,6 +195,150 @@ export async function getRecentSubmissions(
 		return result.results;
 	} catch (error) {
 		logger.error({ error }, 'Error fetching recent submissions');
+		throw error;
+	}
+}
+
+/**
+ * Submissions filter options
+ */
+export interface SubmissionsFilters {
+	limit?: number;
+	offset?: number;
+	sortBy?: string;
+	sortOrder?: 'asc' | 'desc';
+	countries?: string[];
+	botScoreMin?: number;
+	botScoreMax?: number;
+	startDate?: string;
+	endDate?: string;
+	verifiedBot?: boolean;
+	hasJa3?: boolean;
+	hasJa4?: boolean;
+	search?: string;
+}
+
+/**
+ * Get submissions with advanced filtering, sorting, and search
+ */
+export async function getSubmissions(
+	db: D1Database,
+	filters: SubmissionsFilters = {}
+) {
+	try {
+		// Defaults and validation
+		const limit = Math.min(filters.limit || 50, 100);
+		const offset = Math.max(filters.offset || 0, 0);
+		const sortBy = filters.sortBy || 'created_at';
+		const sortOrder = filters.sortOrder || 'desc';
+
+		// Validate sortBy field (whitelist to prevent SQL injection)
+		const validSortFields = ['created_at', 'bot_score', 'email', 'country', 'first_name', 'last_name'];
+		if (!validSortFields.includes(sortBy)) {
+			throw new Error(`Invalid sortBy field: ${sortBy}`);
+		}
+
+		// Validate sortOrder
+		if (!['asc', 'desc'].includes(sortOrder)) {
+			throw new Error(`Invalid sortOrder: ${sortOrder}`);
+		}
+
+		// Build WHERE clause dynamically
+		const whereClauses: string[] = ['1=1'];
+		const bindings: any[] = [];
+
+		// Country filter
+		if (filters.countries && filters.countries.length > 0) {
+			const placeholders = filters.countries.map(() => '?').join(',');
+			whereClauses.push(`country IN (${placeholders})`);
+			bindings.push(...filters.countries);
+		}
+
+		// Bot score range
+		if (filters.botScoreMin !== undefined) {
+			whereClauses.push('bot_score >= ?');
+			bindings.push(filters.botScoreMin);
+		}
+		if (filters.botScoreMax !== undefined) {
+			whereClauses.push('bot_score <= ?');
+			bindings.push(filters.botScoreMax);
+		}
+
+		// Date range
+		if (filters.startDate) {
+			whereClauses.push('created_at >= ?');
+			bindings.push(filters.startDate);
+		}
+		if (filters.endDate) {
+			whereClauses.push('created_at <= ?');
+			bindings.push(filters.endDate);
+		}
+
+		// Verified bot filter
+		if (filters.verifiedBot !== undefined) {
+			whereClauses.push('verified_bot = ?');
+			bindings.push(filters.verifiedBot ? 1 : 0);
+		}
+
+		// JA3 hash presence
+		if (filters.hasJa3 !== undefined) {
+			whereClauses.push(filters.hasJa3 ? 'ja3_hash IS NOT NULL' : 'ja3_hash IS NULL');
+		}
+
+		// JA4 hash presence
+		if (filters.hasJa4 !== undefined) {
+			whereClauses.push(filters.hasJa4 ? 'ja4 IS NOT NULL' : 'ja4 IS NULL');
+		}
+
+		// Search across multiple fields
+		if (filters.search && filters.search.trim()) {
+			const searchTerm = `%${filters.search.trim()}%`;
+			whereClauses.push('(email LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR remote_ip LIKE ?)');
+			bindings.push(searchTerm, searchTerm, searchTerm, searchTerm);
+		}
+
+		const whereClause = whereClauses.join(' AND ');
+
+		// Build main query
+		const query = `
+			SELECT
+				id, first_name, last_name, email, country, city, bot_score,
+				created_at, remote_ip, user_agent, tls_version, asn,
+				ja3_hash, ja4, ephemeral_id, verified_bot
+			FROM submissions
+			WHERE ${whereClause}
+			ORDER BY ${sortBy} ${sortOrder}
+			LIMIT ? OFFSET ?
+		`;
+
+		// Build count query for total
+		const countQuery = `
+			SELECT COUNT(*) as total
+			FROM submissions
+			WHERE ${whereClause}
+		`;
+
+		// Execute both queries
+		const [dataResult, countResult] = await Promise.all([
+			db.prepare(query).bind(...bindings, limit, offset).all(),
+			db.prepare(countQuery).bind(...bindings).first<{ total: number }>(),
+		]);
+
+		logger.info(
+			{
+				filters,
+				count: dataResult.results.length,
+				total: countResult?.total || 0,
+			},
+			'Submissions retrieved with filters'
+		);
+
+		return {
+			data: dataResult.results,
+			total: countResult?.total || 0,
+		};
+	} catch (error) {
+		logger.error({ error, filters }, 'Error fetching submissions with filters');
 		throw error;
 	}
 }

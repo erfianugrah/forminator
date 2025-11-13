@@ -3,6 +3,7 @@ import type { Env } from '../lib/types';
 import {
 	getValidationStats,
 	getRecentSubmissions,
+	getSubmissions,
 	getSubmissionsByCountry,
 	getBotScoreDistribution,
 	getAsnDistribution,
@@ -12,6 +13,7 @@ import {
 	getSubmissionById,
 	getTimeSeriesData,
 } from '../lib/database';
+import type { SubmissionsFilters } from '../lib/database';
 import logger from '../lib/logger';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -73,33 +75,144 @@ app.get('/stats', async (c) => {
 	}
 });
 
-// GET /api/analytics/submissions - Get recent submissions
+// GET /api/analytics/submissions - Get submissions with filtering, sorting, and search
 app.get('/submissions', async (c) => {
 	try {
 		const db = c.env.DB;
 
-		// Parse query params
-		const limit = Math.min(parseInt(c.req.query('limit') || '50', 10), 100);
-		const offset = Math.max(parseInt(c.req.query('offset') || '0', 10), 0);
+		// Parse pagination params
+		const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
+		const offset = c.req.query('offset') ? parseInt(c.req.query('offset')!, 10) : undefined;
 
-		const submissions = await getRecentSubmissions(db, limit, offset);
+		// Parse sorting params
+		const sortBy = c.req.query('sortBy');
+		const sortOrder = c.req.query('sortOrder') as 'asc' | 'desc' | undefined;
 
-		logger.info({ limit, offset, count: submissions.length }, 'Recent submissions retrieved');
+		// Validate sortOrder if provided
+		if (sortOrder && !['asc', 'desc'].includes(sortOrder)) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid parameter',
+					message: 'sortOrder must be either "asc" or "desc"',
+				},
+				400
+			);
+		}
+
+		// Parse filter params
+		const countries = c.req.query('countries')?.split(',').filter(Boolean);
+		const botScoreMin = c.req.query('botScoreMin')
+			? parseInt(c.req.query('botScoreMin')!, 10)
+			: undefined;
+		const botScoreMax = c.req.query('botScoreMax')
+			? parseInt(c.req.query('botScoreMax')!, 10)
+			: undefined;
+		const startDate = c.req.query('startDate');
+		const endDate = c.req.query('endDate');
+		const verifiedBotStr = c.req.query('verifiedBot');
+		const verifiedBot =
+			verifiedBotStr !== undefined ? verifiedBotStr === 'true' : undefined;
+		const hasJa3Str = c.req.query('hasJa3');
+		const hasJa3 = hasJa3Str !== undefined ? hasJa3Str === 'true' : undefined;
+		const hasJa4Str = c.req.query('hasJa4');
+		const hasJa4 = hasJa4Str !== undefined ? hasJa4Str === 'true' : undefined;
+		const search = c.req.query('search');
+
+		// Validate bot score range
+		if (botScoreMin !== undefined && (botScoreMin < 0 || botScoreMin > 100)) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid parameter',
+					message: 'botScoreMin must be between 0 and 100',
+				},
+				400
+			);
+		}
+		if (botScoreMax !== undefined && (botScoreMax < 0 || botScoreMax > 100)) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid parameter',
+					message: 'botScoreMax must be between 0 and 100',
+				},
+				400
+			);
+		}
+
+		// Build filters object
+		const filters: SubmissionsFilters = {
+			limit,
+			offset,
+			sortBy,
+			sortOrder,
+			countries,
+			botScoreMin,
+			botScoreMax,
+			startDate,
+			endDate,
+			verifiedBot,
+			hasJa3,
+			hasJa4,
+			search,
+		};
+
+		// Fetch submissions with filters
+		const result = await getSubmissions(db, filters);
+
+		// Build applied filters object for response
+		const appliedFilters: Record<string, any> = {};
+		if (countries) appliedFilters.countries = countries;
+		if (botScoreMin !== undefined) appliedFilters.botScoreMin = botScoreMin;
+		if (botScoreMax !== undefined) appliedFilters.botScoreMax = botScoreMax;
+		if (startDate) appliedFilters.startDate = startDate;
+		if (endDate) appliedFilters.endDate = endDate;
+		if (verifiedBot !== undefined) appliedFilters.verifiedBot = verifiedBot;
+		if (hasJa3 !== undefined) appliedFilters.hasJa3 = hasJa3;
+		if (hasJa4 !== undefined) appliedFilters.hasJa4 = hasJa4;
+		if (search) appliedFilters.search = search;
+		if (sortBy) appliedFilters.sortBy = sortBy;
+		if (sortOrder) appliedFilters.sortOrder = sortOrder;
+
+		logger.info(
+			{
+				filters: appliedFilters,
+				count: result.data.length,
+				total: result.total,
+			},
+			'Submissions retrieved'
+		);
 
 		return c.json({
 			success: true,
-			data: submissions,
+			data: result.data,
 			pagination: {
-				limit,
-				offset,
-				count: submissions.length,
+				limit: limit || 50,
+				offset: offset || 0,
+				count: result.data.length,
+				total: result.total,
 			},
+			filters: appliedFilters,
 		});
-	} catch (error) {
+	} catch (error: any) {
+		// Handle validation errors
+		if (error.message?.includes('Invalid sortBy')) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid parameter',
+					message: error.message,
+				},
+				400
+			);
+		}
+
 		logger.error({ error }, 'Error fetching submissions');
 
 		return c.json(
 			{
+				success: false,
 				error: 'Internal server error',
 				message: 'Failed to fetch submissions',
 			},
