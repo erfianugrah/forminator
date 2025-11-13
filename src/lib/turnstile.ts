@@ -58,6 +58,10 @@ export async function validateTurnstileToken(
 			};
 		}>();
 
+		// Extract ephemeral ID if available (Enterprise only)
+		// IMPORTANT: Extract ephemeral ID even on failed validations for fraud detection
+		const ephemeralId = result.metadata?.ephemeral_id || null;
+
 		if (!result.success) {
 			const errorCodes = result['error-codes'] || [];
 			const debugInfo = getDebugErrorInfo(errorCodes);
@@ -69,6 +73,7 @@ export async function validateTurnstileToken(
 					errorMessages: debugInfo.messages,
 					categories: debugInfo.categories,
 					isConfigError: isConfigurationError(errorCodes),
+					ephemeralId,
 				},
 				'Turnstile validation failed'
 			);
@@ -87,11 +92,9 @@ export async function validateTurnstileToken(
 				errors: errorCodes,
 				userMessage: getUserErrorMessage(errorCodes),
 				debugInfo,
+				ephemeralId, // Include ephemeral ID for fraud detection
 			};
 		}
-
-		// Extract ephemeral ID if available (Enterprise only)
-		const ephemeralId = result.metadata?.ephemeral_id || null;
 
 		if (!ephemeralId) {
 			logger.info('⚠️ Ephemeral ID not available (requires Enterprise plan)');

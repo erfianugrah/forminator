@@ -93,6 +93,96 @@ app.post('/', async (c) => {
 			secretKey
 		);
 
+		// CRITICAL: Check fraud patterns BEFORE returning validation errors
+		// This prevents attackers from bypassing fraud detection with expired/invalid tokens
+		// Even failed validations can have ephemeral IDs that we need to track
+
+		// Initialize fraud check result (default: allow with 0 risk score)
+		let fraudCheck = {
+			allowed: true,
+			riskScore: 0,
+			warnings: [] as string[],
+		};
+
+		// EPHEMERAL ID BLACKLIST CHECK & FRAUD DETECTION (performance optimization)
+		// If this ephemeral ID was previously detected as fraudulent, block immediately
+		// This skips expensive D1 aggregation queries for repeat offenders
+		if (validation.ephemeralId) {
+			const ephemeralIdBlacklist = await checkPreValidationBlock(validation.ephemeralId, metadata.remoteIp, db);
+
+			if (ephemeralIdBlacklist.blocked) {
+				logger.warn(
+					{
+						ephemeralId: validation.ephemeralId,
+						reason: ephemeralIdBlacklist.reason,
+						confidence: ephemeralIdBlacklist.confidence,
+						validationFailed: !validation.valid,
+					},
+					'Request blocked - ephemeral ID previously flagged as fraudulent'
+				);
+
+				await logValidation(db, {
+					tokenHash,
+					validation,
+					metadata,
+					riskScore: 100,
+					allowed: false,
+					blockReason: ephemeralIdBlacklist.reason || 'Ephemeral ID blacklisted',
+				});
+
+				return c.json(
+					{
+						error: 'Request blocked',
+						message: 'Your submission cannot be processed at this time',
+					},
+					403
+				);
+			}
+
+			// FRAUD DETECTION ON ALL REQUESTS (failed and successful validations)
+			// Check if this ephemeral ID is making repeated attempts (even with failed tokens)
+			// This catches attackers who repeatedly try with expired/invalid tokens
+			fraudCheck = await checkEphemeralIdFraud(validation.ephemeralId, db);
+
+			if (!fraudCheck.allowed) {
+				logger.warn(
+					{
+						ephemeralId: validation.ephemeralId,
+						riskScore: fraudCheck.riskScore,
+						reason: fraudCheck.reason,
+						warnings: fraudCheck.warnings,
+						validationFailed: !validation.valid,
+					},
+					'Request blocked due to fraud detection (repeated attempts detected)'
+				);
+
+				await logValidation(db, {
+					tokenHash,
+					validation,
+					metadata,
+					riskScore: fraudCheck.riskScore,
+					allowed: false,
+					blockReason: fraudCheck.reason,
+				});
+
+				return c.json(
+					{
+						error: 'Too many requests',
+						message: 'Please try again later',
+					},
+					429,
+					{
+						'Retry-After': '3600',
+					}
+				);
+			}
+		} else {
+			// Ephemeral ID missing (unlikely) - skip fraud detection, fail open
+			logger.warn('Ephemeral ID not available - skipping fraud detection');
+			fraudCheck.warnings = ['Ephemeral ID not available'];
+		}
+
+		// Now check if validation actually failed
 		if (!validation.valid) {
 			logger.warn(
 				{
@@ -100,6 +190,7 @@ app.post('/', async (c) => {
 					errors: validation.errors,
 					errorCodes: validation.debugInfo?.codes,
 					errorMessages: validation.debugInfo?.messages,
+					ephemeralId: validation.ephemeralId,
 				},
 				'Turnstile validation failed'
 			);
@@ -127,89 +218,8 @@ app.post('/', async (c) => {
 			);
 		}
 
-		// EPHEMERAL ID BLACKLIST CHECK (performance optimization)
-		// If this ephemeral ID was previously detected as fraudulent, block immediately
-		// This skips expensive D1 aggregation queries for repeat offenders
-		if (validation.ephemeralId) {
-			const ephemeralIdBlacklist = await checkPreValidationBlock(validation.ephemeralId, metadata.remoteIp, db);
-
-			if (ephemeralIdBlacklist.blocked) {
-				logger.warn(
-					{
-						ephemeralId: validation.ephemeralId,
-						reason: ephemeralIdBlacklist.reason,
-						confidence: ephemeralIdBlacklist.confidence,
-					},
-					'Request blocked - ephemeral ID previously flagged as fraudulent'
-				);
-
-				await logValidation(db, {
-					tokenHash,
-					validation,
-					metadata,
-					riskScore: 100,
-					allowed: false,
-					blockReason: ephemeralIdBlacklist.reason || 'Ephemeral ID blacklisted',
-				});
-
-				return c.json(
-					{
-						error: 'Request blocked',
-						message: 'Your submission cannot be processed at this time',
-					},
-					403
-				);
-			}
-		}
-
-		// Fraud detection (requires ephemeral ID)
-		// Note: Ephemeral ID should always be present since users must solve Turnstile to submit
-		// The only limitation is the ID's lifespan - if unavailable (unlikely), fail open
-		let fraudCheck;
-		if (validation.ephemeralId) {
-			fraudCheck = await checkEphemeralIdFraud(validation.ephemeralId, db);
-		} else {
-			// Ephemeral ID missing (unlikely) - skip fraud detection, fail open
-			logger.warn('Ephemeral ID not available - skipping fraud detection');
-			fraudCheck = {
-				allowed: true,
-				riskScore: 0,
-				warnings: ['Ephemeral ID not available'],
-			};
-		}
-
-		if (!fraudCheck.allowed) {
-			logger.warn(
-				{
-					riskScore: fraudCheck.riskScore,
-					reason: fraudCheck.reason,
-					warnings: fraudCheck.warnings,
-				},
-				'Submission blocked due to fraud detection'
-			);
-
-			await logValidation(db, {
-				tokenHash,
-				validation,
-				metadata,
-				riskScore: fraudCheck.riskScore,
-				allowed: false,
-				blockReason: fraudCheck.reason,
-			});
-
-			return c.json(
-				{
-					error: 'Too many requests',
-					message: 'Please try again later',
-				},
-				429,
-				{
-					'Retry-After': '3600',
-				}
-			);
-		}
-
-		// Check for duplicate email
+		// At this point, validation passed and fraud check passed
+		// Final step: Check for duplicate email before creating submission
 		const existingSubmission = await db
 			.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
 			.bind(sanitized.email)

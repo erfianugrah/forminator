@@ -171,279 +171,146 @@ turnstile.ready(() => {
 
 ---
 
-## Advanced Configuration Options
+## Our Implementation
 
-### Callback Configuration
+### Frontend: TurnstileWidget.tsx
 
-Turnstile provides several callbacks to handle widget events:
-
-**1. `callback` (Success Callback)**
-```typescript
-callback: (token: string) => {
-  console.log('Challenge completed:', token);
-  // Token is valid for 300 seconds (5 minutes)
-  // Send token to your backend for validation
-}
-```
-- Triggered when challenge successfully completes
-- Receives Turnstile token as parameter
-- Token must be validated server-side using Siteverify API
-- Tokens are single-use and expire after 5 minutes
-
-**2. `error-callback` (Error Callback)**
-```typescript
-'error-callback': (errorCode: string) => {
-  console.error('Turnstile error:', errorCode);
-  // Handle error based on error code
-  // See error code dictionary for user-friendly messages
-}
-```
-- Triggered when an error occurs during the challenge
-- Receives error code as parameter (e.g., "110420", "106010")
-- Use error code dictionary to display user-friendly messages
-- Common errors: network issues, token expiration, configuration problems
-
-**3. `expired-callback` (Token Expiration Callback)**
-```typescript
-'expired-callback': () => {
-  console.warn('Token expired');
-  // Token expired before submission
-  // Does NOT reset the widget automatically
-  // Consider calling turnstile.reset() to get new token
-}
-```
-- Triggered when token expires (5 minutes after generation)
-- Does not automatically reset widget
-- You must handle token refresh manually or call `turnstile.reset()`
-
-**4. `timeout-callback` (Interactive Challenge Timeout)**
-```typescript
-'timeout-callback': () => {
-  console.warn('Interactive challenge timed out');
-  // User took too long to complete interactive challenge
-  // Widget will reset automatically
-}
-```
-- Only relevant for interactive challenges (visible mode)
-- Triggered when user doesn't complete interactive challenge in time
-- Widget automatically resets after callback
-
-**5. `before-interactive-callback` & `after-interactive-callback`**
-```typescript
-'before-interactive-callback': () => {
-  console.log('Entering interactive mode');
-  // Show loading indicator, disable submit button, etc.
-},
-'after-interactive-callback': () => {
-  console.log('Exiting interactive mode');
-  // Hide loading indicator, re-enable submit button, etc.
-}
-```
-- Track when widget enters/exits interactive mode
-- Useful for UI updates and user feedback
-- Most users never see interactive mode (silent pass)
-
-**6. `unsupported-callback` (Browser Unsupported)**
-```typescript
-'unsupported-callback': () => {
-  console.error('Browser not supported');
-  // Handle unsupported browser
-  // Show message to upgrade browser or use fallback
-}
-```
-- Triggered when browser doesn't support Turnstile
-- Rare - most modern browsers supported
-- Consider fallback verification method
-
-### Retry & Refresh Behavior
-
-**Retry Configuration**
-
-Controls automatic retry on challenge failures:
+**Configuration** (`frontend/src/components/TurnstileWidget.tsx:92-136`)
 
 ```typescript
-{
-  retry: 'auto',              // Auto-retry on failure (default)
-  'retry-interval': 8000,     // Wait 8 seconds between retries (default)
-}
-```
-
-Options:
-- `auto` (default): Automatically retries failed challenges
-  - Better user experience
-  - Recovers from temporary network issues
-  - Handles transient processing errors
-- `never`: Disables automatic retry
-  - Gives you full control over error handling
-  - Useful for custom retry logic
-  - Requires manual intervention
-
-**Refresh Configuration**
-
-Controls behavior when tokens expire or challenges timeout:
-
-```typescript
-{
-  'refresh-expired': 'auto',   // Auto-refresh expired tokens (default)
-  'refresh-timeout': 'auto',   // Auto-refresh timed out challenges (default)
-}
-```
-
-**`refresh-expired` Options:**
-- `auto` (default): Automatically generates new token when old one expires
-  - Seamless user experience
-  - No manual intervention needed
-  - Uses more resources (frequent refreshes)
-- `manual`: Prompts user to manually refresh
-  - User must click to get new token
-  - Gives users control
-  - More conservative resource usage
-- `never`: No automatic refresh
-  - Your application must handle all refresh logic
-  - Most control but most complexity
-
-**`refresh-timeout` Options:**
-- `auto` (default): Automatically refreshes when interactive challenge times out
-  - Only applies to Managed mode (visible widgets)
-  - Seamless retry for users
-- `manual`: Prompts user to manually refresh
-  - User must click to retry
-- `never`: Shows timeout error
-  - No automatic retry
-  - User sees error message
-
-### Custom Data (cData) and Action
-
-**Action Parameter**
-
-Custom identifier for analytics and differentiation:
-
-```typescript
-{
-  action: 'submit-form',  // Max 32 characters, alphanumeric + _ and -
-}
-```
-
-**Use cases:**
-- Differentiate between multiple forms: `'login'`, `'signup'`, `'contact'`
-- Track different workflows: `'checkout-step-1'`, `'checkout-step-2'`
-- A/B testing: `'form-variant-a'`, `'form-variant-b'`
-- Analytics segmentation: Group challenges by action in dashboard
-
-**Returned in validation response:**
-```json
-{
-  "success": true,
-  "action": "submit-form",
-  ...
-}
-```
-
-**cData Parameter**
-
-Custom payload data for contextual information:
-
-```typescript
-{
-  cdata: 'user-id-12345',  // Max 255 characters, alphanumeric + _ and -
-}
-```
-
-**Use cases:**
-- User context: `'user-id-12345'` or `'session-abc123'`
-- Fraud detection: Additional context for risk assessment
-- Request tracking: Link challenge to specific request
-- A/B testing: `'test-group-b'`
-
-**Returned in validation response:**
-```json
-{
-  "success": true,
-  "cdata": "user-id-12345",
-  ...
-}
-```
-
-**Important constraints:**
-- Both `action` and `cdata` only accept: letters, numbers, underscores (_), hyphens (-)
-- No spaces, special characters, or emojis
-- Invalid characters will cause error code `110420` (invalid action) or `110430` (invalid cData)
-
-### Form Integration
-
-**Automatic Form Integration (Implicit Rendering)**
-
-When using implicit rendering, Turnstile automatically creates hidden input field:
-
-```html
-<div class="cf-turnstile" data-sitekey="YOUR-SITE-KEY"></div>
-```
-
-Automatically creates:
-```html
-<input type="hidden" name="cf-turnstile-response" value="TURNSTILE-TOKEN">
-```
-
-Token is automatically included when form submits - no JavaScript needed!
-
-**Custom Form Integration (Explicit Rendering)**
-
-For more control, disable automatic field creation:
-
-```typescript
-{
-  'response-field': false,  // Disable automatic hidden field (default: true)
-  // Handle token manually via callback
-}
-```
-
-Or customize field name:
-
-```typescript
-{
-  'response-field': true,
-  'response-field-name': 'turnstile-token',  // Custom field name (default: cf-turnstile-response)
-}
-```
-
-**Manual Token Handling (Recommended for APIs)**
-
-```typescript
-let turnstileToken = null;
-
-turnstile.render('#widget', {
-  sitekey: 'YOUR-SITE-KEY',
-  'response-field': false,  // Manual handling
-  callback: (token) => {
-    turnstileToken = token;
-    // Token ready - enable submit button
-  },
+turnstile.render(container, {
+  sitekey: TURNSTILE_SITEKEY,
+  theme: 'auto',                    // Auto-sync with system preference
+  size: 'flexible',                 // Responsive widget (300px-100%)
+  appearance: 'execute',            // Show only when executed
+  execution: 'execute',             // Manual trigger on submit
+  retry: 'auto',                    // Auto-retry failed challenges
+  'refresh-expired': 'auto',        // Auto-refresh expired tokens
+  'response-field': false,          // Manual token handling via callback
+  action: 'submit-form',            // Analytics tracking
+  callback, error-callback, expired-callback, timeout-callback,
+  'before-interactive-callback', 'after-interactive-callback', 'unsupported-callback',
+  language: 'auto',
+  tabindex: 0,
 });
+```
 
-// On form submit
-async function handleSubmit(formData) {
-  if (!turnstileToken) {
-    alert('Please complete verification');
-    return;
-  }
+**Key Features:**
+1. **Manual Execution** (`execution: 'execute'`) - Widget only runs when `turnstile.execute()` is called (on form submit)
+2. **Hidden Until Needed** (`appearance: 'execute'`) - Widget appears only when verification starts
+3. **Automatic Recovery** (`retry: 'auto', 'refresh-expired': 'auto'`) - Handles transient errors and token expiration
+4. **Manual Token Management** (`'response-field': false`) - Token passed via callback, not hidden input field
 
-  const response = await fetch('/api/submissions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...formData,
-      turnstileToken,  // Include token in request
-    }),
-  });
+**Callbacks Implemented:**
+- `callback` - Receives token, passes to parent component (`onValidated`)
+- `error-callback` - Shows user-friendly error, logs to console
+- `expired-callback` - Token expired (5min), shows "Verification expired" message
+- `timeout-callback` - Interactive challenge timed out
+- `before-interactive-callback` - User entered interactive mode (updates UI)
+- `after-interactive-callback` - User left interactive mode (updates UI)
+- `unsupported-callback` - Browser doesn't support Turnstile
+
+**Exposed Methods** (`TurnstileWidgetHandle:54-57`):
+- `execute()` - Start verification challenge
+- `reset()` - Reset widget to initial state
+
+### Backend: Server-Side Validation
+
+**3-Layer Fraud Detection** (`src/routes/submissions.ts:89-215`):
+
+**Layer 0: Token Reuse Check** (lines 58-87)
+```typescript
+const tokenHash = hashToken(turnstileToken);
+const isReused = await checkTokenReuse(tokenHash, db);
+if (isReused) return 400; // Token replay attack
+```
+
+**Layer 1: Turnstile Validation** (lines 89-94)
+```typescript
+const validation = await validateTurnstileToken(token, remoteIp, secretKey);
+// Extracts ephemeral ID even on failed validations for fraud tracking
+```
+
+**Layer 2: Blacklist Check** (lines 100-140)
+```typescript
+if (validation.ephemeralId) {
+  const blacklist = await checkPreValidationBlock(ephemeralId, remoteIp, db);
+  if (blacklist.blocked) return 403; // Previously flagged as fraudulent
 }
 ```
 
-**Best Practices:**
-1. Always validate tokens server-side (never trust client-side)
-2. Tokens expire after 300 seconds (5 minutes)
-3. Tokens are single-use (cannot be validated twice)
-4. Check token age on server (warn if > 4 minutes old)
-5. Store tokens securely (never log actual tokens, use hashes)
+**Layer 3: Pattern Analysis** (lines 142-178)
+```typescript
+const fraudCheck = await checkEphemeralIdFraud(ephemeralId, db);
+// Checks: ≥3 submissions/hour, IP diversity, validation attempts
+if (!fraudCheck.allowed) return 429; // High risk detected
+```
+
+**CRITICAL FIX**: Fraud detection runs BEFORE returning validation errors. This prevents attackers from bypassing fraud detection with expired/invalid tokens.
+
+**Layer 4: Validation Result Check** (lines 185-208)
+```typescript
+if (!validation.valid) {
+  // Enhanced error responses with user-friendly messages
+  return 400; // Validation failed with error code dictionary
+}
+```
+
+**Layer 5: Duplicate Email Check** (lines 212-242)
+```typescript
+const existing = await db.query('SELECT id FROM submissions WHERE email = ?');
+if (existing) return 409; // Duplicate email conflict
+```
+
+### Error Handling
+
+**Error Dictionary** (`src/lib/turnstile-errors.ts`)
+- 30+ error codes from official Cloudflare documentation
+- User-friendly messages (shown to users)
+- Debug messages (logged for developers)
+- Action recommendations (retry/reload/contact_support/check_config)
+- Pattern matching: `102001` → `102xxx`, `110601` → `11060x`
+
+**Error Response Format** (`src/routes/submissions.ts:199-207`):
+```json
+{
+  "error": "Verification failed",
+  "message": "Verification expired. Please complete the verification again.",
+  "errorCode": "106010",
+  "debug": {
+    "codes": ["106010"],
+    "messages": ["Challenge timeout"],
+    "actions": ["retry"],
+    "categories": ["client"]
+  }
+}
+```
+
+### Token Lifecycle
+
+1. **Frontend**: User submits form → `turnstile.execute()` called
+2. **Challenge**: Turnstile runs (usually silently, sometimes interactive)
+3. **Token Generated**: `callback(token)` receives token (valid for 300 seconds)
+4. **API Call**: Token sent to `/api/submissions` with form data
+5. **Server Validation**:
+   - Hash token → Check reuse (Layer 0)
+   - Validate with Cloudflare → Extract ephemeral ID (Layer 1)
+   - Check blacklist + fraud patterns (Layers 2-3)
+   - If valid, check validation result (Layer 4)
+   - Check duplicate email (Layer 5)
+   - Create submission
+6. **Logging**: All validations logged to D1 with metadata, risk scores
+
+### Security Best Practices Implemented
+
+✅ Server-side validation (never trust client)
+✅ Token hashing (never store actual tokens)
+✅ Single-use tokens (replay attack prevention)
+✅ Ephemeral ID tracking (pattern analysis)
+✅ Pre-validation blacklist (performance optimization)
+✅ Fraud detection on failed validations (bypass prevention)
+✅ Duplicate email prevention
+✅ Comprehensive logging with risk scores
 
 ---
 
