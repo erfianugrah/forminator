@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 
 interface SearchBarProps {
@@ -19,6 +19,16 @@ export function SearchBar({
 	className = '',
 }: SearchBarProps) {
 	const [localValue, setLocalValue] = useState(value);
+	const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+	// Cleanup timer on unmount
+	useEffect(() => {
+		return () => {
+			if (timerRef.current) {
+				clearTimeout(timerRef.current);
+			}
+		};
+	}, []);
 
 	// Debounce search input
 	const handleChange = useCallback(
@@ -26,12 +36,15 @@ export function SearchBar({
 			const newValue = e.target.value;
 			setLocalValue(newValue);
 
-			// Debounce the onChange callback
-			const timer = setTimeout(() => {
+			// Clear existing timer
+			if (timerRef.current) {
+				clearTimeout(timerRef.current);
+			}
+
+			// Set new timer
+			timerRef.current = setTimeout(() => {
 				onChange(newValue);
 			}, 300);
-
-			return () => clearTimeout(timer);
 		},
 		[onChange]
 	);
