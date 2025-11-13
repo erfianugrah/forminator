@@ -153,12 +153,13 @@ app.post('/', async (c) => {
 		}
 
 		// Fraud detection (requires ephemeral ID)
+		// Note: Ephemeral ID should always be present since users must solve Turnstile to submit
+		// The only limitation is the ID's lifespan - if unavailable (unlikely), fail open
 		let fraudCheck;
 		if (validation.ephemeralId) {
 			fraudCheck = await checkEphemeralIdFraud(validation.ephemeralId, db);
 		} else {
-			// No ephemeral ID available - skip fraud detection (fail open)
-			// Note: Ephemeral IDs are an Enterprise Turnstile feature
+			// Ephemeral ID missing (unlikely) - skip fraud detection, fail open
 			logger.warn('Ephemeral ID not available - skipping fraud detection');
 			fraudCheck = {
 				allowed: true,
