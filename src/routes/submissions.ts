@@ -95,7 +95,12 @@ app.post('/', async (c) => {
 
 		if (!validation.valid) {
 			logger.warn(
-				{ reason: validation.reason, errors: validation.errors },
+				{
+					reason: validation.reason,
+					errors: validation.errors,
+					errorCodes: validation.debugInfo?.codes,
+					errorMessages: validation.debugInfo?.messages,
+				},
 				'Turnstile validation failed'
 			);
 
@@ -108,10 +113,15 @@ app.post('/', async (c) => {
 				blockReason: validation.reason,
 			});
 
+			// Use user-friendly error message from validation
+			const userMessage = validation.userMessage || 'Please complete the verification challenge';
+
 			return c.json(
 				{
 					error: 'Verification failed',
-					message: 'Please complete the verification challenge',
+					message: userMessage,
+					errorCode: validation.errors?.[0], // Include error code for client debugging
+					debug: validation.debugInfo, // Include debug info in development
 				},
 				400
 			);
@@ -196,6 +206,40 @@ app.post('/', async (c) => {
 				{
 					'Retry-After': '3600',
 				}
+			);
+		}
+
+		// Check for duplicate email
+		const existingSubmission = await db
+			.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
+			.bind(sanitized.email)
+			.first<{ id: number; created_at: string }>();
+
+		if (existingSubmission) {
+			logger.warn(
+				{
+					email: sanitized.email,
+					existingId: existingSubmission.id,
+					existingCreatedAt: existingSubmission.created_at,
+				},
+				'Duplicate email submission attempt'
+			);
+
+			await logValidation(db, {
+				tokenHash,
+				validation,
+				metadata,
+				riskScore: 60, // Medium risk for duplicate email
+				allowed: false,
+				blockReason: 'Duplicate email address',
+			});
+
+			return c.json(
+				{
+					error: 'Duplicate submission',
+					message: 'This email address has already been registered. If you believe this is an error, please contact support.',
+				},
+				409 // 409 Conflict
 			);
 		}
 

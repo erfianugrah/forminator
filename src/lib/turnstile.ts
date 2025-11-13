@@ -2,6 +2,12 @@ import { createHash } from 'node:crypto';
 import type { TurnstileValidationResult, FraudCheckResult } from './types';
 import logger from './logger';
 import { addToBlacklist } from './fraud-prevalidation';
+import {
+	getTurnstileError,
+	getUserErrorMessage,
+	getDebugErrorInfo,
+	isConfigurationError,
+} from './turnstile-errors';
 
 /**
  * Validate Turnstile token with Cloudflare's siteverify API
@@ -53,14 +59,34 @@ export async function validateTurnstileToken(
 		}>();
 
 		if (!result.success) {
+			const errorCodes = result['error-codes'] || [];
+			const debugInfo = getDebugErrorInfo(errorCodes);
+
+			// Log with enhanced error information
 			logger.warn(
-				{ errorCodes: result['error-codes'] },
+				{
+					errorCodes,
+					errorMessages: debugInfo.messages,
+					categories: debugInfo.categories,
+					isConfigError: isConfigurationError(errorCodes),
+				},
 				'Turnstile validation failed'
 			);
+
+			// Alert on configuration errors (needs developer attention)
+			if (isConfigurationError(errorCodes)) {
+				logger.error(
+					{ errorCodes, debugInfo },
+					'⚠️ CONFIGURATION ERROR: Turnstile misconfigured - immediate attention required'
+				);
+			}
+
 			return {
 				valid: false,
 				reason: 'turnstile_validation_failed',
-				errors: result['error-codes'] || [],
+				errors: errorCodes,
+				userMessage: getUserErrorMessage(errorCodes),
+				debugInfo,
 			};
 		}
 

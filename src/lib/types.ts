@@ -182,6 +182,14 @@ export interface TurnstileValidationResult {
 	};
 	errors?: string[];
 	ephemeralId?: string | null;
+	// Enhanced error reporting
+	userMessage?: string; // User-friendly error message for display
+	debugInfo?: {
+		codes: string[];
+		messages: string[];
+		actions: string[];
+		categories: string[];
+	};
 }
 
 // Fraud check result
