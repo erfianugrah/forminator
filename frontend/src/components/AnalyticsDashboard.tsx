@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { SearchBar } from './analytics/filters/SearchBar';
+import { DateRangePicker } from './analytics/filters/DateRangePicker';
+import { TimeSeriesChart } from './analytics/charts/TimeSeriesChart';
+import { BarChart } from './analytics/charts/BarChart';
+import { DataTable } from './analytics/tables/DataTable';
+import { subDays } from 'date-fns';
+import type { ColumnDef } from '@tanstack/react-table';
 
 interface ValidationStats {
 	total: number;
@@ -124,6 +131,16 @@ export default function AnalyticsDashboard() {
 	const [selectedSubmission, setSelectedSubmission] = useState<SubmissionDetail | null>(null);
 	const [modalLoading, setModalLoading] = useState(false);
 
+	// Filter states
+	const [searchQuery, setSearchQuery] = useState('');
+	const [dateRange, setDateRange] = useState({
+		start: subDays(new Date(), 30),
+		end: new Date(),
+	});
+
+	// Time-series data
+	const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
+
 	useEffect(() => {
 		// Check for saved API key in localStorage
 		const savedApiKey = localStorage.getItem('analytics-api-key');
@@ -152,15 +169,17 @@ export default function AnalyticsDashboard() {
 				tlsRes,
 				ja3Res,
 				ja4Res,
+				timeSeriesRes,
 			] = await Promise.all([
 				fetch('/api/analytics/stats', { headers }),
-				fetch('/api/analytics/submissions?limit=10', { headers }),
+				fetch('/api/analytics/submissions?limit=50', { headers }),
 				fetch('/api/analytics/countries', { headers }),
 				fetch('/api/analytics/bot-scores', { headers }),
 				fetch('/api/analytics/asn', { headers }),
 				fetch('/api/analytics/tls', { headers }),
 				fetch('/api/analytics/ja3', { headers }),
 				fetch('/api/analytics/ja4', { headers }),
+				fetch('/api/analytics/time-series?metric=submissions&interval=day', { headers }),
 			]);
 
 			// Check for 401 errors (unauthorized)
@@ -181,12 +200,13 @@ export default function AnalyticsDashboard() {
 				!asnRes.ok ||
 				!tlsRes.ok ||
 				!ja3Res.ok ||
-				!ja4Res.ok
+				!ja4Res.ok ||
+				!timeSeriesRes.ok
 			) {
 				throw new Error('Failed to fetch analytics');
 			}
 
-			const [statsData, submissionsData, countriesData, botScoresData, asnData, tlsData, ja3DataRes, ja4DataRes] =
+			const [statsData, submissionsData, countriesData, botScoresData, asnData, tlsData, ja3DataRes, ja4DataRes, timeSeriesDataRes] =
 				await Promise.all([
 					statsRes.json(),
 					submissionsRes.json(),
@@ -196,6 +216,7 @@ export default function AnalyticsDashboard() {
 					tlsRes.json(),
 					ja3Res.json(),
 					ja4Res.json(),
+					timeSeriesRes.json(),
 				]);
 
 			setStats(statsData.data);
@@ -206,6 +227,7 @@ export default function AnalyticsDashboard() {
 			setTlsData(tlsData.data);
 			setJa3Data(ja3DataRes.data);
 			setJa4Data(ja4DataRes.data);
+			setTimeSeriesData(timeSeriesDataRes.data || []);
 		} catch (err) {
 			console.error('Error loading analytics:', err);
 			setError('Failed to load analytics data');
@@ -253,6 +275,80 @@ export default function AnalyticsDashboard() {
 		setApiKeyInput('');
 		loadAnalytics(trimmedKey);
 	};
+
+	// Define columns for DataTable
+	const columns: ColumnDef<Submission>[] = [
+		{
+			accessorKey: 'id',
+			header: 'ID',
+			cell: ({ row }) => <span className="font-mono text-xs">{row.original.id}</span>,
+		},
+		{
+			accessorKey: 'first_name',
+			header: 'Name',
+			cell: ({ row }) => (
+				<span>
+					{row.original.first_name} {row.original.last_name}
+				</span>
+			),
+		},
+		{
+			accessorKey: 'email',
+			header: 'Email',
+			cell: ({ row }) => <span className="text-xs">{row.original.email}</span>,
+		},
+		{
+			accessorKey: 'country',
+			header: 'Country',
+			cell: ({ row }) => <span>{row.original.country || 'N/A'}</span>,
+		},
+		{
+			accessorKey: 'remote_ip',
+			header: 'IP',
+			cell: ({ row }) => (
+				<span className="font-mono text-xs">{row.original.remote_ip || 'N/A'}</span>
+			),
+		},
+		{
+			accessorKey: 'bot_score',
+			header: 'Bot Score',
+			cell: ({ row }) => {
+				const score = row.original.bot_score;
+				return (
+					<span
+						className={`font-semibold ${
+							score && score < 30
+								? 'text-destructive'
+								: score && score >= 70
+								? 'text-green-600 dark:text-green-400'
+								: 'text-yellow-600 dark:text-yellow-400'
+						}`}
+					>
+						{score !== null ? score : 'N/A'}
+					</span>
+				);
+			},
+		},
+		{
+			accessorKey: 'created_at',
+			header: 'Date',
+			cell: ({ row }) => (
+				<span className="text-xs">{new Date(row.original.created_at).toLocaleString()}</span>
+			),
+		},
+		{
+			id: 'actions',
+			header: 'Actions',
+			cell: ({ row }) => (
+				<button
+					onClick={() => loadSubmissionDetail(row.original.id)}
+					className="text-xs text-primary hover:underline"
+				>
+					View Details
+				</button>
+			),
+		},
+	];
 
 	if (loading) {
 		return (
@@ -372,87 +468,54 @@ export default function AnalyticsDashboard() {
 				</Card>
 			</div>
 
-			{/* Recent Submissions - Expanded View */}
+			{/* Submissions Time Series */}
+			<Card>
+				<CardHeader>
+					<CardTitle>Submissions Over Time</CardTitle>
+					<CardDescription>Daily submission volume (last 30 days)</CardDescription>
+				</CardHeader>
+				<CardContent>
+					{timeSeriesData.length > 0 ? (
+						<TimeSeriesChart
+							data={timeSeriesData}
+							type="area"
+							height={250}
+							yAxisLabel="Submissions"
+							formatTooltip={(value) => `${value.toFixed(0)} submissions`}
+						/>
+					) : (
+						<div className="flex items-center justify-center h-[250px]">
+							<p className="text-muted-foreground text-sm">No time-series data available</p>
+						</div>
+					)}
+				</CardContent>
+			</Card>
+
+			{/* Recent Submissions with Filters */}
 			<Card>
 				<CardHeader>
 					<CardTitle>Recent Submissions</CardTitle>
 					<CardDescription>
-						Latest form submissions (click row for full details)
+						Search and filter form submissions (click row for full details)
 					</CardDescription>
 				</CardHeader>
-				<CardContent>
-					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="border-b">
-									<th className="text-left py-2 px-3">ID</th>
-									<th className="text-left py-2 px-3">Name</th>
-									<th className="text-left py-2 px-3">Email</th>
-									<th className="text-left py-2 px-3">Country</th>
-									<th className="text-left py-2 px-3">IP</th>
-									<th className="text-left py-2 px-3">Bot Score</th>
-									<th className="text-left py-2 px-3">ASN</th>
-									<th className="text-left py-2 px-3">TLS Ver</th>
-									<th className="text-left py-2 px-3">JA3 Hash</th>
-									<th className="text-left py-2 px-3">Date</th>
-								</tr>
-							</thead>
-							<tbody>
-								{submissions.length === 0 ? (
-									<tr>
-										<td colSpan={10} className="text-center py-4 text-muted-foreground">
-											No submissions yet
-										</td>
-									</tr>
-								) : (
-									submissions.map((sub) => (
-										<tr
-											key={sub.id}
-											className="border-b hover:bg-muted/50 cursor-pointer transition-colors"
-											onClick={() => loadSubmissionDetail(sub.id)}
-										>
-											<td className="py-2 px-3 font-mono text-xs">{sub.id}</td>
-											<td className="py-2 px-3">
-												{sub.first_name} {sub.last_name}
-											</td>
-											<td className="py-2 px-3 text-xs">{sub.email}</td>
-											<td className="py-2 px-3">{sub.country || 'N/A'}</td>
-											<td className="py-2 px-3 font-mono text-xs">
-												{sub.remote_ip || 'N/A'}
-											</td>
-											<td className="py-2 px-3">
-												<span
-													className={`font-semibold ${
-														sub.bot_score && sub.bot_score < 30
-															? 'text-destructive'
-															: sub.bot_score && sub.bot_score >= 70
-															? 'text-green-600 dark:text-green-400'
-															: 'text-yellow-600 dark:text-yellow-400'
-													}`}
-												>
-													{sub.bot_score !== null ? sub.bot_score : 'N/A'}
-												</span>
-											</td>
-											<td className="py-2 px-3 font-mono text-xs">
-												{sub.asn || 'N/A'}
-											</td>
-											<td className="py-2 px-3 font-mono text-xs">
-												{sub.tls_version || 'N/A'}
-											</td>
-											<td className="py-2 px-3 font-mono text-xs truncate max-w-[100px]">
-												{sub.ja3_hash
-													? `${sub.ja3_hash.substring(0, 12)}...`
-													: 'N/A'}
-											</td>
-											<td className="py-2 px-3 text-xs">
-												{new Date(sub.created_at).toLocaleString()}
-											</td>
-										</tr>
-									))
-								)}
-							</tbody>
-						</table>
+				<CardContent className="space-y-4">
+					{/* Filters */}
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<SearchBar
+							value={searchQuery}
+							onChange={setSearchQuery}
+							placeholder="Search by email, name, or IP..."
+						/>
+						<DateRangePicker value={dateRange} onChange={setDateRange} />
 					</div>
+
+					{/* Data Table */}
+					<DataTable
+						data={submissions}
+						columns={columns}
+						totalCount={submissions.length}
+					/>
 				</CardContent>
 			</Card>
 
@@ -464,21 +527,20 @@ export default function AnalyticsDashboard() {
 						<CardDescription>Top countries</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<div className="space-y-2">
-							{countries.length === 0 ? (
-								<p className="text-muted-foreground">No data available</p>
-							) : (
-								countries.slice(0, 10).map((item) => (
-									<div
-										key={item.country}
-										className="flex items-center justify-between py-2 border-b last:border-0"
-									>
-										<span className="font-medium">{item.country}</span>
-										<span className="text-muted-foreground">{item.count}</span>
-									</div>
-								))
-							)}
-						</div>
+						{countries.length === 0 ? (
+							<div className="flex items-center justify-center h-[300px]">
+								<p className="text-muted-foreground text-sm">No data available</p>
+							</div>
+						) : (
+							<BarChart
+								data={countries.slice(0, 10)}
+								xAxisKey="country"
+								yAxisKey="count"
+								layout="vertical"
+								height={300}
+								formatTooltip={(value) => `${value} submissions`}
+							/>
+						)}
 					</CardContent>
 				</Card>
 
@@ -488,21 +550,20 @@ export default function AnalyticsDashboard() {
 						<CardDescription>Score ranges</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<div className="space-y-2">
-							{botScores.length === 0 ? (
-								<p className="text-muted-foreground">No data available</p>
-							) : (
-								botScores.map((item) => (
-									<div
-										key={item.score_range}
-										className="flex items-center justify-between py-2 border-b last:border-0"
-									>
-										<span className="font-medium">{item.score_range}</span>
-										<span className="text-muted-foreground">{item.count}</span>
-									</div>
-								))
-							)}
-						</div>
+						{botScores.length === 0 ? (
+							<div className="flex items-center justify-center h-[300px]">
+								<p className="text-muted-foreground text-sm">No data available</p>
+							</div>
+						) : (
+							<BarChart
+								data={botScores}
+								xAxisKey="score_range"
+								yAxisKey="count"
+								layout="vertical"
+								height={300}
+								formatTooltip={(value) => `${value} submissions`}
+							/>
+						)}
 					</CardContent>
 				</Card>
 			</div>
