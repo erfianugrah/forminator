@@ -10,6 +10,7 @@ import {
 	getJa3Distribution,
 	getJa4Distribution,
 	getSubmissionById,
+	getTimeSeriesData,
 } from '../lib/database';
 import logger from '../lib/logger';
 
@@ -286,6 +287,107 @@ app.get('/submissions/:id', async (c) => {
 			{
 				error: 'Internal server error',
 				message: 'Failed to fetch submission details',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/time-series - Get time-series data for trend visualization
+app.get('/time-series', async (c) => {
+	try {
+		const db = c.env.DB;
+
+		// Parse and validate query parameters
+		const metric = c.req.query('metric');
+		const interval = c.req.query('interval');
+		const start = c.req.query('start');
+		const end = c.req.query('end');
+
+		// Validate required parameters
+		if (!metric) {
+			return c.json(
+				{
+					success: false,
+					error: 'Missing required parameter',
+					message: 'Parameter "metric" is required',
+				},
+				400
+			);
+		}
+
+		if (!interval) {
+			return c.json(
+				{
+					success: false,
+					error: 'Missing required parameter',
+					message: 'Parameter "interval" is required',
+				},
+				400
+			);
+		}
+
+		// Validate metric
+		const validMetrics = [
+			'submissions',
+			'validations',
+			'validation_success_rate',
+			'bot_score_avg',
+			'risk_score_avg',
+			'allowed_rate',
+		];
+		if (!validMetrics.includes(metric)) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid metric',
+					message: `Metric must be one of: ${validMetrics.join(', ')}`,
+				},
+				400
+			);
+		}
+
+		// Validate interval
+		const validIntervals = ['hour', 'day', 'week', 'month'];
+		if (!validIntervals.includes(interval)) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid interval',
+					message: `Interval must be one of: ${validIntervals.join(', ')}`,
+				},
+				400
+			);
+		}
+
+		// Fetch time-series data
+		const data = await getTimeSeriesData(db, metric, interval, start, end);
+
+		// Calculate actual date range used (including defaults)
+		const startDate = start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+		const endDate = end || new Date().toISOString();
+
+		logger.info({ metric, interval, start: startDate, end: endDate }, 'Time-series data retrieved');
+
+		return c.json({
+			success: true,
+			data,
+			meta: {
+				metric,
+				interval,
+				start: startDate,
+				end: endDate,
+				total_points: data.length,
+			},
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error fetching time-series data');
+
+		return c.json(
+			{
+				success: false,
+				error: 'Internal server error',
+				message: 'Failed to fetch time-series data',
 			},
 			500
 		);

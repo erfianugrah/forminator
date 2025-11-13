@@ -390,3 +390,149 @@ export async function getSubmissionById(db: D1Database, id: number) {
 		throw error;
 	}
 }
+
+/**
+ * Get time-series data for analytics
+ * @param db Database instance
+ * @param metric Metric to aggregate (submissions, validations, bot_score_avg, etc.)
+ * @param interval Time bucket size (hour, day, week, month)
+ * @param start Start date (ISO8601)
+ * @param end End date (ISO8601)
+ */
+export async function getTimeSeriesData(
+	db: D1Database,
+	metric: string,
+	interval: string,
+	start?: string,
+	end?: string
+) {
+	try {
+		// Default to last 30 days if not specified
+		const startDate = start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+		const endDate = end || new Date().toISOString();
+
+		// Get SQLite date format string based on interval
+		const formatString = getDateFormatString(interval);
+		if (!formatString) {
+			throw new Error(`Invalid interval: ${interval}`);
+		}
+
+		let query: string;
+		let tableName: string;
+
+		// Build query based on metric type
+		switch (metric) {
+			case 'submissions':
+				query = `
+					SELECT
+						strftime('${formatString}', created_at) as timestamp,
+						COUNT(*) as value,
+						COUNT(*) as count
+					FROM submissions
+					WHERE created_at >= ? AND created_at <= ?
+					GROUP BY strftime('${formatString}', created_at)
+					ORDER BY timestamp ASC
+				`;
+				break;
+
+			case 'validations':
+				query = `
+					SELECT
+						strftime('${formatString}', created_at) as timestamp,
+						COUNT(*) as value,
+						COUNT(*) as count
+					FROM turnstile_validations
+					WHERE created_at >= ? AND created_at <= ?
+					GROUP BY strftime('${formatString}', created_at)
+					ORDER BY timestamp ASC
+				`;
+				break;
+
+			case 'validation_success_rate':
+				query = `
+					SELECT
+						strftime('${formatString}', created_at) as timestamp,
+						AVG(CASE WHEN success = 1 THEN 100.0 ELSE 0.0 END) as value,
+						COUNT(*) as count
+					FROM turnstile_validations
+					WHERE created_at >= ? AND created_at <= ?
+					GROUP BY strftime('${formatString}', created_at)
+					ORDER BY timestamp ASC
+				`;
+				break;
+
+			case 'bot_score_avg':
+				query = `
+					SELECT
+						strftime('${formatString}', created_at) as timestamp,
+						AVG(bot_score) as value,
+						COUNT(*) as count
+					FROM submissions
+					WHERE created_at >= ?
+						AND created_at <= ?
+						AND bot_score IS NOT NULL
+					GROUP BY strftime('${formatString}', created_at)
+					ORDER BY timestamp ASC
+				`;
+				break;
+
+			case 'risk_score_avg':
+				query = `
+					SELECT
+						strftime('${formatString}', created_at) as timestamp,
+						AVG(risk_score) as value,
+						COUNT(*) as count
+					FROM turnstile_validations
+					WHERE created_at >= ?
+						AND created_at <= ?
+						AND risk_score IS NOT NULL
+					GROUP BY strftime('${formatString}', created_at)
+					ORDER BY timestamp ASC
+				`;
+				break;
+
+			case 'allowed_rate':
+				query = `
+					SELECT
+						strftime('${formatString}', created_at) as timestamp,
+						AVG(CASE WHEN allowed = 1 THEN 100.0 ELSE 0.0 END) as value,
+						COUNT(*) as count
+					FROM turnstile_validations
+					WHERE created_at >= ? AND created_at <= ?
+					GROUP BY strftime('${formatString}', created_at)
+					ORDER BY timestamp ASC
+				`;
+				break;
+
+			default:
+				throw new Error(`Invalid metric: ${metric}`);
+		}
+
+		const result = await db.prepare(query).bind(startDate, endDate).all();
+
+		logger.info({ metric, interval, start: startDate, end: endDate }, 'Time-series data retrieved');
+
+		return result.results;
+	} catch (error) {
+		logger.error({ error, metric, interval }, 'Error fetching time-series data');
+		throw error;
+	}
+}
+
+/**
+ * Helper function to get SQLite date format string based on interval
+ */
+function getDateFormatString(interval: string): string | null {
+	switch (interval) {
+		case 'hour':
+			return '%Y-%m-%dT%H:00:00Z';
+		case 'day':
+			return '%Y-%m-%dT00:00:00Z';
+		case 'week':
+			return '%Y-W%W'; // ISO week number
+		case 'month':
+			return '%Y-%m-01T00:00:00Z';
+		default:
+			return null;
+	}
+}
