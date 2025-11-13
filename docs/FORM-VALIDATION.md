@@ -27,6 +27,7 @@ Located in `/frontend/src/lib/validation.ts` (client) and `/src/lib/validation.t
 
 ```typescript
 export const formSchema = z.object({
+  // Required fields
   firstName: z
     .string()
     .min(1, 'First name is required')
@@ -45,29 +46,37 @@ export const formSchema = z.object({
     .email('Invalid email address')
     .max(100, 'Email must be less than 100 characters'),
 
+  // Optional fields
   phone: z
     .string()
-    .min(1, 'Phone is required')
+    .optional()
     .refine((val) => {
+      if (!val || val.trim() === '') return true; // Allow empty
       const digits = val.replace(/\D/g, '');
       return digits.length >= 7 && digits.length <= 15;
     }, 'Phone must contain 7-15 digits'),
 
   address: z
     .string()
-    .min(1, 'Address is required')
-    .max(200, 'Address must be less than 200 characters'),
+    .optional()
+    .refine((val) => {
+      if (!val || val.trim() === '') return true; // Allow empty
+      return val.length <= 200;
+    }, 'Address must be less than 200 characters'),
 
   dateOfBirth: z
     .string()
-    .min(1, 'Date of birth is required')
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format')
-    .refine((date) => {
-      const birthDate = new Date(date);
+    .optional()
+    .refine((val) => {
+      if (!val || val.trim() === '') return true; // Allow empty
+      return /^\d{4}-\d{2}-\d{2}$/.test(val);
+    }, 'Invalid date format (YYYY-MM-DD)')
+    .refine((val) => {
+      if (!val || val.trim() === '') return true; // Allow empty
+      const birthDate = new Date(val);
       const today = new Date();
       const age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
-      // Adjust age if birthday hasn't occurred this year
       const actualAge =
         monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
           ? age - 1
@@ -78,6 +87,11 @@ export const formSchema = z.object({
 ```
 
 ### Design Decisions
+
+**Which fields are required?**
+- **Required**: First name, last name, email
+- **Optional**: Phone, address, date of birth
+- Rationale: Only collect essential data. Optional fields reduce friction while still capturing useful demographic info when users choose to provide it.
 
 **Why regex for names?**
 - Prevents injection attacks while allowing legitimate names

@@ -50,11 +50,21 @@ If validation succeeds → Extract ephemeral_id, continue to Layer 3
 
 **Post-validation fraud scoring with auto-blacklisting**
 
-Analyzes ephemeral ID patterns over 7-day window:
-- 5+ submissions in 7 days: +30 risk
-- 10+ submissions in 7 days: +40 risk
-- 10+ validations in 1 hour: +25 risk
-- 3+ submissions from different IPs (proxy rotation): +40 risk
+**Multi-layer detection strategy** (handles D1 eventual consistency):
+
+**Sub-Layer 1: Submission Check (24h window)**
+- 2+ submissions: Block immediately (riskScore = 100)
+- Rationale: Registration forms should only be submitted ONCE per user
+
+**Sub-Layer 2: Validation Attempt Check (1h window)** ⭐ KEY FOR RAPID ATTACKS
+- 3+ validation attempts: Block immediately (riskScore = 100)
+- 2 validation attempts: High risk (riskScore = 60, allows one retry)
+- CRITICAL: Checks `turnstile_validations` table which replicates faster than `submissions`
+- Catches rapid-fire attacks BEFORE D1 replication lag becomes an issue
+
+**Sub-Layer 3: IP Diversity Check (24h window)**
+- 2+ unique IPs for same ephemeral ID: Block immediately (riskScore = 100)
+- Detects proxy rotation and distributed botnets
 
 **Auto-blacklist if risk ≥ 70:**
 - 100 risk: 7-day block
@@ -66,7 +76,7 @@ Analyzes ephemeral ID patterns over 7-day window:
 - 5+ submissions in 1 hour: +30 risk
 
 ```typescript
-If risk ≥ 70 → Add to fraud_blacklist, block submission (403)
+If risk ≥ 70 → Add to fraud_blacklist, block submission (429 Too Many Requests)
 If risk < 70 → Allow submission, log validation attempt
 ```
 
