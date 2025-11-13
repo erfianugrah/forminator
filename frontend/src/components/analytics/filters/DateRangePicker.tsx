@@ -85,10 +85,10 @@ export function DateRangePicker({ value, onChange, className = '' }: DateRangePi
 		<div className={`relative ${className}`} ref={dropdownRef}>
 			<button
 				onClick={() => setIsOpen(!isOpen)}
-				className="flex items-center gap-2 px-4 py-2 border border-border rounded-md bg-background text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+				className="w-full flex items-center gap-2 px-4 py-2 border border-border rounded-md bg-background text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
 			>
 				<Calendar size={18} />
-				<span className="text-sm">{formatDateRange(value)}</span>
+				<span className="text-sm flex-1 text-left">{formatDateRange(value)}</span>
 				<ChevronDown
 					size={16}
 					className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}

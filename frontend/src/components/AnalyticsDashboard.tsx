@@ -754,7 +754,6 @@ export default function AnalyticsDashboard() {
 							value={selectedCountries}
 							onChange={setSelectedCountries}
 							placeholder="Filter by countries..."
-							label="Countries"
 						/>
 						<DateRangePicker value={dateRange} onChange={setDateRange} />
 					</div>
