@@ -87,43 +87,6 @@ app.post('/', async (c) => {
 			);
 		}
 
-		// PRE-VALIDATION FRAUD BLOCKING (Layer 1)
-		// Check if IP is blacklisted BEFORE expensive Turnstile API call
-		// Expected impact: Save 85-90% of API calls, 15x faster blocking (10ms vs 150ms)
-		const preValidationCheck = await checkPreValidationBlock(null, metadata.remoteIp, db);
-
-		if (preValidationCheck.blocked) {
-			logger.warn(
-				{
-					ip: metadata.remoteIp,
-					reason: preValidationCheck.reason,
-					confidence: preValidationCheck.confidence,
-				},
-				'Request blocked by pre-validation blacklist'
-			);
-
-			await logValidation(db, {
-				tokenHash,
-				validation: {
-					valid: false,
-					reason: 'blacklisted',
-					errors: [preValidationCheck.reason || 'Blocked by blacklist'],
-				},
-				metadata,
-				riskScore: 100,
-				allowed: false,
-				blockReason: preValidationCheck.reason || 'Blacklisted',
-			});
-
-			return c.json(
-				{
-					error: 'Request blocked',
-					message: 'Your submission cannot be processed at this time',
-				},
-				403
-			);
-		}
-
 		// Validate Turnstile token
 		const validation = await validateTurnstileToken(
 			turnstileToken,
@@ -155,8 +118,9 @@ app.post('/', async (c) => {
 			);
 		}
 
-		// POST-VALIDATION BLACKLIST CHECK (if ephemeral ID available)
-		// Check if ephemeral ID is blacklisted before expensive fraud analysis
+		// EPHEMERAL ID BLACKLIST CHECK (performance optimization)
+		// If this ephemeral ID was previously detected as fraudulent, block immediately
+		// This skips expensive D1 aggregation queries for repeat offenders
 		if (validation.ephemeralId) {
 			const ephemeralIdBlacklist = await checkPreValidationBlock(validation.ephemeralId, metadata.remoteIp, db);
 
@@ -167,7 +131,7 @@ app.post('/', async (c) => {
 						reason: ephemeralIdBlacklist.reason,
 						confidence: ephemeralIdBlacklist.confidence,
 					},
-					'Request blocked by ephemeral ID blacklist'
+					'Request blocked - ephemeral ID previously flagged as fraudulent'
 				);
 
 				await logValidation(db, {

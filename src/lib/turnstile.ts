@@ -118,7 +118,8 @@ export async function checkTokenReuse(
 
 /**
  * Check for fraud patterns based on ephemeral ID
- * Only checks last 7 days while ephemeral ID is likely still active
+ * Research-based thresholds: Legitimate users submit 1-2 times max, 3+ = abuse
+ * Time window: 1 hour for registration forms
  */
 export async function checkEphemeralIdFraud(
 	ephemeralId: string,
@@ -128,8 +129,8 @@ export async function checkEphemeralIdFraud(
 	let riskScore = 0;
 
 	try {
-		// Check submissions in last 7 days (while ephemeral ID is likely active)
-		const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+		// Check submissions in last hour (research: 3-5 per hour is industry standard limit)
+		const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
 		const recentSubmissions = await db
 			.prepare(
@@ -138,22 +139,23 @@ export async function checkEphemeralIdFraud(
 				 WHERE ephemeral_id = ?
 				 AND created_at > ?`
 			)
-			.bind(ephemeralId, sevenDaysAgo)
+			.bind(ephemeralId, oneHourAgo)
 			.first<{ count: number }>();
 
-		if (recentSubmissions && recentSubmissions.count >= 5) {
-			warnings.push('Multiple submissions in last 7 days');
-			riskScore += 30;
+		const submissionCount = recentSubmissions?.count || 0;
+
+		// Hard block: 3+ submissions in 1 hour (clear abuse)
+		if (submissionCount >= 3) {
+			warnings.push('Excessive submissions in last hour (3+)');
+			riskScore = 100;
+		}
+		// Warning: 2 submissions in 1 hour (possible duplicate/error)
+		else if (submissionCount >= 2) {
+			warnings.push('Multiple submissions detected (2)');
+			riskScore = 50;
 		}
 
-		if (recentSubmissions && recentSubmissions.count >= 10) {
-			warnings.push('Excessive submissions detected');
-			riskScore += 40;
-		}
-
-		// Check validation attempts in last hour
-		const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-
+		// Check validation attempts (high-frequency token generation = bot)
 		const recentValidations = await db
 			.prepare(
 				`SELECT COUNT(*) as count
@@ -164,29 +166,33 @@ export async function checkEphemeralIdFraud(
 			.bind(ephemeralId, oneHourAgo)
 			.first<{ count: number }>();
 
-		if (recentValidations && recentValidations.count >= 10) {
-			warnings.push('Multiple validation attempts in last hour');
-			riskScore += 25;
+		const validationCount = recentValidations?.count || 0;
+
+		// 10+ validation attempts in an hour = suspicious
+		if (validationCount >= 10) {
+			warnings.push('High-frequency validation attempts (10+)');
+			riskScore += 30;
 		}
 
 		const allowed = riskScore < 70;
 
 		// Auto-blacklist high-risk ephemeral IDs
 		if (!allowed && riskScore >= 70) {
-			const confidence = riskScore >= 100 ? 'high' : riskScore >= 85 ? 'medium' : 'low';
-			const expiresIn = riskScore >= 100 ? 86400 * 7 : riskScore >= 85 ? 86400 * 3 : 86400; // 7 days, 3 days, or 1 day
+			const confidence = riskScore >= 100 ? 'high' : riskScore >= 80 ? 'medium' : 'low';
+			// High confidence (100): 7 days, Medium (80+): 3 days, Low (70+): 1 day
+			const expiresIn = riskScore >= 100 ? 86400 * 7 : riskScore >= 80 ? 86400 * 3 : 86400;
 
 			await addToBlacklist(db, {
 				ephemeralId,
-				blockReason: `Automated: Risk score ${riskScore} - ${warnings.join(', ')}`,
+				blockReason: `Automated: ${submissionCount} submissions in 1 hour - ${warnings.join(', ')}`,
 				confidence,
 				expiresIn,
-				submissionCount: recentSubmissions?.count || 0,
+				submissionCount: submissionCount,
 				detectionMetadata: {
 					risk_score: riskScore,
 					warnings,
-					recent_submissions: recentSubmissions?.count || 0,
-					recent_validations: recentValidations?.count || 0,
+					submissions_1h: submissionCount,
+					validations_1h: validationCount,
 					detected_at: new Date().toISOString(),
 				},
 			});
@@ -197,6 +203,8 @@ export async function checkEphemeralIdFraud(
 					riskScore,
 					confidence,
 					expiresIn,
+					submissionCount,
+					validationCount,
 				},
 				'Ephemeral ID auto-blacklisted'
 			);
@@ -208,8 +216,8 @@ export async function checkEphemeralIdFraud(
 				riskScore,
 				allowed,
 				warnings,
-				recentSubmissions: recentSubmissions?.count || 0,
-				recentValidations: recentValidations?.count || 0,
+				submissions_1h: submissionCount,
+				validations_1h: validationCount,
 			},
 			'Fraud check completed'
 		);
@@ -234,6 +242,8 @@ export async function checkEphemeralIdFraud(
 
 /**
  * Fallback fraud check based on IP when ephemeral ID is not available
+ * Note: Less reliable than ephemeral ID (shared IPs, proxies, NAT)
+ * Use same thresholds as ephemeral ID but with lower confidence
  */
 export async function checkIpFraud(
 	remoteIp: string,
@@ -256,34 +266,37 @@ export async function checkIpFraud(
 			.bind(remoteIp, oneHourAgo)
 			.first<{ count: number }>();
 
-		if (recentSubmissions && recentSubmissions.count >= 3) {
-			warnings.push('Multiple submissions from IP in last hour');
-			riskScore += 40;
-		}
+		const submissionCount = recentSubmissions?.count || 0;
 
-		if (recentSubmissions && recentSubmissions.count >= 5) {
-			warnings.push('Excessive submissions from IP');
-			riskScore += 30;
+		// Use same thresholds as ephemeral ID but with caution (shared IPs exist)
+		if (submissionCount >= 5) {
+			warnings.push('Excessive submissions from IP (5+)');
+			riskScore = 100;
+		} else if (submissionCount >= 3) {
+			warnings.push('Multiple submissions from IP (3-4)');
+			riskScore = 70;
 		}
 
 		const allowed = riskScore < 70;
 
-		// Auto-blacklist high-risk IPs
+		// Auto-blacklist high-risk IPs (but with shorter durations due to shared IP concerns)
 		if (!allowed && riskScore >= 70) {
-			const confidence = riskScore >= 100 ? 'high' : riskScore >= 85 ? 'medium' : 'low';
-			const expiresIn = riskScore >= 100 ? 86400 * 7 : riskScore >= 85 ? 86400 * 3 : 86400; // 7 days, 3 days, or 1 day
+			const confidence = riskScore >= 100 ? 'medium' : 'low'; // Never 'high' for IPs (shared IPs exist)
+			// Shorter blacklist periods for IPs: 3 days max (vs 7 for ephemeral IDs)
+			const expiresIn = riskScore >= 100 ? 86400 * 3 : 86400;
 
 			await addToBlacklist(db, {
 				ipAddress: remoteIp,
-				blockReason: `Automated: Risk score ${riskScore} - ${warnings.join(', ')}`,
+				blockReason: `Automated: ${submissionCount} submissions in 1 hour - ${warnings.join(', ')}`,
 				confidence,
 				expiresIn,
-				submissionCount: recentSubmissions?.count || 0,
+				submissionCount: submissionCount,
 				detectionMetadata: {
 					risk_score: riskScore,
 					warnings,
-					recent_submissions: recentSubmissions?.count || 0,
+					submissions_1h: submissionCount,
 					detected_at: new Date().toISOString(),
+					note: 'IP-based detection (less reliable)',
 				},
 			});
 
@@ -293,8 +306,9 @@ export async function checkIpFraud(
 					riskScore,
 					confidence,
 					expiresIn,
+					submissionCount,
 				},
-				'IP address auto-blacklisted'
+				'IP address auto-blacklisted (fallback detection)'
 			);
 		}
 
@@ -304,7 +318,7 @@ export async function checkIpFraud(
 				riskScore,
 				allowed,
 				warnings,
-				recentSubmissions: recentSubmissions?.count || 0,
+				submissions_1h: submissionCount,
 			},
 			'IP-based fraud check completed'
 		);
