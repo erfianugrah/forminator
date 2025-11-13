@@ -1,5 +1,23 @@
 import { z } from 'zod';
 
+// Address data structure
+export const addressSchema = z.object({
+	street: z.string().optional(),
+	street2: z.string().optional(),
+	city: z.string().optional(),
+	state: z.string().optional(),
+	postalCode: z.string().optional(),
+	country: z.string().min(2, 'Country is required'),
+}).optional()
+	.transform((val) => {
+		// If address is provided but all fields are empty (only country set), return undefined
+		if (!val) return undefined;
+		const hasContent = val.street || val.street2 || val.city || val.state || val.postalCode;
+		return hasContent ? val : undefined;
+	});
+
+export type AddressData = z.infer<typeof addressSchema>;
+
 // Frontend form validation schema (matches backend schema)
 export const formSchema = z.object({
 	firstName: z
@@ -25,13 +43,7 @@ export const formSchema = z.object({
 			const digits = val.replace(/\D/g, '');
 			return digits.length >= 7 && digits.length <= 15;
 		}, 'Phone must contain 7-15 digits'),
-	address: z
-		.string()
-		.optional()
-		.refine((val) => {
-			if (!val || val.trim() === '') return true; // Allow empty
-			return val.length <= 200;
-		}, 'Address must be less than 200 characters'),
+	address: addressSchema,
 	dateOfBirth: z
 		.string()
 		.optional()

@@ -82,7 +82,7 @@ export function DataTable<TData>({
 									{headerGroup.headers.map((header) => (
 										<th
 											key={header.id}
-											className="px-4 py-3 text-left text-sm font-medium text-foreground"
+											className={`px-4 py-3 text-left text-sm font-medium text-foreground`}
 										>
 											{header.isPlaceholder ? null : (
 												<div
@@ -137,7 +137,7 @@ export function DataTable<TData>({
 										className="border-t border-border hover:bg-muted/30 transition-colors"
 									>
 										{row.getVisibleCells().map((cell) => (
-											<td key={cell.id} className="px-4 py-3 text-sm">
+											<td key={cell.id} className={`px-4 py-3 text-sm`}>
 												{flexRender(
 													cell.column.columnDef.cell,
 													cell.getContext()

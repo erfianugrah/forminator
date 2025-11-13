@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { PhoneInput } from './phone';
 import { DateOfBirthInput } from './DateOfBirthInput';
+import { AddressInput } from './AddressInput';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -58,6 +59,7 @@ export default function SubmissionForm() {
 
 	const phoneValue = watch('phone');
 	const dateOfBirthValue = watch('dateOfBirth');
+	const addressValue = watch('address');
 
 	const onSubmit = async (data: FormData) => {
 		setSubmitResult(null);
@@ -108,6 +110,12 @@ export default function SubmissionForm() {
 					}
 				}, 3000);
 			} else {
+				// Log full error response for debugging
+				console.error('Server error response:', {
+					status: response.status,
+					result,
+				});
+
 				// Handle different error types with appropriate messaging
 				let userFriendlyMessage = result.message || 'Submission failed. Please try again.';
 
@@ -123,8 +131,8 @@ export default function SubmissionForm() {
 					// Validation error - use server message
 					userFriendlyMessage = result.message || 'Please check your information and try again.';
 				} else if (response.status >= 500) {
-					// Server error
-					userFriendlyMessage = 'A server error occurred. Please try again in a few moments.';
+					// Server error - use server message if available
+					userFriendlyMessage = result.message || 'A server error occurred. Please try again in a few moments.';
 				}
 
 				setFlowStep('error');
@@ -347,26 +355,18 @@ export default function SubmissionForm() {
 								)}
 							</div>
 
-							<div className="space-y-2">
-								<Label htmlFor="address" className="text-sm font-medium">
-									Address{' '}
-									<span className="text-xs text-muted-foreground font-normal">(Optional)</span>
-								</Label>
-								<Input
-									id="address"
-									{...register('address')}
-									placeholder="123 Main St, City, State, ZIP"
-									disabled={isSubmitting}
-									className={errors.address ? 'border-destructive' : ''}
-									aria-invalid={!!errors.address}
-									aria-describedby={errors.address ? 'address-error' : undefined}
-								/>
-								{errors.address && (
-									<p id="address-error" className="text-sm text-destructive mt-1">
-										{errors.address.message}
-									</p>
-								)}
-							</div>
+							<AddressInput
+								value={addressValue}
+								onChange={(address) => setValue('address', address, { shouldValidate: true })}
+								disabled={isSubmitting}
+								error={!!errors.address}
+								defaultCountry={defaultCountry}
+							/>
+							{errors.address && (
+								<p id="address-error" className="text-sm text-destructive mt-1">
+									{errors.address.message as string}
+								</p>
+							)}
 						</div>
 					</div>
 

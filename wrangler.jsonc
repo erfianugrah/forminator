@@ -16,7 +16,8 @@
 		{
 			"binding": "DB",
 			"database_name": "DB",
-			"database_id": "32b62f8d-14ad-48cf-9464-7fc4b154a4f3"
+			"database_id": "f36739a7-badb-456f-bbab-da0732722cae",
+			"remote": true
 		}
 	],
 	// Environment variables

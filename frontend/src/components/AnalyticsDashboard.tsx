@@ -165,9 +165,6 @@ export default function AnalyticsDashboard() {
 	const [autoRefresh, setAutoRefresh] = useState(false);
 	const [refreshInterval, setRefreshInterval] = useState(30); // seconds
 
-	// Table view state
-	const [tableView, setTableView] = useState<'compact' | 'comfortable' | 'spacious'>('comfortable');
-
 	useEffect(() => {
 		// Check for saved API key in localStorage
 		const savedApiKey = localStorage.getItem('analytics-api-key');
@@ -653,8 +650,6 @@ export default function AnalyticsDashboard() {
 					onExportJSON={() => handleExport('json')}
 					hasActiveFilters={hasActiveFilters}
 					onClearFilters={handleClearFilters}
-					tableView={tableView}
-					onTableViewChange={setTableView}
 					isLoading={loading || submissionsLoading}
 				/>
 

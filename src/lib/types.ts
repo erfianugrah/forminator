@@ -97,13 +97,23 @@ export function extractRequestMetadata(request: Request): RequestMetadata {
 	};
 }
 
+// Address data structure
+export interface AddressData {
+	street?: string;
+	street2?: string;
+	city?: string;
+	state?: string;
+	postalCode?: string;
+	country: string;
+}
+
 // Form submission data
 export interface FormSubmission {
 	firstName: string;
 	lastName: string;
 	email: string;
 	phone?: string; // Optional
-	address?: string; // Optional
+	address?: AddressData; // Optional structured address
 	dateOfBirth?: string; // Optional
 }
 

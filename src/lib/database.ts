@@ -109,9 +109,9 @@ export async function createSubmission(
 				formData.firstName,
 				formData.lastName,
 				formData.email,
-				formData.phone,
-				formData.address,
-				formData.dateOfBirth,
+				formData.phone ?? null,
+				formData.address ? JSON.stringify(formData.address) : null,
+				formData.dateOfBirth ?? null,
 				ephemeralId || null,
 				metadata.remoteIp,
 				metadata.userAgent,
@@ -152,7 +152,12 @@ export async function createSubmission(
 
 		return submissionId;
 	} catch (error) {
-		logger.error({ error }, 'Error creating submission');
+		logger.error({
+			error,
+			errorMessage: error instanceof Error ? error.message : 'Unknown error',
+			errorStack: error instanceof Error ? error.stack : undefined,
+			formData: { email: formData.email, hasAddress: !!formData.address }
+		}, 'Error creating submission');
 		throw error;
 	}
 }

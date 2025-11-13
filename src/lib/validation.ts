@@ -1,5 +1,21 @@
 import { z } from 'zod';
 
+// Address schema
+const addressSchema = z.object({
+	street: z.string().max(100).optional(),
+	street2: z.string().max(100).optional(),
+	city: z.string().max(100).optional(),
+	state: z.string().max(100).optional(),
+	postalCode: z.string().max(20).optional(),
+	country: z.string().min(2, 'Country is required'),
+}).optional()
+	.transform((val) => {
+		// If address is provided but all fields are empty (only country set), return undefined
+		if (!val) return undefined;
+		const hasContent = val.street || val.street2 || val.city || val.state || val.postalCode;
+		return hasContent ? val : undefined;
+	});
+
 // Form submission schema
 export const formSubmissionSchema = z.object({
 	firstName: z
@@ -33,13 +49,7 @@ export const formSubmissionSchema = z.object({
 				'Phone must contain 7-15 digits'
 			).optional()
 		),
-	address: z
-		.string()
-		.optional()
-		.transform((val) => !val || val.trim() === '' ? undefined : val)
-		.pipe(
-			z.string().max(200, 'Address must be less than 200 characters').optional()
-		),
+	address: addressSchema,
 	dateOfBirth: z
 		.string()
 		.optional()
@@ -75,7 +85,14 @@ export function sanitizeFormData(data: FormSubmissionInput) {
 		lastName: sanitizeString(data.lastName),
 		email: sanitizeString(data.email.toLowerCase()),
 		phone: data.phone, // Already normalized by schema transform (undefined if not provided)
-		address: data.address ? sanitizeString(data.address) : undefined,
+		address: data.address ? {
+			street: data.address.street ? sanitizeString(data.address.street) : undefined,
+			street2: data.address.street2 ? sanitizeString(data.address.street2) : undefined,
+			city: data.address.city ? sanitizeString(data.address.city) : undefined,
+			state: data.address.state ? sanitizeString(data.address.state) : undefined,
+			postalCode: data.address.postalCode ? sanitizeString(data.address.postalCode) : undefined,
+			country: sanitizeString(data.address.country),
+		} : undefined,
 		dateOfBirth: data.dateOfBirth ? sanitizeString(data.dateOfBirth) : undefined,
 		turnstileToken: data.turnstileToken, // Don't sanitize token
 	};

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { Download, RefreshCw, X, Save, Filter, Eye } from 'lucide-react';
+import { Download, RefreshCw, X, Filter } from 'lucide-react';
 
 interface GlobalControlsBarProps {
 	// Auto-refresh controls
@@ -17,10 +17,6 @@ interface GlobalControlsBarProps {
 	// Filter controls
 	hasActiveFilters: boolean;
 	onClearFilters?: () => void;
-
-	// View options
-	tableView?: 'compact' | 'comfortable' | 'spacious';
-	onTableViewChange?: (view: 'compact' | 'comfortable' | 'spacious') => void;
 
 	// Loading state
 	isLoading?: boolean;
@@ -40,23 +36,16 @@ export function GlobalControlsBar({
 	onExportJSON,
 	hasActiveFilters,
 	onClearFilters,
-	tableView = 'comfortable',
-	onTableViewChange,
 	isLoading = false,
 }: GlobalControlsBarProps) {
 	const [showExportMenu, setShowExportMenu] = useState(false);
-	const [showViewMenu, setShowViewMenu] = useState(false);
 	const exportMenuRef = React.useRef<HTMLDivElement>(null);
-	const viewMenuRef = React.useRef<HTMLDivElement>(null);
 
 	// Close dropdowns when clicking outside
 	React.useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
 			if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
 				setShowExportMenu(false);
-			}
-			if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
-				setShowViewMenu(false);
 			}
 		};
 
@@ -131,60 +120,8 @@ export function GlobalControlsBar({
 					)}
 				</div>
 
-				{/* Right Section - Export & View Options */}
+				{/* Right Section - Export */}
 				<div className="flex items-center gap-2">
-				{/* View Options */}
-				{onTableViewChange && (
-					<div className="relative" ref={viewMenuRef}>
-						<button
-							onClick={() => setShowViewMenu(!showViewMenu)}
-							className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-foreground bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
-							title="View options"
-						>
-							<Eye size={16} />
-							View
-						</button>
-						{showViewMenu && (
-							<div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-md shadow-lg z-10">
-								<div className="p-2 space-y-1 bg-card">
-									<button
-										onClick={() => {
-											onTableViewChange('compact');
-											setShowViewMenu(false);
-										}}
-										className={`w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary ${
-											tableView === 'compact' ? 'bg-secondary font-medium' : ''
-										}`}
-									>
-										Compact
-									</button>
-									<button
-										onClick={() => {
-											onTableViewChange('comfortable');
-											setShowViewMenu(false);
-										}}
-										className={`w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary ${
-											tableView === 'comfortable' ? 'bg-secondary font-medium' : ''
-										}`}
-									>
-										Comfortable
-									</button>
-									<button
-										onClick={() => {
-											onTableViewChange('spacious');
-											setShowViewMenu(false);
-										}}
-										className={`w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary ${
-											tableView === 'spacious' ? 'bg-secondary font-medium' : ''
-										}`}
-									>
-										Spacious
-									</button>
-								</div>
-							</div>
-						)}
-					</div>
-				)}
 
 				{/* Export Menu */}
 				{(onExportCSV || onExportJSON) && (
@@ -199,8 +136,8 @@ export function GlobalControlsBar({
 							Export
 						</button>
 						{showExportMenu && (
-							<div className="absolute right-0 mt-2 w-32 bg-card border border-border rounded-md shadow-lg z-10">
-								<div className="p-2 space-y-1 bg-card">
+							<div className="absolute right-0 mt-2 w-32 bg-popover border border-border rounded-md shadow-lg z-50 backdrop-blur-sm">
+								<div className="p-2 space-y-1">
 									{onExportCSV && (
 										<button
 											onClick={() => {

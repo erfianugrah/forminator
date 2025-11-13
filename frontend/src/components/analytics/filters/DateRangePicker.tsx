@@ -96,8 +96,8 @@ export function DateRangePicker({ value, onChange, className = '' }: DateRangePi
 			</button>
 
 			{isOpen && (
-				<div className="absolute top-full left-0 mt-2 w-56 bg-card border border-border rounded-md shadow-lg z-50">
-					<div className="p-2 bg-card">
+				<div className="absolute top-full left-0 mt-2 w-56 bg-popover border border-border rounded-md shadow-lg z-50 backdrop-blur-sm">
+					<div className="p-2">
 						<div className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">
 							Quick Select
 						</div>

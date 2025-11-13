@@ -295,12 +295,31 @@ app.post('/', async (c) => {
 			201
 		);
 	} catch (error) {
-		logger.error({ error }, 'Error processing submission');
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		const errorStack = error instanceof Error ? error.stack : undefined;
+
+		logger.error({
+			error,
+			errorMessage,
+			errorStack,
+			errorType: error instanceof Error ? error.constructor.name : typeof error
+		}, 'Error processing submission');
+
+		// Check for specific error types to provide better user feedback
+		if (errorMessage.includes('validation') || errorMessage.includes('Invalid')) {
+			return c.json(
+				{
+					error: 'Validation error',
+					message: 'Please check your form data and try again',
+				},
+				400
+			);
+		}
 
 		return c.json(
 			{
 				error: 'Internal server error',
-				message: 'An error occurred while processing your submission',
+				message: 'An error occurred while processing your submission. Please try again.',
 			},
 			500
 		);
