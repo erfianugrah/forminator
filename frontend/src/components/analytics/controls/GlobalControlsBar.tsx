@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useState } from 'react';
 import { Download, RefreshCw, X, Save, Filter, Eye } from 'lucide-react';
 
@@ -45,6 +46,23 @@ export function GlobalControlsBar({
 }: GlobalControlsBarProps) {
 	const [showExportMenu, setShowExportMenu] = useState(false);
 	const [showViewMenu, setShowViewMenu] = useState(false);
+	const exportMenuRef = React.useRef<HTMLDivElement>(null);
+	const viewMenuRef = React.useRef<HTMLDivElement>(null);
+
+	// Close dropdowns when clicking outside
+	React.useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+				setShowExportMenu(false);
+			}
+			if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
+				setShowViewMenu(false);
+			}
+		};
+
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
 
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-card border border-border rounded-lg shadow-sm">
@@ -116,7 +134,7 @@ export function GlobalControlsBar({
 			<div className="flex items-center gap-2">
 				{/* View Options */}
 				{onTableViewChange && (
-					<div className="relative">
+					<div className="relative" ref={viewMenuRef}>
 						<button
 							onClick={() => setShowViewMenu(!showViewMenu)}
 							className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-foreground bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
@@ -127,13 +145,13 @@ export function GlobalControlsBar({
 						</button>
 						{showViewMenu && (
 							<div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-md shadow-lg z-10">
-								<div className="p-2 space-y-1">
+								<div className="p-2 space-y-1 bg-card">
 									<button
 										onClick={() => {
 											onTableViewChange('compact');
 											setShowViewMenu(false);
 										}}
-										className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary ${
+										className={`w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary ${
 											tableView === 'compact' ? 'bg-secondary font-medium' : ''
 										}`}
 									>
@@ -144,7 +162,7 @@ export function GlobalControlsBar({
 											onTableViewChange('comfortable');
 											setShowViewMenu(false);
 										}}
-										className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary ${
+										className={`w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary ${
 											tableView === 'comfortable' ? 'bg-secondary font-medium' : ''
 										}`}
 									>
@@ -155,7 +173,7 @@ export function GlobalControlsBar({
 											onTableViewChange('spacious');
 											setShowViewMenu(false);
 										}}
-										className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary ${
+										className={`w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary ${
 											tableView === 'spacious' ? 'bg-secondary font-medium' : ''
 										}`}
 									>
@@ -169,7 +187,7 @@ export function GlobalControlsBar({
 
 				{/* Export Menu */}
 				{(onExportCSV || onExportJSON) && (
-					<div className="relative">
+					<div className="relative" ref={exportMenuRef}>
 						<button
 							onClick={() => setShowExportMenu(!showExportMenu)}
 							disabled={isLoading}
@@ -181,14 +199,14 @@ export function GlobalControlsBar({
 						</button>
 						{showExportMenu && (
 							<div className="absolute right-0 mt-2 w-32 bg-card border border-border rounded-md shadow-lg z-10">
-								<div className="p-2 space-y-1">
+								<div className="p-2 space-y-1 bg-card">
 									{onExportCSV && (
 										<button
 											onClick={() => {
 												onExportCSV();
 												setShowExportMenu(false);
 											}}
-											className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary"
+											className="w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary"
 										>
 											CSV
 										</button>
@@ -199,7 +217,7 @@ export function GlobalControlsBar({
 												onExportJSON();
 												setShowExportMenu(false);
 											}}
-											className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary"
+											className="w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary"
 										>
 											JSON
 										</button>
