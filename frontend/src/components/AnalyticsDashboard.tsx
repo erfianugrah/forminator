@@ -10,6 +10,7 @@ import { TimeSeriesChart } from './analytics/charts/TimeSeriesChart';
 import { BarChart } from './analytics/charts/BarChart';
 import { DataTable } from './analytics/tables/DataTable';
 import { FraudAlert } from './analytics/cards/FraudAlert';
+import { GlobalControlsBar } from './analytics/controls/GlobalControlsBar';
 import { Download, RefreshCw } from 'lucide-react';
 import { subDays } from 'date-fns';
 import type { ColumnDef, PaginationState, SortingState } from '@tanstack/react-table';
@@ -160,6 +161,9 @@ export default function AnalyticsDashboard() {
 	// Auto-refresh state
 	const [autoRefresh, setAutoRefresh] = useState(false);
 	const [refreshInterval, setRefreshInterval] = useState(30); // seconds
+
+	// Table view state
+	const [tableView, setTableView] = useState<'compact' | 'comfortable' | 'spacious'>('comfortable');
 
 	useEffect(() => {
 		// Check for saved API key in localStorage
@@ -467,6 +471,31 @@ export default function AnalyticsDashboard() {
 		loadAnalytics(trimmedKey);
 	};
 
+	const handleManualRefresh = () => {
+		if (apiKey) {
+			loadAnalytics(apiKey);
+			loadSubmissions(apiKey);
+		}
+	};
+
+	const handleClearFilters = () => {
+		setSearchQuery('');
+		setSelectedCountries([]);
+		setBotScoreRange([0, 100]);
+		setDateRange({
+			start: subDays(new Date(), 30),
+			end: new Date(),
+		});
+	};
+
+	const hasActiveFilters =
+		searchQuery.trim() !== '' ||
+		selectedCountries.length > 0 ||
+		botScoreRange[0] !== 0 ||
+		botScoreRange[1] !== 100 ||
+		dateRange.start.getTime() !== subDays(new Date(), 30).setHours(0, 0, 0, 0) ||
+		dateRange.end.getTime() !== new Date().setHours(23, 59, 59, 999);
+
 	// Define columns for DataTable
 	const columns: ColumnDef<Submission>[] = [
 		{
@@ -601,32 +630,20 @@ export default function AnalyticsDashboard() {
 
 			<div className="space-y-6">
 				{/* Auto-refresh Controls */}
-				<div className="flex justify-end items-center gap-3 pb-4 border-b border-border">
-					<label className="flex items-center gap-2 cursor-pointer">
-						<input
-							type="checkbox"
-							checked={autoRefresh}
-							onChange={(e) => setAutoRefresh(e.target.checked)}
-							className="w-4 h-4 accent-primary cursor-pointer"
-						/>
-						<span className="text-sm text-foreground">Auto-refresh</span>
-					</label>
-					{autoRefresh && (
-						<>
-							<select
-								value={refreshInterval}
-								onChange={(e) => setRefreshInterval(parseInt(e.target.value))}
-								className="px-2 py-1 text-sm border border-border rounded-md bg-background text-foreground"
-							>
-								<option value={10}>10s</option>
-								<option value={30}>30s</option>
-								<option value={60}>60s</option>
-								<option value={120}>2min</option>
-							</select>
-							<RefreshCw size={14} className="text-primary animate-spin" />
-						</>
-					)}
-				</div>
+				<GlobalControlsBar
+					autoRefresh={autoRefresh}
+					refreshInterval={refreshInterval}
+					onAutoRefreshChange={setAutoRefresh}
+					onRefreshIntervalChange={setRefreshInterval}
+					onManualRefresh={handleManualRefresh}
+					onExportCSV={() => handleExport('csv')}
+					onExportJSON={() => handleExport('json')}
+					hasActiveFilters={hasActiveFilters}
+					onClearFilters={handleClearFilters}
+					tableView={tableView}
+					onTableViewChange={setTableView}
+					isLoading={loading || submissionsLoading}
+				/>
 
 				{/* Stats Grid */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -749,26 +766,6 @@ export default function AnalyticsDashboard() {
 							label="Bot Score Range"
 							step={1}
 						/>
-					</div>
-
-					{/* Export Buttons */}
-					<div className="flex justify-end gap-2">
-						<button
-							onClick={() => handleExport('csv')}
-							className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary hover:text-primary-foreground transition-colors"
-							disabled={submissionsLoading}
-						>
-							<Download size={16} />
-							Export CSV
-						</button>
-						<button
-							onClick={() => handleExport('json')}
-							className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary hover:text-primary-foreground transition-colors"
-							disabled={submissionsLoading}
-						>
-							<Download size={16} />
-							Export JSON
-						</button>
 					</div>
 
 					{/* Data Table */}
