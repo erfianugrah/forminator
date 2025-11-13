@@ -12,6 +12,7 @@ import {
 	getJa4Distribution,
 	getSubmissionById,
 	getTimeSeriesData,
+	detectFraudPatterns,
 } from '../lib/database';
 import type { SubmissionsFilters } from '../lib/database';
 import logger from '../lib/logger';
@@ -678,6 +679,33 @@ app.get('/export', async (c) => {
 				success: false,
 				error: 'Internal server error',
 				message: 'Failed to export data',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/fraud-patterns - Detect potential fraud patterns
+app.get('/fraud-patterns', async (c) => {
+	try {
+		const db = c.env.DB;
+
+		const patterns = await detectFraudPatterns(db);
+
+		logger.info('Fraud patterns retrieved');
+
+		return c.json({
+			success: true,
+			data: patterns,
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error detecting fraud patterns');
+
+		return c.json(
+			{
+				success: false,
+				error: 'Internal server error',
+				message: 'Failed to detect fraud patterns',
 			},
 			500
 		);

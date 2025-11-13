@@ -680,3 +680,98 @@ function getDateFormatString(interval: string): string | null {
 			return null;
 	}
 }
+
+/**
+ * Detect potential fraud patterns in submissions
+ */
+export async function detectFraudPatterns(db: D1Database): Promise<any> {
+	try {
+		// Pattern 1: Duplicate IP addresses with multiple submissions
+		const duplicateIpsQuery = `
+			SELECT
+				remote_ip,
+				COUNT(*) as submission_count,
+				GROUP_CONCAT(DISTINCT email) as emails,
+				AVG(bot_score) as avg_bot_score
+			FROM submissions
+			WHERE created_at >= datetime('now', '-24 hours')
+			GROUP BY remote_ip
+			HAVING COUNT(*) >= 3
+			ORDER BY submission_count DESC
+			LIMIT 10
+		`;
+
+		// Pattern 2: Low bot score submissions (< 30)
+		const lowBotScoresQuery = `
+			SELECT
+				id, email, remote_ip, bot_score, country, created_at
+			FROM submissions
+			WHERE bot_score IS NOT NULL
+				AND bot_score < 30
+				AND created_at >= datetime('now', '-7 days')
+			ORDER BY bot_score ASC, created_at DESC
+			LIMIT 10
+		`;
+
+		// Pattern 3: Rapid submissions (multiple in short time)
+		const rapidSubmissionsQuery = `
+			SELECT
+				remote_ip,
+				COUNT(*) as count,
+				MIN(created_at) as first_submission,
+				MAX(created_at) as last_submission,
+				ROUND((JULIANDAY(MAX(created_at)) - JULIANDAY(MIN(created_at))) * 24 * 60, 2) as time_span_minutes,
+				GROUP_CONCAT(DISTINCT email) as emails
+			FROM submissions
+			WHERE created_at >= datetime('now', '-1 hour')
+			GROUP BY remote_ip
+			HAVING COUNT(*) >= 2
+				AND time_span_minutes < 5
+			ORDER BY count DESC
+			LIMIT 10
+		`;
+
+		// Pattern 4: Duplicate emails
+		const duplicateEmailsQuery = `
+			SELECT
+				email,
+				COUNT(*) as submission_count,
+				COUNT(DISTINCT remote_ip) as unique_ips,
+				GROUP_CONCAT(DISTINCT country) as countries,
+				AVG(bot_score) as avg_bot_score
+			FROM submissions
+			WHERE created_at >= datetime('now', '-7 days')
+			GROUP BY email
+			HAVING COUNT(*) >= 2
+			ORDER BY submission_count DESC
+			LIMIT 10
+		`;
+
+		const [duplicateIps, lowBotScores, rapidSubmissions, duplicateEmails] = await Promise.all([
+			db.prepare(duplicateIpsQuery).all(),
+			db.prepare(lowBotScoresQuery).all(),
+			db.prepare(rapidSubmissionsQuery).all(),
+			db.prepare(duplicateEmailsQuery).all(),
+		]);
+
+		logger.info(
+			{
+				duplicate_ips: duplicateIps.results.length,
+				low_bot_scores: lowBotScores.results.length,
+				rapid_submissions: rapidSubmissions.results.length,
+				duplicate_emails: duplicateEmails.results.length,
+			},
+			'Fraud patterns detected'
+		);
+
+		return {
+			duplicate_ips: duplicateIps.results,
+			low_bot_scores: lowBotScores.results,
+			rapid_submissions: rapidSubmissions.results,
+			duplicate_emails: duplicateEmails.results,
+		};
+	} catch (error) {
+		logger.error({ error }, 'Error detecting fraud patterns');
+		throw error;
+	}
+}

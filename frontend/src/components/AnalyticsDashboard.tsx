@@ -9,6 +9,7 @@ import { RangeSlider } from './analytics/filters/RangeSlider';
 import { TimeSeriesChart } from './analytics/charts/TimeSeriesChart';
 import { BarChart } from './analytics/charts/BarChart';
 import { DataTable } from './analytics/tables/DataTable';
+import { FraudAlert } from './analytics/cards/FraudAlert';
 import { Download } from 'lucide-react';
 import { subDays } from 'date-fns';
 import type { ColumnDef, PaginationState, SortingState } from '@tanstack/react-table';
@@ -121,6 +122,7 @@ export default function AnalyticsDashboard() {
 	const [tlsData, setTlsData] = useState<TlsData[]>([]);
 	const [ja3Data, setJa3Data] = useState<Ja3Data[]>([]);
 	const [ja4Data, setJa4Data] = useState<Ja4Data[]>([]);
+	const [fraudPatterns, setFraudPatterns] = useState<any>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
@@ -206,6 +208,7 @@ export default function AnalyticsDashboard() {
 				ja3Res,
 				ja4Res,
 				timeSeriesRes,
+				fraudRes,
 			] = await Promise.all([
 				fetch('/api/analytics/stats', { headers }),
 				fetch('/api/analytics/countries', { headers }),
@@ -215,6 +218,7 @@ export default function AnalyticsDashboard() {
 				fetch('/api/analytics/ja3', { headers }),
 				fetch('/api/analytics/ja4', { headers }),
 				fetch('/api/analytics/time-series?metric=submissions&interval=day', { headers }),
+				fetch('/api/analytics/fraud-patterns', { headers }),
 			]);
 
 			// Check for 401 errors (unauthorized)
@@ -235,12 +239,13 @@ export default function AnalyticsDashboard() {
 				!tlsRes.ok ||
 				!ja3Res.ok ||
 				!ja4Res.ok ||
-				!timeSeriesRes.ok
+				!timeSeriesRes.ok ||
+				!fraudRes.ok
 			) {
 				throw new Error('Failed to fetch analytics');
 			}
 
-			const [statsData, countriesData, botScoresData, asnData, tlsData, ja3DataRes, ja4DataRes, timeSeriesDataRes] =
+			const [statsData, countriesData, botScoresData, asnData, tlsData, ja3DataRes, ja4DataRes, timeSeriesDataRes, fraudDataRes] =
 				await Promise.all([
 					statsRes.json(),
 					countriesRes.json(),
@@ -250,6 +255,7 @@ export default function AnalyticsDashboard() {
 					ja3Res.json(),
 					ja4Res.json(),
 					timeSeriesRes.json(),
+					fraudRes.json(),
 				]);
 
 			setStats(statsData.data);
@@ -260,6 +266,7 @@ export default function AnalyticsDashboard() {
 			setJa3Data(ja3DataRes.data);
 			setJa4Data(ja4DataRes.data);
 			setTimeSeriesData(timeSeriesDataRes.data || []);
+			setFraudPatterns(fraudDataRes.data);
 
 			// Load submissions separately with filters
 			await loadSubmissions(key);
@@ -635,6 +642,9 @@ export default function AnalyticsDashboard() {
 					</CardContent>
 				</Card>
 			</div>
+
+			{/* Fraud Detection */}
+			<FraudAlert data={fraudPatterns} loading={loading} />
 
 			{/* Submissions Time Series */}
 			<Card>
