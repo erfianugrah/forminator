@@ -2,7 +2,7 @@
 
 ## Overview
 
-Turnstile Flow is a full-stack Cloudflare Turnstile demonstration showcasing:
+Forminator is a full-stack Cloudflare Turnstile demonstration showcasing:
 - **Frontend**: Astro static site with React components (shadcn/ui) and dark mode
 - **Backend**: Cloudflare Worker with Hono routing framework
 - **Database**: D1 for storing form submissions with rich metadata (40+ fields)
@@ -13,7 +13,7 @@ Turnstile Flow is a full-stack Cloudflare Turnstile demonstration showcasing:
  Project Structure
 
 ```
-turnstile-flow/
+forminator/
 ├── frontend/                    # Astro static site (UI only)
 │   ├── src/
 │   │   ├── components/         # React components (shadcn/ui)
@@ -304,7 +304,7 @@ wrangler secret put TURNSTILE-SITE-KEY
 **Configuration** (wrangler.jsonc):
 ```jsonc
 {
-  "name": "turnstile-flow",
+  "name": "forminator",
   "main": "src/index.ts",
   "compatibility_date": "2025-11-12",
 

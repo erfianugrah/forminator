@@ -7,7 +7,7 @@ Production-ready form submission platform powered by Cloudflare Turnstile with a
 ## Architecture
 
 ```
-turnstile-flow/
+forminator/
 ├── frontend/              # Astro static site (UI only)
 │   ├── src/
 │   │   ├── components/   # React components (shadcn/ui)

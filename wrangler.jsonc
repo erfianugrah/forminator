@@ -1,5 +1,5 @@
 {
-	"name": "turnstile-flow",
+	"name": "forminator",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-11-12",
 	"compatibility_flags": [
