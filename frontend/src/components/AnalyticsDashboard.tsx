@@ -10,7 +10,7 @@ import { TimeSeriesChart } from './analytics/charts/TimeSeriesChart';
 import { BarChart } from './analytics/charts/BarChart';
 import { DataTable } from './analytics/tables/DataTable';
 import { FraudAlert } from './analytics/cards/FraudAlert';
-import { Download } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 import { subDays } from 'date-fns';
 import type { ColumnDef, PaginationState, SortingState } from '@tanstack/react-table';
 
@@ -157,6 +157,10 @@ export default function AnalyticsDashboard() {
 	// Time-series data
 	const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
 
+	// Auto-refresh state
+	const [autoRefresh, setAutoRefresh] = useState(false);
+	const [refreshInterval, setRefreshInterval] = useState(30); // seconds
+
 	useEffect(() => {
 		// Check for saved API key in localStorage
 		const savedApiKey = localStorage.getItem('analytics-api-key');
@@ -191,6 +195,18 @@ export default function AnalyticsDashboard() {
 		sorting.length > 0 ? sorting[0].desc : false,
 		apiKey,
 	]);
+
+	// Auto-refresh interval
+	useEffect(() => {
+		if (!autoRefresh || !apiKey) return;
+
+		const intervalId = setInterval(() => {
+			loadAnalytics(apiKey);
+			loadSubmissions(apiKey);
+		}, refreshInterval * 1000);
+
+		return () => clearInterval(intervalId);
+	}, [autoRefresh, refreshInterval, apiKey]);
 
 	const loadAnalytics = async (key: string) => {
 		setLoading(true);
@@ -584,6 +600,34 @@ export default function AnalyticsDashboard() {
 			</Dialog>
 
 			<div className="space-y-6">
+				{/* Auto-refresh Controls */}
+				<div className="flex justify-end items-center gap-3 pb-4 border-b border-border">
+					<label className="flex items-center gap-2 cursor-pointer">
+						<input
+							type="checkbox"
+							checked={autoRefresh}
+							onChange={(e) => setAutoRefresh(e.target.checked)}
+							className="w-4 h-4 accent-primary cursor-pointer"
+						/>
+						<span className="text-sm text-foreground">Auto-refresh</span>
+					</label>
+					{autoRefresh && (
+						<>
+							<select
+								value={refreshInterval}
+								onChange={(e) => setRefreshInterval(parseInt(e.target.value))}
+								className="px-2 py-1 text-sm border border-border rounded-md bg-background text-foreground"
+							>
+								<option value={10}>10s</option>
+								<option value={30}>30s</option>
+								<option value={60}>60s</option>
+								<option value={120}>2min</option>
+							</select>
+							<RefreshCw size={14} className="text-primary animate-spin" />
+						</>
+					)}
+				</div>
+
 				{/* Stats Grid */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 				<Card>
