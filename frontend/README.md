@@ -98,5 +98,4 @@ The frontend is built and deployed as part of the main Worker deployment:
 
 For complete documentation, see the parent directory:
 - [Root README](../README.md) - Complete project documentation
-- [GAPS.md](../GAPS.md) - Implementation status
 - [docs/](../docs/) - Technical documentation

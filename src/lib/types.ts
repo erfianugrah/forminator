@@ -197,6 +197,7 @@ export interface Env {
 	// Secrets (note: use bracket notation to access)
 	'TURNSTILE-SECRET-KEY': string;
 	'TURNSTILE-SITE-KEY': string;
+	'X-API-KEY'?: string;
 
 	// Bindings
 	DB: D1Database;

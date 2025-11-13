@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PhoneInput, type CountryIso2, defaultCountries, parseCountry } from 'react-international-phone';
-import 'react-international-phone/style.css';
+import { PhoneInput } from './phone';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import TurnstileWidget, { type TurnstileWidgetHandle } from './TurnstileWidget';
+import { SubmissionFlow, type FlowStep } from './SubmissionFlow';
 import { formSchema, type FormData } from '../lib/validation';
 
 export default function SubmissionForm() {
@@ -17,7 +17,9 @@ export default function SubmissionForm() {
 		type: 'success' | 'error';
 		message: string;
 	} | null>(null);
-	const [defaultCountry, setDefaultCountry] = useState<CountryIso2>('us');
+	const [defaultCountry, setDefaultCountry] = useState<string>('us');
+	const [flowStep, setFlowStep] = useState<FlowStep>('idle');
+	const [flowError, setFlowError] = useState<string | undefined>();
 
 	const turnstileRef = useRef<TurnstileWidgetHandle>(null);
 	const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -30,7 +32,7 @@ export default function SubmissionForm() {
 				const response = await fetch('/api/geo');
 				const data = await response.json();
 				if (data.success && data.countryCode) {
-					setDefaultCountry(data.countryCode as CountryIso2);
+					setDefaultCountry(data.countryCode.toLowerCase());
 				}
 			} catch (error) {
 				console.error('Failed to detect country:', error);
@@ -57,10 +59,13 @@ export default function SubmissionForm() {
 
 	const onSubmit = async (data: FormData) => {
 		setSubmitResult(null);
+		setFlowError(undefined);
+		setFlowStep('validating');
 
 		// Trigger Turnstile challenge if no token yet
 		if (!turnstileToken) {
 			if (turnstileRef.current) {
+				setFlowStep('turnstile-challenge');
 				turnstileRef.current.execute();
 			}
 			return;
@@ -68,6 +73,7 @@ export default function SubmissionForm() {
 
 		// Submit form
 		try {
+			setFlowStep('server-validation');
 			const response = await fetch('/api/submissions', {
 				method: 'POST',
 				headers: {
@@ -82,19 +88,25 @@ export default function SubmissionForm() {
 			const result = await response.json();
 
 			if (response.ok) {
+				setFlowStep('success');
 				setSubmitResult({
 					type: 'success',
 					message: result.message || 'Form submitted successfully!',
 				});
-				// Reset form
-				reset();
-				setTurnstileToken(null);
-				hasSubmittedRef.current = false;
-				// Reset Turnstile
-				if (turnstileRef.current) {
-					turnstileRef.current.reset();
-				}
+				// Reset form after a delay
+				setTimeout(() => {
+					reset();
+					setTurnstileToken(null);
+					hasSubmittedRef.current = false;
+					setFlowStep('idle');
+					// Reset Turnstile
+					if (turnstileRef.current) {
+						turnstileRef.current.reset();
+					}
+				}, 3000);
 			} else {
+				setFlowStep('error');
+				setFlowError(result.message || 'Submission failed. Please try again.');
 				setSubmitResult({
 					type: 'error',
 					message: result.message || 'Submission failed. Please try again.',
@@ -108,6 +120,8 @@ export default function SubmissionForm() {
 			}
 		} catch (error) {
 			console.error('Submission error:', error);
+			setFlowStep('error');
+			setFlowError('An error occurred. Please try again.');
 			setSubmitResult({
 				type: 'error',
 				message: 'An error occurred. Please try again.',
@@ -131,6 +145,7 @@ export default function SubmissionForm() {
 			clearTimeout(submitTimeoutRef.current);
 		}
 
+		setFlowStep('turnstile-success');
 		setTurnstileToken(token);
 		hasSubmittedRef.current = true;
 
@@ -145,10 +160,40 @@ export default function SubmissionForm() {
 
 	const handleTurnstileError = (error?: string) => {
 		console.error('Turnstile error:', error);
+		setFlowStep('error');
+		setFlowError('Verification failed. Please try again.');
 		setSubmitResult({
 			type: 'error',
 			message: 'Verification failed. Please try again.',
 		});
+	};
+
+	const handleBeforeInteractive = () => {
+		console.log('Before interactive mode');
+		setFlowStep('turnstile-interactive');
+	};
+
+	const handleAfterInteractive = () => {
+		console.log('After interactive mode');
+		setFlowStep('turnstile-challenge');
+	};
+
+	const handleExpired = () => {
+		console.log('Token expired');
+		setFlowStep('error');
+		setFlowError('Verification expired. Please try again.');
+	};
+
+	const handleTimeout = () => {
+		console.log('Challenge timeout');
+		setFlowStep('error');
+		setFlowError('Verification timed out. Please try again.');
+	};
+
+	const handleUnsupported = () => {
+		console.log('Browser unsupported');
+		setFlowStep('error');
+		setFlowError('Your browser does not support verification.');
 	};
 
 	return (
@@ -244,22 +289,11 @@ export default function SubmissionForm() {
 								</Label>
 								<PhoneInput
 									defaultCountry={defaultCountry}
-									value={phoneValue}
+									value={phoneValue || ''}
 									onChange={(phone) => setValue('phone', phone, { shouldValidate: true })}
 									disabled={isSubmitting}
-									inputClassName={errors.phone ? 'border-destructive' : ''}
-									className={errors.phone ? 'react-international-phone-error' : ''}
-									flagComponent={({ iso2 }) => {
-										const country = parseCountry(defaultCountries.find((c) => c[1] === iso2));
-										return (
-											<span
-												className="react-international-phone-flag-emoji"
-												style={{ fontSize: '1.25rem' }}
-											>
-												{country?.emoji || '🌐'}
-											</span>
-										);
-									}}
+									error={!!errors.phone}
+									placeholder="Phone number"
 								/>
 								{errors.phone && (
 									<p id="phone-error" className="text-sm text-destructive mt-1">
@@ -322,11 +356,22 @@ export default function SubmissionForm() {
 						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
 							Security Verification
 						</h3>
+
+						{/* Visual submission flow */}
+						<SubmissionFlow currentStep={flowStep} errorMessage={flowError} />
+
+						{/* Turnstile widget */}
 						<div className="bg-muted/30 rounded-lg p-5">
 							<TurnstileWidget
 								ref={turnstileRef}
 								onValidated={handleTurnstileValidated}
 								onError={handleTurnstileError}
+								onBeforeInteractive={handleBeforeInteractive}
+								onAfterInteractive={handleAfterInteractive}
+								onExpired={handleExpired}
+								onTimeout={handleTimeout}
+								onUnsupported={handleUnsupported}
+								action="registration-form"
 							/>
 						</div>
 					</div>

@@ -1,6 +1,8 @@
-# Cloudflare Turnstile Flow Demo
+# Forminator
 
-Full-stack Turnstile demo with Astro frontend, Cloudflare Workers backend (Hono), D1 database, and comprehensive fraud detection using Bot Management signals.
+**Forminator** - I'm collecting all your data.
+
+Production-ready form submission platform powered by Cloudflare Turnstile with advanced fraud detection using Bot Management signals. Built with Astro frontend, Cloudflare Workers backend (Hono), and D1 database.
 
 ## Architecture
 
@@ -294,7 +296,6 @@ wrangler deploy
 ## Documentation
 
 ### Core Documentation
-- **[GAPS.md](./GAPS.md)** - Implementation status (100% complete, production ready)
 - **[.dev.vars.example](./.dev.vars.example)** - Local development secrets template
 - **[docs/README.md](./docs/README.md)** - Complete documentation index
 
@@ -316,8 +317,6 @@ wrangler deploy
 ## Project Status
 
 ✅ **Production Ready** - All core features implemented and security hardened
-
-See [GAPS.md](./GAPS.md) for detailed implementation status and checklist.
 
 ## License
 

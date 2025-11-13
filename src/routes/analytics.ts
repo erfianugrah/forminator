@@ -14,6 +14,38 @@ import logger from '../lib/logger';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// API Key authentication middleware
+app.use('*', async (c, next) => {
+	const apiKey = c.req.header('X-API-KEY');
+	const expectedKey = c.env['X-API-KEY'];
+
+	// If no expected key is set, allow access (backward compatibility)
+	if (!expectedKey) {
+		logger.warn('X-API-KEY not configured in environment - analytics unprotected');
+		return next();
+	}
+
+	// Check if API key matches
+	if (!apiKey || apiKey !== expectedKey) {
+		logger.warn(
+			{
+				hasKey: !!apiKey,
+				ip: c.req.header('CF-Connecting-IP')
+			},
+			'Unauthorized analytics access attempt'
+		);
+		return c.json(
+			{
+				success: false,
+				error: 'Unauthorized - Invalid or missing X-API-KEY header',
+			},
+			401
+		);
+	}
+
+	return next();
+});
+
 // GET /api/analytics/stats - Get validation statistics
 app.get('/stats', async (c) => {
 	try {

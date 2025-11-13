@@ -1,14 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import SubmissionForm from '../components/SubmissionForm';
-import '../styles/phone-input.css';
 ---
 
-<Layout title="Turnstile Demo">
+<Layout title="Forminator - Secure Form Submission">
 	<main class="container mx-auto px-4 py-8">
 		<div class="text-center mb-8">
-			<h1 class="text-4xl font-bold mb-2">Cloudflare Turnstile Demo</h1>
-			<p class="text-muted-foreground">Form submission with Turnstile verification and fraud detection</p>
+			<h1 class="text-4xl font-bold mb-2">Forminator</h1>
+			<p class="text-muted-foreground">I'm collecting all your data</p>
 		</div>
 
 		<SubmissionForm client:load />

@@ -5,6 +5,10 @@
 TURNSTILE-SECRET-KEY=your_secret_key_here
 TURNSTILE-SITE-KEY=0x4AAAAAACAjw0bmUZ7V7fh2
 
+# Analytics API Key (optional - protects /api/analytics/* endpoints)
+# If not set, analytics endpoints will be publicly accessible
+X-API-KEY=your_secure_api_key_here
+
 # ============================================
 # TESTING KEYS (Optional - for development)
 # ============================================

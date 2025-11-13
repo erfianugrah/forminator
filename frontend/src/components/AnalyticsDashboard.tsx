@@ -108,17 +108,33 @@ export default function AnalyticsDashboard() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
+	// API Key state
+	const [apiKey, setApiKey] = useState<string>('');
+	const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
+	const [apiKeyInput, setApiKeyInput] = useState('');
+	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+
 	// Modal state
 	const [selectedSubmission, setSelectedSubmission] = useState<SubmissionDetail | null>(null);
 	const [modalLoading, setModalLoading] = useState(false);
 
 	useEffect(() => {
-		loadAnalytics();
+		// Check for saved API key in localStorage
+		const savedApiKey = localStorage.getItem('analytics-api-key');
+		if (savedApiKey) {
+			setApiKey(savedApiKey);
+			loadAnalytics(savedApiKey);
+		} else {
+			setShowApiKeyDialog(true);
+			setLoading(false);
+		}
 	}, []);
 
-	const loadAnalytics = async () => {
+	const loadAnalytics = async (key: string) => {
 		setLoading(true);
 		setError(null);
+
+		const headers = key ? { 'X-API-KEY': key } : {};
 
 		try {
 			const [
@@ -130,14 +146,24 @@ export default function AnalyticsDashboard() {
 				tlsRes,
 				ja3Res,
 			] = await Promise.all([
-				fetch('/api/analytics/stats'),
-				fetch('/api/analytics/submissions?limit=10'),
-				fetch('/api/analytics/countries'),
-				fetch('/api/analytics/bot-scores'),
-				fetch('/api/analytics/asn'),
-				fetch('/api/analytics/tls'),
-				fetch('/api/analytics/ja3'),
+				fetch('/api/analytics/stats', { headers }),
+				fetch('/api/analytics/submissions?limit=10', { headers }),
+				fetch('/api/analytics/countries', { headers }),
+				fetch('/api/analytics/bot-scores', { headers }),
+				fetch('/api/analytics/asn', { headers }),
+				fetch('/api/analytics/tls', { headers }),
+				fetch('/api/analytics/ja3', { headers }),
 			]);
+
+			// Check for 401 errors (unauthorized)
+			if (statsRes.status === 401) {
+				localStorage.removeItem('analytics-api-key');
+				setApiKey('');
+				setShowApiKeyDialog(true);
+				setApiKeyError('Invalid or missing API key. Please enter a valid key.');
+				setLoading(false);
+				return;
+			}
 
 			if (
 				!statsRes.ok ||
@@ -179,8 +205,16 @@ export default function AnalyticsDashboard() {
 
 	const loadSubmissionDetail = async (id: number) => {
 		setModalLoading(true);
+		const headers = apiKey ? { 'X-API-KEY': apiKey } : {};
 		try {
-			const res = await fetch(`/api/analytics/submissions/${id}`);
+			const res = await fetch(`/api/analytics/submissions/${id}`, { headers });
+			if (res.status === 401) {
+				localStorage.removeItem('analytics-api-key');
+				setApiKey('');
+				setShowApiKeyDialog(true);
+				setApiKeyError('Invalid or missing API key. Please enter a valid key.');
+				return;
+			}
 			if (!res.ok) {
 				throw new Error('Failed to fetch submission details');
 			}
@@ -192,6 +226,21 @@ export default function AnalyticsDashboard() {
 		} finally {
 			setModalLoading(false);
 		}
+	};
+
+	const handleApiKeySubmit = () => {
+		if (!apiKeyInput.trim()) {
+			setApiKeyError('Please enter an API key');
+			return;
+		}
+
+		setApiKeyError(null);
+		const trimmedKey = apiKeyInput.trim();
+		localStorage.setItem('analytics-api-key', trimmedKey);
+		setApiKey(trimmedKey);
+		setShowApiKeyDialog(false);
+		setApiKeyInput('');
+		loadAnalytics(trimmedKey);
 	};
 
 	if (loading) {
@@ -211,9 +260,50 @@ export default function AnalyticsDashboard() {
 	}
 
 	return (
-		<div className="space-y-6">
-			{/* Stats Grid */}
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+		<>
+			{/* API Key Dialog - Required, cannot close without entering key */}
+			<Dialog open={showApiKeyDialog}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Enter Analytics API Key</DialogTitle>
+						<DialogDescription>
+							Please enter your API key to access the analytics dashboard. This key matches the X-API-KEY secret configured in your Cloudflare Workers.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-4 py-4">
+						<div className="space-y-2">
+							<input
+								type="password"
+								placeholder="Enter API key"
+								value={apiKeyInput}
+								onChange={(e) => setApiKeyInput(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') {
+										handleApiKeySubmit();
+									}
+								}}
+								className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+								autoFocus
+							/>
+							{apiKeyError && (
+								<p className="text-sm text-destructive">{apiKeyError}</p>
+							)}
+						</div>
+						<div className="flex justify-end gap-3">
+							<button
+								onClick={handleApiKeySubmit}
+								className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md h-10 px-4 py-2"
+							>
+								Submit
+							</button>
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			<div className="space-y-6">
+				{/* Stats Grid */}
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 				<Card>
 					<CardHeader className="pb-2">
 						<CardTitle className="text-sm font-medium text-muted-foreground">
@@ -770,6 +860,7 @@ export default function AnalyticsDashboard() {
 					) : null}
 				</DialogContent>
 			</Dialog>
-		</div>
+			</div>
+		</>
 	);
 }
