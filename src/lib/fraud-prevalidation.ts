@@ -51,12 +51,13 @@ interface AddToBlacklistParams {
 }
 
 /**
- * Check if ephemeral ID or IP is blacklisted before validation
+ * Check if ephemeral ID, IP, or JA4 is blacklisted before validation
  * This is the Layer 1 pre-validation blocking from FRAUD-DETECTION-ENHANCED.md
  */
 export async function checkPreValidationBlock(
 	ephemeralId: string | null,
 	remoteIp: string,
+	ja4: string | null,
 	db: D1Database
 ): Promise<PreValidationResult> {
 	const now = toSQLiteDateTime(new Date());
@@ -100,6 +101,49 @@ export async function checkPreValidationBlock(
 				expiresAt: blacklistCheck.expires_at,
 				retryAfter,
 				blacklistEntry: blacklistCheck,
+			};
+		}
+	}
+
+	// Check JA4 blacklist (if available)
+	if (ja4) {
+		const ja4BlacklistCheck = await db
+			.prepare(
+				`
+			SELECT * FROM fraud_blacklist
+			WHERE ja4 = ?
+			AND expires_at > ?
+			ORDER BY blocked_at DESC
+			LIMIT 1
+		`
+			)
+			.bind(ja4, now)
+			.first<BlacklistEntry>();
+
+		if (ja4BlacklistCheck) {
+			// Update last_seen_at
+			await db
+				.prepare(
+					`
+				UPDATE fraud_blacklist
+				SET last_seen_at = ?,
+					submission_count = submission_count + 1
+				WHERE id = ?
+			`
+				)
+				.bind(now, ja4BlacklistCheck.id)
+				.run();
+
+			const retryAfter = calculateCacheTime(ja4BlacklistCheck.expires_at);
+
+			return {
+				blocked: true,
+				reason: `Blacklisted JA4 fingerprint: ${ja4BlacklistCheck.block_reason}`,
+				confidence: ja4BlacklistCheck.detection_confidence,
+				cacheFor: retryAfter,
+				expiresAt: ja4BlacklistCheck.expires_at,
+				retryAfter,
+				blacklistEntry: ja4BlacklistCheck,
 			};
 		}
 	}

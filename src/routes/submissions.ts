@@ -11,6 +11,7 @@ import {
 import { logValidation, createSubmission } from '../lib/database';
 import logger from '../lib/logger';
 import { checkPreValidationBlock } from '../lib/fraud-prevalidation';
+import { checkJA4FraudPatterns } from '../lib/ja4-fraud-detection';
 import {
 	ValidationError,
 	RateLimitError,
@@ -130,7 +131,7 @@ app.post('/', async (c) => {
 		// If this ephemeral ID was previously detected as fraudulent, block immediately
 		// This skips expensive D1 aggregation queries for repeat offenders
 		if (validation.ephemeralId) {
-			const ephemeralIdBlacklist = await checkPreValidationBlock(validation.ephemeralId, metadata.remoteIp, db);
+			const ephemeralIdBlacklist = await checkPreValidationBlock(validation.ephemeralId, metadata.remoteIp, metadata.ja4 ?? null, db);
 
 			if (ephemeralIdBlacklist.blocked) {
 				// Log validation attempt
@@ -194,6 +195,51 @@ app.post('/', async (c) => {
 			// Ephemeral ID missing (unlikely) - skip fraud detection, fail open
 			logger.warn('Ephemeral ID not available - skipping fraud detection');
 			fraudCheck.warnings = ['Ephemeral ID not available'];
+		}
+
+		// JA4 FRAUD DETECTION (Layer 4 - Session Hopping Detection)
+		// Check for same device creating multiple sessions (incognito/browser hopping)
+		if (metadata.ja4) {
+			const ja4FraudCheck = await checkJA4FraudPatterns(
+				metadata.remoteIp,
+				metadata.ja4,
+				db
+			);
+
+			if (!ja4FraudCheck.allowed) {
+				// Log validation attempt
+				try {
+					await logValidation(db, {
+						tokenHash,
+						validation,
+						metadata,
+						riskScore: ja4FraudCheck.riskScore,
+						allowed: false,
+						blockReason: ja4FraudCheck.reason,
+					});
+				} catch (dbError) {
+					// Non-critical: log but don't fail the request
+					logger.error({ error: dbError }, 'Failed to log JA4 fraud check');
+				}
+
+				// Format wait time message
+				const waitTime = formatWaitTime(ja4FraudCheck.retryAfter || 3600);
+
+				throw new RateLimitError(
+					`JA4 fraud detection triggered: ${ja4FraudCheck.reason}`,
+					ja4FraudCheck.retryAfter || 3600,
+					ja4FraudCheck.expiresAt || new Date(Date.now() + 3600000).toISOString(),
+					`You have made too many submission attempts. Please wait ${waitTime} before trying again`
+				);
+			}
+
+			// Merge JA4 fraud warnings with existing fraud check
+			fraudCheck.warnings = [...fraudCheck.warnings, ...ja4FraudCheck.warnings];
+			fraudCheck.riskScore = Math.max(fraudCheck.riskScore, ja4FraudCheck.riskScore);
+		} else {
+			// JA4 not available (unlikely) - skip JA4 detection
+			logger.warn('JA4 fingerprint not available - skipping JA4 fraud detection');
+			fraudCheck.warnings.push('JA4 not available');
 		}
 
 		// Now check if validation actually failed
