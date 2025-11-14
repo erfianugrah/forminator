@@ -276,23 +276,6 @@ export default function AnalyticsDashboard() {
 
 				<FraudAlert data={analyticsData.fraudPatterns} loading={analyticsData.loading} />
 
-				{analyticsData.blockedStats && analyticsData.blockedStats.total_blocked > 0 && (
-					<>
-						<BlacklistSection entries={blacklistData.entries} />
-						<BlockedValidationsSection validations={blockedValidationsData.validations} />
-					</>
-				)}
-
-				<ChartsSection
-					timeSeriesData={analyticsData.timeSeriesData}
-					countries={analyticsData.countries}
-					botScores={analyticsData.botScores}
-					asnData={analyticsData.asnData}
-					tlsData={analyticsData.tlsData}
-					ja3Data={analyticsData.ja3Data}
-					ja4Data={analyticsData.ja4Data}
-				/>
-
 				<RecentSubmissionsSection
 					submissions={submissionsData.submissions}
 					totalCount={submissionsData.totalCount}
@@ -311,6 +294,28 @@ export default function AnalyticsDashboard() {
 					onPaginationChange={setPagination}
 					sorting={sorting}
 					onSortingChange={setSorting}
+				/>
+
+				<BlockedStatsSection
+					blockedStats={analyticsData.blockedStats}
+					blockReasons={analyticsData.blockReasons}
+				/>
+
+				{analyticsData.blockedStats && analyticsData.blockedStats.total_blocked > 0 && (
+					<>
+						<BlacklistSection entries={blacklistData.entries} />
+						<BlockedValidationsSection validations={blockedValidationsData.validations} />
+					</>
+				)}
+
+				<ChartsSection
+					timeSeriesData={analyticsData.timeSeriesData}
+					countries={analyticsData.countries}
+					botScores={analyticsData.botScores}
+					asnData={analyticsData.asnData}
+					tlsData={analyticsData.tlsData}
+					ja3Data={analyticsData.ja3Data}
+					ja4Data={analyticsData.ja4Data}
 				/>
 
 				<SubmissionDetailDialog

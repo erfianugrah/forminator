@@ -17,6 +17,10 @@ forminator/
 ├── frontend/                    # Astro static site (UI only)
 │   ├── src/
 │   │   ├── components/         # React components (shadcn/ui)
+│   │   │   ├── SubmissionForm.tsx
+│   │   │   ├── AnalyticsDashboard.tsx (modular - 330 lines)
+│   │   │   └── analytics/     # Analytics components (20 files)
+│   │   ├── hooks/              # Custom React hooks (4 files)
 │   │   ├── layouts/            # Astro layouts
 │   │   ├── pages/              # Astro pages (NO API routes)
 │   │   └── styles/             # Global CSS
@@ -393,4 +397,4 @@ cd .. && wrangler dev --remote
 - [SECURITY.md](./SECURITY.md) - Security fixes and best practices
 - [TURNSTILE.md](./TURNSTILE.md) - Turnstile integration guide
 - [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) - Ephemeral ID strategy
-- [API.md](./API.md) - Complete API documentation
+- [API-REFERENCE.md](./API-REFERENCE.md) - Complete API documentation

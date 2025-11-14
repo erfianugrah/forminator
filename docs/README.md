@@ -2,7 +2,7 @@
 
 Comprehensive technical documentation for **Forminator** - I'm collecting all your data.
 
-**Last Updated:** 2024-11-13
+**Last Updated:** 2025-11-14
 
 ## Quick Start
 
@@ -36,7 +36,6 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 | [TURNSTILE.md](./TURNSTILE.md) | Turnstile integration and verification | ~18KB |
 | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) | Ephemeral ID fraud detection with progressive timeouts | ~28KB |
 | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) | Complete D1 database management guide | ~35KB |
-| [TURNSTILE-ENHANCEMENTS.md](./TURNSTILE-ENHANCEMENTS.md) | Optional enhancement opportunities | ~10KB |
 
 ## Document Summaries
 
@@ -522,7 +521,6 @@ When adding/updating a feature:
 **2025-11-13:** Database operations & fraud detection updates
 - Added DATABASE-OPERATIONS.md - Complete D1 management guide (35KB)
 - Updated FRAUD-DETECTION.md - Progressive timeout system (1h → 24h)
-- Updated CLAUDE.md - Nord theme, database commands, recent enhancements
 - Updated this index with database operations navigation
 
 **2024-11-12:** Major documentation expansion
