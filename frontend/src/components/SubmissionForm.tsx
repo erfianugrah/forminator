@@ -230,11 +230,20 @@ export default function SubmissionForm() {
 		}
 
 		// No token yet, trigger Turnstile
-		pendingFormDataRef.current = data;
-		if (turnstileRef.current) {
-			setFlowStep('turnstile-challenge');
-			turnstileRef.current.execute();
+		// Check if Turnstile widget is ready before executing
+		if (!turnstileRef.current || !turnstileRef.current.isReady()) {
+			console.error('Turnstile widget not ready yet');
+			setFlowStep('error');
+			setSubmitResult({
+				type: 'error',
+				message: 'Security verification is still loading. Please wait a moment and try again.',
+			});
+			return;
 		}
+
+		pendingFormDataRef.current = data;
+		setFlowStep('turnstile-challenge');
+		turnstileRef.current.execute();
 	};
 
 	const handleTurnstileValidated = (token: string) => {

@@ -54,6 +54,7 @@ interface TurnstileWidgetProps {
 export interface TurnstileWidgetHandle {
 	execute: () => void;
 	reset: () => void;
+	isReady: () => boolean;
 }
 
 const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
@@ -177,6 +178,9 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 				setIsExecuted(false);
 				setError(null);
 			}
+		},
+		isReady: () => {
+			return widgetIdRef.current !== null && window.turnstile !== undefined;
 		},
 	}));
 
