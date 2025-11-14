@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import type { BlacklistEntry } from '../../../hooks/useBlacklist';
 import type { BlockedValidation } from '../../../hooks/useBlockedValidations';
@@ -33,6 +34,10 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 	const [detectionTypeFilter, setDetectionTypeFilter] = useState<string>('all');
 	const [statusFilter, setStatusFilter] = useState<string>('all');
 	const [riskLevelFilter, setRiskLevelFilter] = useState<string>('all');
+
+	// Pagination state
+	const [pageIndex, setPageIndex] = useState(0);
+	const [pageSize] = useState(10);
 
 	// Convert active blocks to unified format
 	const activeBlockEvents: SecurityEvent[] = activeBlocks.map((entry) => ({
@@ -102,8 +107,16 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 		return true;
 	});
 
-	// Limit to 50 events
-	const displayEvents = filteredEvents.slice(0, 50);
+	// Reset pagination when filters change
+	useEffect(() => {
+		setPageIndex(0);
+	}, [detectionTypeFilter, statusFilter, riskLevelFilter]);
+
+	// Apply pagination
+	const totalPages = Math.ceil(filteredEvents.length / pageSize);
+	const start = pageIndex * pageSize;
+	const end = start + pageSize;
+	const displayEvents = filteredEvents.slice(start, end);
 
 	const getRiskColor = (score: number) => {
 		if (score >= 90) return 'text-red-600 dark:text-red-400';
@@ -266,10 +279,6 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 					</div>
 				) : (
 					<>
-						<div className="mb-4 text-sm text-muted-foreground">
-							Showing {displayEvents.length} of {filteredEvents.length} events
-							{hasActiveFilters && ` (${allEvents.length} total)`}
-						</div>
 						<div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
 							{displayEvents.map((event) => {
 								const riskLevel = getRiskLevel(event.riskScore);
@@ -342,12 +351,42 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 								);
 							})}
 						</div>
-						{filteredEvents.length > 50 && (
-							<div className="mt-4 text-center text-sm text-muted-foreground">
-								Showing first 50 events. Total: {filteredEvents.length}
-								{hasActiveFilters && ` (${allEvents.length} unfiltered)`}
+
+						{/* Pagination Controls */}
+						<div className="flex items-center justify-between pt-4 border-t border-border">
+							<div className="text-sm text-muted-foreground">
+								{(() => {
+									const total = filteredEvents.length;
+									const startItem = Math.min(start + 1, total);
+									const endItem = Math.min(end, total);
+
+									if (total === 0) return 'No results';
+									if (total === 1) return 'Showing 1 event';
+									return `Showing ${startItem} to ${endItem} of ${total} events${hasActiveFilters ? ` (${allEvents.length} total)` : ''}`;
+								})()}
 							</div>
-						)}
+							<div className="flex items-center gap-2">
+								<button
+									onClick={() => setPageIndex(Math.max(0, pageIndex - 1))}
+									disabled={pageIndex === 0}
+									className="p-2 border border-border rounded hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									title="Previous page"
+								>
+									<ChevronLeft size={16} />
+								</button>
+								<span className="text-sm text-muted-foreground px-2">
+									Page {pageIndex + 1} of {totalPages || 1}
+								</span>
+								<button
+									onClick={() => setPageIndex(Math.min(totalPages - 1, pageIndex + 1))}
+									disabled={pageIndex >= totalPages - 1}
+									className="p-2 border border-border rounded hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									title="Next page"
+								>
+									<ChevronRight size={16} />
+								</button>
+							</div>
+						</div>
 					</>
 				)}
 			</CardContent>
