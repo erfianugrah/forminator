@@ -12,6 +12,35 @@ export function BlockedValidationsSection({ validations }: BlockedValidationsSec
 		return 'text-yellow-600 dark:text-yellow-400';
 	};
 
+	const getDetectionTypeBadge = (detectionType: string) => {
+		switch (detectionType) {
+			case 'ja4_fraud':
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+						JA4 Session Hopping
+					</span>
+				);
+			case 'ephemeral_fraud':
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+						Ephemeral ID
+					</span>
+				);
+			case 'ip_fraud':
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+						IP Fraud
+					</span>
+				);
+			default:
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
+						Other
+					</span>
+				);
+		}
+	};
+
 	return (
 		<Card>
 			<CardHeader>
@@ -36,12 +65,18 @@ export function BlockedValidationsSection({ validations }: BlockedValidationsSec
 									key={validation.id}
 									className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
 								>
-									<div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm min-w-0">
+									<div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4 text-sm min-w-0">
 										<div className="min-w-0">
 											<span className="text-muted-foreground block text-xs">IP Address</span>
 											<p className="font-mono text-xs mt-1">
 												{validation.ip_address}
 											</p>
+										</div>
+										<div className="min-w-0">
+											<span className="text-muted-foreground block text-xs">Detection Type</span>
+											<div className="mt-1">
+												{getDetectionTypeBadge(validation.detection_type)}
+											</div>
 										</div>
 										<div className="min-w-0">
 											<span className="text-muted-foreground block text-xs">Block Reason</span>

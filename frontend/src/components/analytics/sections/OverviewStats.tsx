@@ -7,7 +7,7 @@ interface OverviewStatsProps {
 
 export function OverviewStats({ stats }: OverviewStatsProps) {
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
 			<Card>
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm font-medium text-muted-foreground">
@@ -60,6 +60,19 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 				<CardContent>
 					<div className="text-3xl font-bold">
 						{stats?.avg_risk_score ? stats.avg_risk_score.toFixed(1) : '0.0'}
+					</div>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader className="pb-2">
+					<CardTitle className="text-sm font-medium text-muted-foreground">
+						JA4 Fraud Blocks
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<div className="text-3xl font-bold text-destructive">
+						{stats?.ja4_fraud_blocks || 0}
 					</div>
 				</CardContent>
 			</Card>

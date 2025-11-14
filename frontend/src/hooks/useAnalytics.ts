@@ -6,6 +6,7 @@ export interface ValidationStats {
 	allowed: number;
 	avg_risk_score: number;
 	unique_ephemeral_ids: number;
+	ja4_fraud_blocks: number;
 }
 
 export interface BlockedStats {

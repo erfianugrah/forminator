@@ -201,7 +201,7 @@ export async function getRecentSubmissions(
 		const result = await db
 			.prepare(
 				`SELECT id, first_name, last_name, email, country, city, bot_score,
-				 created_at, remote_ip, user_agent, tls_version, asn, ja3_hash, ephemeral_id
+				 created_at, remote_ip, user_agent, tls_version, asn, ja3_hash, ja4, ephemeral_id
 				 FROM submissions
 				 ORDER BY created_at DESC
 				 LIMIT ? OFFSET ?`
@@ -380,7 +380,8 @@ export async function getValidationStats(db: D1Database) {
 					SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
 					SUM(CASE WHEN allowed = 1 THEN 1 ELSE 0 END) as allowed,
 					AVG(risk_score) as avg_risk_score,
-					COUNT(DISTINCT ephemeral_id) as unique_ephemeral_ids
+					COUNT(DISTINCT ephemeral_id) as unique_ephemeral_ids,
+					SUM(CASE WHEN allowed = 0 AND block_reason LIKE '%JA4%' THEN 1 ELSE 0 END) as ja4_fraud_blocks
 				 FROM turnstile_validations`
 			)
 			.first<{
@@ -389,6 +390,7 @@ export async function getValidationStats(db: D1Database) {
 				allowed: number;
 				avg_risk_score: number;
 				unique_ephemeral_ids: number;
+				ja4_fraud_blocks: number;
 			}>();
 
 		return stats;
@@ -969,6 +971,13 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 					risk_score,
 					bot_score,
 					user_agent,
+					ja4,
+					CASE
+						WHEN block_reason LIKE '%JA4%' THEN 'ja4_fraud'
+						WHEN block_reason LIKE '%ephemeral%' OR block_reason LIKE '%Ephemeral%' THEN 'ephemeral_fraud'
+						WHEN block_reason LIKE '%IP%' THEN 'ip_fraud'
+						ELSE 'other'
+					END as detection_type,
 					REPLACE(created_at, ' ', 'T') || 'Z' AS challenge_ts
 				 FROM turnstile_validations
 				 WHERE allowed = 0

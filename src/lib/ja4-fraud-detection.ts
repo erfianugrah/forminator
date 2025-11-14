@@ -18,6 +18,7 @@
 
 import logger from './logger';
 import { addToBlacklist } from './fraud-prevalidation';
+import { calculateProgressiveTimeout } from './turnstile';
 
 // ============================================================================
 // Type Definitions
@@ -154,26 +155,8 @@ export function parseJA4Signals(ja4SignalsJson: string | null): JA4Signals | nul
 }
 
 /**
- * Calculate progressive timeout based on previous offenses
- * Progressive escalation: 1h → 4h → 8h → 12h → 24h
- * @param offenseCount Number of previous offenses in last 24h
- * @returns Timeout in seconds
- */
-function calculateProgressiveTimeout(offenseCount: number): number {
-	const timeWindows = [
-		3600, // 1st offense: 1 hour
-		14400, // 2nd offense: 4 hours
-		28800, // 3rd offense: 8 hours
-		43200, // 4th offense: 12 hours
-		86400, // 5th+ offense: 24 hours
-	];
-
-	const index = Math.min(offenseCount - 1, timeWindows.length - 1);
-	return timeWindows[Math.max(0, index)];
-}
-
-/**
  * Get offense count for an IP address (how many times blocked in last 24h)
+ * Note: This is different from the ephemeral ID offense count in turnstile.ts
  * @param remoteIp IP address to check
  * @param db D1 database instance
  * @returns Number of offenses + 1 for current offense

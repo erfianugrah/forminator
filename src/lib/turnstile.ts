@@ -161,7 +161,7 @@ function toSQLiteDateTime(date: Date): string {
  * Calculate progressive timeout based on previous offenses
  * Progressive escalation: 1h → 4h → 8h → 12h → 24h
  */
-function calculateProgressiveTimeout(offenseCount: number): number {
+export function calculateProgressiveTimeout(offenseCount: number): number {
 	// Progressive time windows in seconds
 	const timeWindows = [
 		3600,    // 1st offense: 1 hour

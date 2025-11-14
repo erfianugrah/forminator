@@ -7,6 +7,8 @@ export interface BlockedValidation {
 	block_reason: string;
 	risk_score: number;
 	challenge_ts: string;
+	ja4: string | null;
+	detection_type: 'ja4_fraud' | 'ephemeral_fraud' | 'ip_fraud' | 'other';
 }
 
 export interface UseBlockedValidationsReturn {
