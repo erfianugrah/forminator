@@ -4,6 +4,8 @@ export interface BlockedValidation {
 	id: number;
 	ephemeral_id: string | null;
 	ip_address: string;
+	country: string | null;
+	city: string | null;
 	block_reason: string;
 	risk_score: number;
 	challenge_ts: string;

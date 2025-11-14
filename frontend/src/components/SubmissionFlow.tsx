@@ -66,7 +66,7 @@ export function SubmissionFlow({ currentStep, errorMessage }: SubmissionFlowProp
     {
       id: 'success' as const,
       title: 'Complete',
-      description: 'Submission successful!',
+      description: 'Finalizing submission...',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

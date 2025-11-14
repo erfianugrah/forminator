@@ -967,15 +967,24 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 					ephemeral_id,
 					remote_ip AS ip_address,
 					country,
+					city,
 					block_reason,
 					risk_score,
 					bot_score,
 					user_agent,
 					ja4,
 					CASE
-						WHEN block_reason LIKE '%JA4%' THEN 'ja4_fraud'
+						-- JA4 fraud: explicit JA4 keyword (from blacklist) or session hopping pattern
+						WHEN block_reason LIKE '%JA4%' OR block_reason LIKE '%ja4%' THEN 'ja4_fraud'
+						WHEN block_reason LIKE '%session hopping%' OR block_reason LIKE '%Session Hopping%' THEN 'ja4_fraud'
+						-- Ephemeral ID fraud: explicit ephemeral keyword or automated/multiple submissions
 						WHEN block_reason LIKE '%ephemeral%' OR block_reason LIKE '%Ephemeral%' THEN 'ephemeral_fraud'
-						WHEN block_reason LIKE '%IP%' THEN 'ip_fraud'
+						WHEN block_reason LIKE '%Automated:%' THEN 'ephemeral_fraud'
+						WHEN block_reason LIKE '%Multiple submissions%' THEN 'ephemeral_fraud'
+						-- Generic high-risk blocks: if neither JA4 nor ephemeral specific, default to ephemeral (runs first in detection flow)
+						WHEN risk_score >= 70 AND (block_reason LIKE '%too many%' OR block_reason LIKE '%submission%') THEN 'ephemeral_fraud'
+						-- IP-based fraud
+						WHEN block_reason LIKE '%IP%' OR block_reason LIKE '%ip%' THEN 'ip_fraud'
 						ELSE 'other'
 					END as detection_type,
 					REPLACE(created_at, ' ', 'T') || 'Z' AS challenge_ts

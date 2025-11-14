@@ -7,9 +7,7 @@ import { GlobalControlsBar } from './analytics/controls/GlobalControlsBar';
 import { FraudAlert } from './analytics/cards/FraudAlert';
 import { OverviewStats } from './analytics/sections/OverviewStats';
 import { RecentSubmissionsSection } from './analytics/sections/RecentSubmissionsSection';
-import { BlockedStatsSection } from './analytics/sections/BlockedStatsSection';
-import { BlacklistSection } from './analytics/sections/BlacklistSection';
-import { BlockedValidationsSection } from './analytics/sections/BlockedValidationsSection';
+import { SecurityEvents } from './analytics/sections/SecurityEvents';
 import { ChartsSection } from './analytics/sections/ChartsSection';
 import { SubmissionDetailDialog, type SubmissionDetail } from './analytics/sections/SubmissionDetailDialog';
 import { useAnalytics } from '../hooks/useAnalytics';
@@ -296,13 +294,11 @@ export default function AnalyticsDashboard() {
 					onSortingChange={setSorting}
 				/>
 
-				<BlockedStatsSection
-					blockedStats={analyticsData.blockedStats}
-					blockReasons={analyticsData.blockReasons}
+				<SecurityEvents
+					activeBlocks={blacklistData.entries}
+					recentDetections={blockedValidationsData.validations}
 				/>
 
-				<BlacklistSection entries={blacklistData.entries} />
-				<BlockedValidationsSection validations={blockedValidationsData.validations} />
 
 				<ChartsSection
 					timeSeriesData={analyticsData.timeSeriesData}
