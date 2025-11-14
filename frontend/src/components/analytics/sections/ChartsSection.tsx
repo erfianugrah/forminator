@@ -182,6 +182,30 @@ export function ChartsSection({
 					</CardContent>
 				</Card>
 			</div>
+
+			{/* JA4 Fingerprints */}
+			<Card>
+				<CardHeader>
+					<CardTitle>JA4 Fingerprints</CardTitle>
+					<CardDescription>Advanced client fingerprints</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<div className="space-y-2">
+						{ja4Data.length === 0 ? (
+							<div className="flex items-center justify-center h-[200px]">
+								<p className="text-muted-foreground text-sm">No data available</p>
+							</div>
+						) : (
+							ja4Data.slice(0, 10).map((item, index) => (
+								<div key={index} className="flex justify-between items-center">
+									<p className="text-xs font-mono truncate flex-1">{item.ja4}</p>
+									<span className="ml-2 text-sm font-semibold">{item.count}</span>
+								</div>
+							))
+						)}
+					</div>
+				</CardContent>
+			</Card>
 		</>
 	);
 }

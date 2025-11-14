@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { GlobalControlsBar } from './analytics/controls/GlobalControlsBar';
 import { FraudAlert } from './analytics/cards/FraudAlert';
 import { OverviewStats } from './analytics/sections/OverviewStats';
+import { RecentSubmissionsSection } from './analytics/sections/RecentSubmissionsSection';
+import { BlockedStatsSection } from './analytics/sections/BlockedStatsSection';
 import { BlacklistSection } from './analytics/sections/BlacklistSection';
 import { BlockedValidationsSection } from './analytics/sections/BlockedValidationsSection';
-import { RecentSubmissionsSection } from './analytics/sections/RecentSubmissionsSection';
 import { ChartsSection } from './analytics/sections/ChartsSection';
 import { SubmissionDetailDialog, type SubmissionDetail } from './analytics/sections/SubmissionDetailDialog';
 import { useAnalytics } from '../hooks/useAnalytics';
