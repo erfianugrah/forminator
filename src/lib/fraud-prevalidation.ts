@@ -4,6 +4,18 @@
  * Expected impact: 85-90% reduction in API calls, 15x faster blocking (10ms vs 150ms)
  */
 
+/**
+ * Convert JavaScript Date to SQLite-compatible datetime string
+ * SQLite stores DATETIME as "YYYY-MM-DD HH:MM:SS" (space separator)
+ * JavaScript Date.toISOString() returns "YYYY-MM-DDTHH:MM:SS.sssZ" (T separator)
+ * Direct comparison fails because space < T in ASCII, causing all time-based queries to fail
+ */
+function toSQLiteDateTime(date: Date): string {
+	return date.toISOString()
+		.replace('T', ' ')      // Replace T with space
+		.replace(/\.\d{3}Z$/, '');  // Remove milliseconds and Z
+}
+
 interface PreValidationResult {
 	blocked: boolean;
 	reason?: string;
@@ -46,7 +58,7 @@ export async function checkPreValidationBlock(
 	remoteIp: string,
 	db: D1Database
 ): Promise<PreValidationResult> {
-	const now = new Date().toISOString();
+	const now = toSQLiteDateTime(new Date());
 
 	// Check ephemeral ID blacklist (if available)
 	if (ephemeralId) {
@@ -172,7 +184,7 @@ export async function addToBlacklist(
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		`
 			)
-			.bind(ephemeralId || null, ipAddress || null, blockReason, confidence, expiresAt.toISOString(), submissionCount, now.toISOString(), metadata)
+			.bind(ephemeralId || null, ipAddress || null, blockReason, confidence, toSQLiteDateTime(expiresAt), submissionCount, toSQLiteDateTime(now), metadata)
 			.run();
 
 		return true;
@@ -196,7 +208,7 @@ function calculateCacheTime(expiresAt: string): number {
  * Clean up expired blacklist entries (run periodically)
  */
 export async function cleanupExpiredBlacklist(db: D1Database): Promise<number> {
-	const now = new Date().toISOString();
+	const now = toSQLiteDateTime(new Date());
 
 	try {
 		const result = await db
@@ -227,7 +239,7 @@ export async function getBlacklistStats(db: D1Database): Promise<{
 	medium_confidence: number;
 	low_confidence: number;
 }> {
-	const now = new Date().toISOString();
+	const now = toSQLiteDateTime(new Date());
 
 	try {
 		const stats = await db

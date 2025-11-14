@@ -2,6 +2,18 @@ import type { RequestMetadata, TurnstileValidationResult, FormSubmission } from 
 import logger from './logger';
 
 /**
+ * Convert JavaScript Date to SQLite-compatible datetime string
+ * SQLite stores DATETIME as "YYYY-MM-DD HH:MM:SS" (space separator)
+ * JavaScript Date.toISOString() returns "YYYY-MM-DDTHH:MM:SS.sssZ" (T separator)
+ * Direct comparison fails because space < T in ASCII, causing all time-based queries to fail
+ */
+function toSQLiteDateTime(date: Date): string {
+	return date.toISOString()
+		.replace('T', ' ')      // Replace T with space
+		.replace(/\.\d{3}Z$/, '');  // Remove milliseconds and Z
+}
+
+/**
  * Log Turnstile validation attempt to database
  */
 export async function logValidation(
@@ -557,8 +569,8 @@ export async function getTimeSeriesData(
 ) {
 	try {
 		// Default to last 30 days if not specified
-		const startDate = start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-		const endDate = end || new Date().toISOString();
+		const startDate = start || toSQLiteDateTime(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+		const endDate = end || toSQLiteDateTime(new Date());
 
 		// Get SQLite date format string based on interval
 		const formatString = getDateFormatString(interval);

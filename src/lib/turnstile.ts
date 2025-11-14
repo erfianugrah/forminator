@@ -146,6 +146,18 @@ export async function checkTokenReuse(
 }
 
 /**
+ * Convert JavaScript Date to SQLite-compatible datetime string
+ * SQLite stores DATETIME as "YYYY-MM-DD HH:MM:SS" (space separator)
+ * JavaScript Date.toISOString() returns "YYYY-MM-DDTHH:MM:SS.sssZ" (T separator)
+ * Direct comparison fails because space < T in ASCII, causing all time-based queries to fail
+ */
+function toSQLiteDateTime(date: Date): string {
+	return date.toISOString()
+		.replace('T', ' ')      // Replace T with space
+		.replace(/\.\d{3}Z$/, '');  // Remove milliseconds and Z
+}
+
+/**
  * Calculate progressive timeout based on previous offenses
  * Progressive escalation: 1h → 4h → 8h → 12h → 24h
  */
@@ -168,7 +180,7 @@ function calculateProgressiveTimeout(offenseCount: number): number {
  * Get offense count for ephemeral ID (how many times blocked in last 24h)
  */
 async function getOffenseCount(ephemeralId: string, db: D1Database): Promise<number> {
-	const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+	const oneDayAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
 	const result = await db
 		.prepare(
@@ -205,8 +217,8 @@ export async function checkEphemeralIdFraud(
 	let riskScore = 0;
 
 	try {
-		const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-		const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+		const oneHourAgo = toSQLiteDateTime(new Date(Date.now() - 60 * 60 * 1000));
+		const oneDayAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
 		// LAYER 1: Check successful submissions in last hour (changed from 24h)
 		// For registration forms, legitimate users should only submit ONCE
