@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../..
 import type { BlacklistEntry } from '../../../hooks/useBlacklist';
 import type { BlockedValidation } from '../../../hooks/useBlockedValidations';
 import { getRelativeTime, getTimeAgo, getTimeUrgency, getUrgencyClasses } from '../../../lib/time-utils';
+import { SingleSelect } from '../filters/SingleSelect';
 
 interface SecurityEventsProps {
 	activeBlocks: BlacklistEntry[];
@@ -201,48 +202,45 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 			<CardContent>
 				{/* Filters */}
 				<div className="flex flex-wrap gap-3 mb-4 pb-4 border-b border-border">
-					<div className="flex flex-col gap-1">
-						<label className="text-xs text-muted-foreground">Detection Type</label>
-						<select
-							value={detectionTypeFilter}
-							onChange={(e) => setDetectionTypeFilter(e.target.value)}
-							className="px-3 py-1.5 text-sm border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-						>
-							<option value="all">All Types</option>
-							<option value="ja4_fraud">JA4 Session Hopping</option>
-							<option value="ephemeral_fraud">Ephemeral ID</option>
-							<option value="ip_fraud">IP Fraud</option>
-							<option value="other">Other</option>
-						</select>
-					</div>
+					<SingleSelect
+						label="Detection Type"
+						options={[
+							{ value: 'all', label: 'All Types' },
+							{ value: 'ja4_fraud', label: 'JA4 Session Hopping' },
+							{ value: 'ephemeral_fraud', label: 'Ephemeral ID' },
+							{ value: 'ip_fraud', label: 'IP Fraud' },
+							{ value: 'other', label: 'Other' }
+						]}
+						value={detectionTypeFilter}
+						onChange={setDetectionTypeFilter}
+						className="min-w-[200px]"
+					/>
 
-					<div className="flex flex-col gap-1">
-						<label className="text-xs text-muted-foreground">Status</label>
-						<select
-							value={statusFilter}
-							onChange={(e) => setStatusFilter(e.target.value)}
-							className="px-3 py-1.5 text-sm border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-						>
-							<option value="all">All Status</option>
-							<option value="active">Actively Blocked</option>
-							<option value="detection">Detections Only</option>
-						</select>
-					</div>
+					<SingleSelect
+						label="Status"
+						options={[
+							{ value: 'all', label: 'All Status' },
+							{ value: 'active', label: 'Actively Blocked' },
+							{ value: 'detection', label: 'Detections Only' }
+						]}
+						value={statusFilter}
+						onChange={setStatusFilter}
+						className="min-w-[200px]"
+					/>
 
-					<div className="flex flex-col gap-1">
-						<label className="text-xs text-muted-foreground">Risk Level</label>
-						<select
-							value={riskLevelFilter}
-							onChange={(e) => setRiskLevelFilter(e.target.value)}
-							className="px-3 py-1.5 text-sm border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-						>
-							<option value="all">All Levels</option>
-							<option value="critical">Critical (≥90)</option>
-							<option value="high">High (70-89)</option>
-							<option value="medium">Medium (50-69)</option>
-							<option value="low">Low (&lt;50)</option>
-						</select>
-					</div>
+					<SingleSelect
+						label="Risk Level"
+						options={[
+							{ value: 'all', label: 'All Levels' },
+							{ value: 'critical', label: 'Critical (≥90)' },
+							{ value: 'high', label: 'High (70-89)' },
+							{ value: 'medium', label: 'Medium (50-69)' },
+							{ value: 'low', label: 'Low (<50)' }
+						]}
+						value={riskLevelFilter}
+						onChange={setRiskLevelFilter}
+						className="min-w-[200px]"
+					/>
 
 					{hasActiveFilters && (
 						<div className="flex items-end">
