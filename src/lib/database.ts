@@ -105,7 +105,8 @@ export async function createSubmission(
 	formData: FormSubmission,
 	metadata: RequestMetadata,
 	ephemeralId?: string | null,
-	riskScoreBreakdown?: any
+	riskScoreBreakdown?: any,
+	emailFraudResult?: { riskScore: number; signals: any } | null
 ): Promise<number> {
 	try {
 		const result = await db
@@ -116,14 +117,19 @@ export async function createSubmission(
 					postal_code, timezone, latitude, longitude, continent, is_eu_country,
 					asn, as_organization, colo, http_protocol, tls_version, tls_cipher,
 					bot_score, client_trust_score, verified_bot, detection_ids,
-					ja3_hash, ja4, ja4_signals, risk_score_breakdown
+					ja3_hash, ja4, ja4_signals,
+					email_risk_score, email_fraud_signals, email_pattern_type,
+					email_markov_detected, email_ood_detected,
+					risk_score_breakdown
 				) VALUES (
 					?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?,
-					?, ?, ?, ?
+					?, ?, ?,
+					?, ?, ?, ?, ?,
+					?
 				)`
 			)
 			.bind(
@@ -158,6 +164,11 @@ export async function createSubmission(
 				metadata.ja3Hash || null,
 				metadata.ja4 || null,
 				metadata.ja4Signals ? JSON.stringify(metadata.ja4Signals) : null,
+				emailFraudResult ? emailFraudResult.riskScore / 100 : null, // Convert back to 0.0-1.0
+				emailFraudResult ? JSON.stringify(emailFraudResult.signals) : null,
+				emailFraudResult?.signals.patternType || null,
+				emailFraudResult?.signals.markovDetected ? 1 : 0,
+				emailFraudResult?.signals.oodDetected ? 1 : 0,
 				riskScoreBreakdown ? JSON.stringify(riskScoreBreakdown) : null
 			)
 			.run();
@@ -243,6 +254,7 @@ export interface SubmissionsFilters {
 	hasJa3?: boolean;
 	hasJa4?: boolean;
 	search?: string;
+	allowed?: boolean | 'all'; // Filter by allowed status: true = allowed only, false = blocked only, 'all' = show all
 }
 
 /**
@@ -325,6 +337,12 @@ export async function getSubmissions(
 			whereClauses.push(filters.hasJa4 ? 'ja4 IS NOT NULL' : 'ja4 IS NULL');
 		}
 
+		// Allowed status filter (show blocked, allowed, or all)
+		if (filters.allowed !== undefined && filters.allowed !== 'all') {
+			whereClauses.push('allowed = ?');
+			bindings.push(filters.allowed ? 1 : 0);
+		}
+
 		// Search across multiple fields
 		if (filters.search && filters.search.trim()) {
 			const searchTerm = `%${filters.search.trim()}%`;
@@ -403,7 +421,33 @@ export async function getValidationStats(db: D1Database) {
 				ja4_fraud_blocks: number;
 			}>();
 
-		return stats;
+		// Get email fraud statistics from submissions table (Phase 2)
+		const emailStats = await db
+			.prepare(
+				`SELECT
+					COUNT(*) as total_with_email_check,
+					SUM(CASE WHEN email_markov_detected = 1 THEN 1 ELSE 0 END) as markov_detected,
+					SUM(CASE WHEN email_ood_detected = 1 THEN 1 ELSE 0 END) as ood_detected,
+					AVG(email_risk_score) as avg_email_risk_score
+				 FROM submissions
+				 WHERE email_risk_score IS NOT NULL`
+			)
+			.first<{
+				total_with_email_check: number;
+				markov_detected: number;
+				ood_detected: number;
+				avg_email_risk_score: number;
+			}>();
+
+		return {
+			...stats,
+			email_fraud: emailStats || {
+				total_with_email_check: 0,
+				markov_detected: 0,
+				ood_detected: 0,
+				avg_email_risk_score: 0,
+			},
+		};
 	} catch (error) {
 		logger.error({ error }, 'Error fetching validation stats');
 		throw error;
@@ -551,6 +595,33 @@ export async function getJa4Distribution(db: D1Database) {
 		return result.results;
 	} catch (error) {
 		logger.error({ error }, 'Error fetching JA4 distribution');
+		throw error;
+	}
+}
+
+/**
+ * Get email pattern type distribution (for analytics) - Phase 2
+ */
+export async function getEmailPatternDistribution(db: D1Database) {
+	try {
+		const result = await db
+			.prepare(
+				`SELECT
+					email_pattern_type,
+					COUNT(*) as count,
+					AVG(email_risk_score) as avg_risk_score,
+					SUM(CASE WHEN email_markov_detected = 1 THEN 1 ELSE 0 END) as markov_detected_count
+				 FROM submissions
+				 WHERE email_pattern_type IS NOT NULL
+				 GROUP BY email_pattern_type
+				 ORDER BY count DESC
+				 LIMIT 10`
+			)
+			.all();
+
+		return result.results;
+	} catch (error) {
+		logger.error({ error }, 'Error fetching email pattern distribution');
 		throw error;
 	}
 }
@@ -991,12 +1062,11 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 					country,
 					city,
 					block_reason,
+				detection_type,
 					risk_score,
-					risk_score_breakdown,
 					bot_score,
 					user_agent,
 					ja4,
-					detection_type,
 					REPLACE(created_at, ' ', 'T') || 'Z' AS challenge_ts
 				 FROM turnstile_validations
 				 WHERE allowed = 0

@@ -2,7 +2,7 @@
 
 ## Current Implementation (Multi-Layer Architecture)
 
-**Status**: ✅ Production-ready with JA4 multi-layer detection (Phase 1-1.8 complete)
+**Status**: ✅ Production-ready with enterprise-grade multi-layer fraud detection
 
 This system uses a multi-layer approach for fraud detection with automatic blacklisting:
 
@@ -114,18 +114,31 @@ flowchart TD
 
 ### Risk Score Normalization
 
-All detections are normalized to a 0-100 scale for consistency:
+All detections are normalized to a 0-100 scale for consistency. The risk score is calculated using weighted components that sum to exactly 100%:
 
+**Component Weights (proportionally normalized from 115% to 100%)**:
+- **Token Replay**: 35% (instant block, highest priority)
+- **Email Fraud**: 17% (Markov-Mail pattern detection)
+- **Ephemeral ID**: 18% (device tracking, core fraud signal)
+- **Validation Frequency**: 13% (attempt rate monitoring)
+- **IP Diversity**: 9% (proxy rotation detection)
+- **JA4 Session Hopping**: 8% (browser hopping detection)
+- **Total**: 100% ✓
+
+**Risk Score Ranges**:
 - **Blocked attempts**: 60-100 (depends on trigger)
-  - Token replay: 100
-  - Ephemeral ID fraud: 100
-  - Validation frequency: 100
-  - IP diversity: 100
-  - JA4 session hopping: 75-190 (composite scoring)
+  - Token replay: 100 (instant block)
+  - Ephemeral ID fraud: ≥70 (blockTrigger ensures minimum)
+  - Validation frequency: ≥70 (blockTrigger ensures minimum)
+  - IP diversity: ≥80 (blockTrigger ensures minimum)
+  - JA4 session hopping: ≥75 (blockTrigger ensures minimum)
   - Turnstile failed: 65
   - Duplicate email: 60
 - **Allowed submissions**: 0-69
+- **Block threshold**: 70/100
 - **Component breakdown**: Stored in `detection_metadata` JSON for transparency
+
+See `docs/SCORING-ANALYSIS.md` for detailed impact analysis of the normalization changes.
 
 ### Progressive Timeout System
 
@@ -248,7 +261,7 @@ If risk < 70 → Allow submission, log validation attempt
 
 This layer uses three detection strategies to catch different attack patterns:
 
-#### Layer 4a: JA4 + IP Clustering (Phase 1.7)
+#### Layer 4a: JA4 + IP Clustering
 
 **Attack Pattern**: Same IP/subnet + Same JA4 + Multiple Ephemeral IDs
 
@@ -267,7 +280,7 @@ WHERE remote_ip IN (same /64 subnet) AND ja4 = ?
   AND created_at > datetime('now', '-1 hour')
 ```
 
-#### Layer 4b: JA4 + Rapid Global Clustering (Phase 1.8)
+#### Layer 4b: JA4 + Rapid Global Clustering
 
 **Attack Pattern**: Same JA4 + Multiple Ephemeral IDs + Rapid Submissions (No IP requirement)
 
@@ -287,7 +300,7 @@ FROM submissions
 WHERE ja4 = ? AND created_at > datetime('now', '-5 minutes')
 ```
 
-#### Layer 4c: JA4 + Extended Global Clustering (Phase 1.8)
+#### Layer 4c: JA4 + Extended Global Clustering
 
 **Attack Pattern**: Same JA4 + Multiple Ephemeral IDs + Slower Attacks (No IP requirement)
 
@@ -362,7 +375,7 @@ CREATE TABLE fraud_blacklist (
   submission_count INTEGER DEFAULT 0,
   last_seen_at DATETIME,
   detection_metadata TEXT, -- JSON
-  detection_type TEXT, -- Phase 1.5+: layer-specific detection types
+  detection_type TEXT, -- Layer-specific detection types (ja4_ip_clustering, etc.)
   CHECK((ephemeral_id IS NOT NULL) OR (ip_address IS NOT NULL) OR (ja4 IS NOT NULL))
 );
 
