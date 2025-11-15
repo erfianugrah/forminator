@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS turnstile_validations (
 	ja3_hash TEXT,
 	ja4 TEXT,
 	ja4_signals TEXT, -- JSON object with h2h3_ratio_1h, heuristic_ratio_1h, etc.
+	-- Detection metadata (Phase 2)
+	detection_type TEXT, -- Layer-specific detection type (e.g., ja4_ip_clustering, ephemeral_id_fraud)
+	risk_score_breakdown TEXT, -- JSON: component scores for transparency
 	-- Timestamps
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (submission_id) REFERENCES submissions(id)
