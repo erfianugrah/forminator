@@ -29,13 +29,14 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 	const successRate = stats && stats.total > 0 ? (stats.successful / stats.total) * 100 : 0;
 	const allowedRate = stats && stats.total > 0 ? (stats.allowed / stats.total) * 100 : 0;
 	const avgRiskScore = stats?.avg_risk_score || 0;
+	const markovDetected = stats?.email_fraud?.markov_detected || 0;
 
 	const successStatus = getSuccessRateStatus(successRate);
 	const allowedStatus = getAllowedRateStatus(allowedRate);
 	const riskStatus = getRiskScoreStatus(avgRiskScore);
 
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
 			<Card>
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm font-medium text-muted-foreground">

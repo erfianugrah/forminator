@@ -7,6 +7,12 @@ export interface ValidationStats {
 	avg_risk_score: number;
 	unique_ephemeral_ids: number;
 	ja4_fraud_blocks: number;
+	email_fraud?: {
+		total_with_email_check: number;
+		markov_detected: number;
+		ood_detected: number;
+		avg_email_risk_score: number;
+	};
 }
 
 export interface BlockedStats {
@@ -57,6 +63,13 @@ export interface Ja4Data {
 	count: number;
 }
 
+export interface EmailPatternData {
+	email_pattern_type: string;
+	count: number;
+	avg_risk_score: number;
+	markov_detected_count: number;
+}
+
 export interface UseAnalyticsReturn {
 	stats: ValidationStats | null;
 	countries: CountryData[];
@@ -65,6 +78,7 @@ export interface UseAnalyticsReturn {
 	tlsData: TlsData[];
 	ja3Data: Ja3Data[];
 	ja4Data: Ja4Data[];
+	emailPatterns: EmailPatternData[];
 	timeSeriesData: any[];
 	blockedStats: BlockedStats | null;
 	blockReasons: BlockReason[];
@@ -82,6 +96,7 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 	const [tlsData, setTlsData] = useState<TlsData[]>([]);
 	const [ja3Data, setJa3Data] = useState<Ja3Data[]>([]);
 	const [ja4Data, setJa4Data] = useState<Ja4Data[]>([]);
+	const [emailPatterns, setEmailPatterns] = useState<EmailPatternData[]>([]);
 	const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
 	const [blockedStats, setBlockedStats] = useState<BlockedStats | null>(null);
 	const [blockReasons, setBlockReasons] = useState<BlockReason[]>([]);
@@ -106,6 +121,7 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 				tlsRes,
 				ja3Res,
 				ja4Res,
+				emailPatternsRes,
 				timeSeriesRes,
 				blockedStatsRes,
 				blockReasonsRes,
@@ -117,6 +133,7 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 				fetch('/api/analytics/tls', { headers }),
 				fetch('/api/analytics/ja3', { headers }),
 				fetch('/api/analytics/ja4', { headers }),
+				fetch('/api/analytics/email-patterns', { headers }),
 				fetch('/api/analytics/time-series?metric=submissions&interval=day', { headers }),
 				fetch('/api/analytics/blocked-stats', { headers }),
 				fetch('/api/analytics/block-reasons', { headers }),
@@ -143,6 +160,7 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 				tlsDataRes,
 				ja3DataRes,
 				ja4DataRes,
+			emailPatternsData,
 				timeSeriesDataRes,
 				blockedStatsData,
 				blockReasonsData,
@@ -153,6 +171,7 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 				asnRes.json(),
 				tlsRes.json(),
 				ja3Res.json(),
+			emailPatternsRes.json(),
 				ja4Res.json(),
 				timeSeriesRes.json(),
 				blockedStatsRes.json(),
@@ -164,6 +183,7 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 			setBotScores((botScoresData as any).data);
 			setAsnData((asnDataRes as any).data);
 			setTlsData((tlsDataRes as any).data);
+		setEmailPatterns((emailPatternsData as any).data || []);
 			setJa3Data((ja3DataRes as any).data);
 			setJa4Data((ja4DataRes as any).data);
 			setTimeSeriesData((timeSeriesDataRes as any).data || []);
@@ -208,6 +228,7 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 		tlsData,
 		ja3Data,
 		ja4Data,
+		emailPatterns,
 		timeSeriesData,
 		blockedStats,
 		blockReasons,
