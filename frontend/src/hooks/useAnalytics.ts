@@ -202,7 +202,10 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 			}
 		} catch (err) {
 			console.error('Error loading analytics:', err);
-			setError('Failed to load analytics data');
+			const errorMessage = err instanceof Error
+				? err.message
+				: 'Failed to load analytics data. Please check your API key and network connection.';
+			setError(errorMessage);
 		} finally {
 			setLoading(false);
 		}

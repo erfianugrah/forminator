@@ -106,7 +106,10 @@ export function useSubmissions(
 			setTotalCount((data as any).total || 0);
 		} catch (err) {
 			console.error('Error loading submissions:', err);
-			setError('Failed to load submissions');
+			const errorMessage = err instanceof Error
+				? err.message
+				: 'Failed to load submissions. Please check your API key and try again.';
+			setError(errorMessage);
 		} finally {
 			setLoading(false);
 		}

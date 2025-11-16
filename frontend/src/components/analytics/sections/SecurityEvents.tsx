@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { subDays } from 'date-fns';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import type { BlacklistEntry } from '../../../hooks/useBlacklist';
@@ -11,6 +11,7 @@ import { DateRangePicker } from '../filters/DateRangePicker';
 interface SecurityEventsProps {
 	activeBlocks: BlacklistEntry[];
 	recentDetections: BlockedValidation[];
+	onLoadDetail: (id: number) => void;
 }
 
 type SecurityEvent = {
@@ -31,7 +32,7 @@ type SecurityEvent = {
 	offenseCount?: number;
 };
 
-export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEventsProps) {
+export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }: SecurityEventsProps) {
 	// Filter states
 	const [detectionTypeFilter, setDetectionTypeFilter] = useState<string>('all');
 	const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -378,11 +379,11 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 								return (
 									<div
 										key={event.id}
-										className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
+										className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors space-y-4"
 									>
-										<div className="flex-1 space-y-4 min-w-0">
-											{/* Header Row: Status + Risk Score + Detection Type */}
-											<div className="flex items-center justify-between gap-4 flex-wrap">
+										{/* Header Row: Status + Risk Score + Detection Type + Button */}
+										<div className="flex items-start justify-between gap-4">
+											<div className="flex-1 flex items-center gap-4 flex-wrap min-w-0">
 												<div className="flex items-center gap-2 flex-wrap">
 													{getStatusBadge(event)}
 												</div>
@@ -399,9 +400,24 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 													{getDetectionTypeBadge(event.detectionType)}
 												</div>
 											</div>
+											{/* View Details Button - Top Right */}
+											<button
+												onClick={() => {
+													const numericId = parseInt(event.id.split('-')[1], 10);
+													if (!isNaN(numericId)) {
+														onLoadDetail(numericId);
+													}
+												}}
+												className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium flex-shrink-0"
+												title="View full details"
+											>
+												<Eye size={14} />
+												<span>Details</span>
+											</button>
+										</div>
 
-											{/* Main Info Grid */}
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
+										{/* Main Info Grid */}
+										<div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
 												<div className="min-w-0 space-y-1.5">
 													{event.ipAddress && event.identifierType === 'ephemeral' && (
 														<p className="flex items-center gap-2">
@@ -440,18 +456,17 @@ export function SecurityEvents({ activeBlocks, recentDetections }: SecurityEvent
 														</span>
 													</p>
 												</div>
-												<div className="min-w-0">
-													{/* Empty column for spacing */}
-												</div>
+											<div className="min-w-0">
+												{/* Empty column for spacing */}
 											</div>
+										</div>
 
-											{/* Block Reason */}
-											<div className="min-w-0 pt-3 mt-3 border-t border-border/50">
-												<span className="inline-flex px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-medium mb-2">Detection Details</span>
-												<p className="text-xs text-foreground leading-relaxed mt-2" title={getDetailedReason(event.detectionType, event.blockReason)}>
-													{getDetailedReason(event.detectionType, event.blockReason)}
-												</p>
-											</div>
+										{/* Block Reason */}
+										<div className="min-w-0 pt-3 border-t border-border/50">
+											<span className="inline-flex px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-medium mb-2">Detection Details</span>
+											<p className="text-xs text-foreground leading-relaxed mt-2" title={getDetailedReason(event.detectionType, event.blockReason)}>
+												{getDetailedReason(event.detectionType, event.blockReason)}
+											</p>
 										</div>
 									</div>
 								);

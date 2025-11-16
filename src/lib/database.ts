@@ -1101,3 +1101,24 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 		throw error;
 	}
 }
+
+/**
+ * Get single validation by ID with all fields
+ */
+export async function getValidationById(db: D1Database, id: number) {
+	try {
+		const validation = await db
+			.prepare(`
+				SELECT *
+				FROM turnstile_validations
+				WHERE id = ?
+			`)
+			.bind(id)
+			.first();
+
+		return validation;
+	} catch (error) {
+		logger.error({ error, id }, 'Error fetching validation by ID');
+		throw error;
+	}
+}

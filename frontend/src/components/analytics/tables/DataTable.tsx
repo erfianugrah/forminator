@@ -72,17 +72,17 @@ export function DataTable<TData>({
 	});
 
 	return (
-		<div className={`space-y-4 ${className}`}>
+		<div className={`space-y-6 ${className}`}>
 			<div className="border border-border rounded-lg overflow-hidden">
 				<div className="overflow-x-auto">
-					<table className="w-full min-w-full table-fixed">
-						<thead className="bg-muted/50">
+					<table className="w-full min-w-full">
+						<thead className="bg-muted/50 border-b border-border">
 							{table.getHeaderGroups().map((headerGroup) => (
 								<tr key={headerGroup.id}>
 									{headerGroup.headers.map((header) => (
 										<th
 											key={header.id}
-											className={`px-4 py-3 text-left text-sm font-medium text-foreground`}
+											className={`px-3 py-3.5 text-left text-sm font-semibold text-foreground`}
 										>
 											{header.isPlaceholder ? null : (
 												<div
@@ -134,10 +134,10 @@ export function DataTable<TData>({
 								table.getRowModel().rows.map((row) => (
 									<tr
 										key={row.id}
-										className="border-t border-border hover:bg-muted/30 transition-colors"
+										className="border-t border-border hover:bg-muted/40 transition-colors"
 									>
 										{row.getVisibleCells().map((cell) => (
-											<td key={cell.id} className={`px-4 py-3 text-sm`}>
+											<td key={cell.id} className={`px-3 py-3.5 text-sm`}>
 												{flexRender(
 													cell.column.columnDef.cell,
 													cell.getContext()
@@ -153,7 +153,7 @@ export function DataTable<TData>({
 			</div>
 
 			{/* Pagination Controls */}
-			<div className="flex items-center justify-between">
+			<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
 				<div className="text-sm text-muted-foreground">
 					{(() => {
 						const total = totalCount || data.length;
@@ -175,16 +175,21 @@ export function DataTable<TData>({
 					<button
 						onClick={() => table.previousPage()}
 						disabled={!table.getCanPreviousPage()}
-						className="p-2 border border-border rounded hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+						className="p-2 border border-border rounded-md hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+						aria-label="Previous page"
 					>
-						<ChevronLeft size={16} />
+						<ChevronLeft size={18} />
 					</button>
+					<span className="text-sm text-muted-foreground px-2">
+						Page {pagination.pageIndex + 1} of {table.getPageCount() || 1}
+					</span>
 					<button
 						onClick={() => table.nextPage()}
 						disabled={!table.getCanNextPage()}
-						className="p-2 border border-border rounded hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+						className="p-2 border border-border rounded-md hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+						aria-label="Next page"
 					>
-						<ChevronRight size={16} />
+						<ChevronRight size={18} />
 					</button>
 				</div>
 			</div>

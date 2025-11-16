@@ -7,6 +7,7 @@ import { SingleSelect } from '../filters/SingleSelect';
 import { RangeSlider } from '../filters/RangeSlider';
 import { DataTable } from '../tables/DataTable';
 import { createSubmissionColumns } from '../tables/columns';
+import { RiskScoreInfo } from '../RiskScoreInfo';
 import { subDays } from 'date-fns';
 import type { CountryData } from '../../../hooks/useAnalytics';
 import type { Submission } from '../../../hooks/useSubmissions';
@@ -67,10 +68,13 @@ export function RecentSubmissionsSection({
 					Search and filter form submissions (click row for full details)
 				</CardDescription>
 			</CardHeader>
-			<CardContent className="space-y-4">
+			<CardContent className="space-y-6">
+				{/* Risk Score Info */}
+				<RiskScoreInfo />
+
 				{/* Filters */}
-				<div className="space-y-4">
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+				<div className="space-y-5">
+					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 						<SearchBar
 							value={searchQuery}
 							onChange={onSearchQueryChange}
@@ -94,7 +98,7 @@ export function RecentSubmissionsSection({
 						/>
 						<DateRangePicker value={dateRange} onChange={onDateRangeChange} />
 					</div>
-					<div className="w-full">
+					<div className="w-full max-w-2xl">
 						<RangeSlider
 							min={0}
 							max={100}
@@ -108,7 +112,7 @@ export function RecentSubmissionsSection({
 
 				{/* Data Table */}
 				{loading ? (
-					<div className="flex items-center justify-center py-12">
+					<div className="flex items-center justify-center py-16">
 						<p className="text-muted-foreground">Loading submissions...</p>
 					</div>
 				) : (

@@ -204,9 +204,20 @@ export default function SubmissionForm() {
 			console.error('Submission error:', error);
 			setFlowStep('error');
 			setFlowError(undefined); // Don't show in flow, only in Alert
+
+			// Provide more specific error message
+			let errorMessage = 'A network error occurred. Please check your connection and try again.';
+			if (error instanceof Error) {
+				if (error.message.includes('fetch')) {
+					errorMessage = 'Unable to reach the server. Please check your internet connection and try again.';
+				} else if (error.message.includes('timeout')) {
+					errorMessage = 'Request timed out. Please try again.';
+				}
+			}
+
 			setSubmitResult({
 				type: 'error',
-				message: 'A network error occurred. Please check your connection and try again.',
+				message: errorMessage,
 			});
 			setTurnstileToken(null);
 			hasSubmittedRef.current = false;

@@ -12,6 +12,7 @@ import {
 	getJa4Distribution,
 	getEmailPatternDistribution,
 	getSubmissionById,
+	getValidationById,
 	getTimeSeriesData,
 	detectFraudPatterns,
 	getBlockedValidationStats,
@@ -889,6 +890,42 @@ app.get('/blocked-validations', async (c) => {
 				success: false,
 				error: 'Internal server error',
 				message: 'Failed to fetch blocked validations',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/validations/:id - Get single validation details
+app.get('/validations/:id', async (c) => {
+	try {
+		const db = c.env.DB;
+		const id = parseInt(c.req.param('id'), 10);
+
+		if (isNaN(id)) {
+			return c.json({ error: 'Invalid ID' }, 400);
+		}
+
+		const validation = await getValidationById(db, id);
+
+		if (!validation) {
+			return c.json({ error: 'Validation not found' }, 404);
+		}
+
+		logger.info({ validationId: id }, 'Validation details retrieved');
+
+		return c.json({
+			success: true,
+			data: validation,
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error fetching validation details');
+
+		return c.json(
+			{
+				success: false,
+				error: 'Internal server error',
+				message: 'Failed to fetch validation details',
 			},
 			500
 		);

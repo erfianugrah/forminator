@@ -10,6 +10,7 @@ import { RecentSubmissionsSection } from './analytics/sections/RecentSubmissions
 import { SecurityEvents } from './analytics/sections/SecurityEvents';
 import { ChartsSection } from './analytics/sections/ChartsSection';
 import { SubmissionDetailDialog, type SubmissionDetail } from './analytics/sections/SubmissionDetailDialog';
+import { ValidationDetailDialog, type ValidationDetail } from './analytics/sections/ValidationDetailDialog';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useSubmissions, type UseSubmissionsFilters } from '../hooks/useSubmissions';
 import { useBlacklist } from '../hooks/useBlacklist';
@@ -24,7 +25,11 @@ export default function AnalyticsDashboard() {
 
 	// Submission detail modal state
 	const [selectedSubmission, setSelectedSubmission] = useState<SubmissionDetail | null>(null);
-	const [modalLoading, setModalLoading] = useState(false);
+	const [submissionModalLoading, setSubmissionModalLoading] = useState(false);
+
+	// Validation detail modal state
+	const [selectedValidation, setSelectedValidation] = useState<ValidationDetail | null>(null);
+	const [validationModalLoading, setValidationModalLoading] = useState(false);
 
 	// Filter states
 	const [searchQuery, setSearchQuery] = useState('');
@@ -90,7 +95,7 @@ export default function AnalyticsDashboard() {
 
 	// Submission detail handler
 	const loadSubmissionDetail = async (id: number) => {
-		setModalLoading(true);
+		setSubmissionModalLoading(true);
 		const headers: HeadersInit = apiKey ? { 'X-API-KEY': apiKey } : {};
 		try {
 			const res = await fetch(`/api/analytics/submissions/${id}`, { headers });
@@ -110,7 +115,33 @@ export default function AnalyticsDashboard() {
 			console.error('Error loading submission details:', err);
 			alert('Failed to load submission details');
 		} finally {
-			setModalLoading(false);
+			setSubmissionModalLoading(false);
+		}
+	};
+
+	// Validation detail handler
+	const loadValidationDetail = async (id: number) => {
+		setValidationModalLoading(true);
+		const headers: HeadersInit = apiKey ? { 'X-API-KEY': apiKey } : {};
+		try {
+			const res = await fetch(`/api/analytics/validations/${id}`, { headers });
+			if (res.status === 401) {
+				localStorage.removeItem('analytics-api-key');
+				setApiKey('');
+				setShowApiKeyDialog(true);
+				setApiKeyError('Invalid or missing API key. Please enter a valid key.');
+				return;
+			}
+			if (!res.ok) {
+				throw new Error('Failed to fetch validation details');
+			}
+			const data = await res.json();
+			setSelectedValidation((data as any).data);
+		} catch (err) {
+			console.error('Error loading validation details:', err);
+			alert('Failed to load validation details');
+		} finally {
+			setValidationModalLoading(false);
 		}
 	};
 
@@ -303,6 +334,7 @@ export default function AnalyticsDashboard() {
 				<SecurityEvents
 					activeBlocks={blacklistData.entries}
 					recentDetections={blockedValidationsData.validations}
+					onLoadDetail={loadValidationDetail}
 				/>
 
 
@@ -318,8 +350,14 @@ export default function AnalyticsDashboard() {
 
 				<SubmissionDetailDialog
 					submission={selectedSubmission}
-					loading={modalLoading}
+					loading={submissionModalLoading}
 					onClose={() => setSelectedSubmission(null)}
+				/>
+
+				<ValidationDetailDialog
+					validation={selectedValidation}
+					loading={validationModalLoading}
+					onClose={() => setSelectedValidation(null)}
 				/>
 			</div>
 		</>
