@@ -16,6 +16,8 @@ export interface Submission {
 	asn?: string | null;
 	ja3_hash?: string | null;
 	ephemeral_id?: string | null;
+	risk_score?: number | null;
+	risk_score_breakdown?: string | null;
 }
 
 export interface UseSubmissionsFilters {

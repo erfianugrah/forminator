@@ -1,4 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../ui/dialog';
+import { FraudAssessment } from '../FraudAssessment';
+import { JA4SignalsDetail } from '../JA4SignalsDetail';
 
 export interface SubmissionDetail {
 	// Form data
@@ -39,6 +41,9 @@ export interface SubmissionDetail {
 	ja3_hash: string | null;
 	ja4: string | null;
 	ja4_signals: string | null;
+	// Risk scoring (Phase 4)
+	risk_score?: number | null;
+	risk_score_breakdown?: string | null;
 }
 
 interface SubmissionDetailDialogProps {
@@ -101,6 +106,16 @@ export function SubmissionDetailDialog({ submission, loading, onClose }: Submiss
 									</div>
 								</div>
 							</div>
+
+							{/* Fraud Risk Assessment */}
+							{submission.risk_score_breakdown && (() => {
+								try {
+									const breakdown = JSON.parse(submission.risk_score_breakdown);
+									return <FraudAssessment breakdown={breakdown} />;
+								} catch (e) {
+									return null;
+								}
+							})()}
 
 							{/* Geographic Data */}
 							<div>
@@ -233,16 +248,23 @@ export function SubmissionDetailDialog({ submission, loading, onClose }: Submiss
 										<span className="text-muted-foreground">JA3 Hash:</span>
 										<p className="font-mono text-xs break-all">{submission.ja3_hash || 'N/A'}</p>
 									</div>
-									<div>
-										<span className="text-muted-foreground">JA4:</span>
-										<p className="font-mono text-xs break-all">{submission.ja4 || 'N/A'}</p>
-									</div>
-									<div>
-										<span className="text-muted-foreground">JA4 Signals:</span>
-										<p className="font-mono text-xs break-all">{submission.ja4_signals || 'N/A'}</p>
-									</div>
 								</div>
 							</div>
+
+							{/* JA4 Intelligence */}
+							{submission.ja4 && submission.ja4_signals && (() => {
+								try {
+									const signals = JSON.parse(submission.ja4_signals);
+									return <JA4SignalsDetail signals={signals} ja4Fingerprint={submission.ja4} />;
+								} catch (e) {
+									return (
+										<div>
+											<h3 className="text-lg font-semibold mb-3">JA4 Fingerprint</h3>
+											<p className="font-mono text-xs break-all">{submission.ja4}</p>
+										</div>
+									);
+								}
+							})()}
 						</div>
 					</>
 				) : null}
