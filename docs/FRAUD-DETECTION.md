@@ -2,15 +2,18 @@
 
 **Status**: ✅ Production-ready with 6-layer fraud detection and progressive mitigation
 
+**Configuration**: ✅ All thresholds and weights are configurable via environment variables. See [CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) for customization guide.
+
 ## Table of Contents
 
 1. [System Overview](#system-overview)
-2. [Request Flow Diagram](#complete-request-flow)
-3. [Detection Layers](#detection-layers-detailed)
-4. [Attack Scenarios](#attack-scenarios-with-diagrams)
-5. [Risk Scoring System](#risk-scoring-system)
-6. [Progressive Timeout System](#progressive-timeout-system)
-7. [Database Schema](#database-schema)
+2. [Configuration System](#configuration-system)
+3. [Request Flow Diagram](#complete-request-flow)
+4. [Detection Layers](#detection-layers-detailed)
+5. [Attack Scenarios](#attack-scenarios-with-diagrams)
+6. [Risk Scoring System](#risk-scoring-system)
+7. [Progressive Timeout System](#progressive-timeout-system)
+8. [Database Schema](#database-schema)
 
 ---
 
@@ -32,6 +35,31 @@ This fraud detection system uses a **multi-layer behavioral analysis** approach 
 - **Pre-validation Cache Hit**: ~10ms (vs ~150ms Turnstile API)
 - **False Positive Rate**: <1% (tested with legitimate NAT traffic)
 - **API Cost Reduction**: 85-90% (blacklist catches repeat offenders)
+
+---
+
+## Configuration System
+
+All fraud detection thresholds and risk scoring weights are **fully configurable** via environment variables.
+
+**Default values** (shown throughout this document):
+- Block threshold: 70
+- Risk weights: tokenReplay (0.35), emailFraud (0.17), ephemeralId (0.18), etc.
+- Detection thresholds: 2 submissions, 3 validation attempts, 2 IPs, etc.
+
+**Customization**:
+```bash
+# Example: Change block threshold to 80
+echo '{"risk":{"blockThreshold":80}}' | wrangler secret put FRAUD_CONFIG
+```
+
+**Documentation**: See [CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) for:
+- Complete configuration reference
+- Usage examples and use cases
+- A/B testing, fine-tuning guidance
+- Deep merge behavior (partial overrides)
+
+**Implementation Status**: ✅ Zero hardcoded values (verified 2025-11-16)
 
 ---
 
