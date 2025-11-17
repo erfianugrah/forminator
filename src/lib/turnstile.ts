@@ -213,7 +213,8 @@ async function getOffenseCount(ephemeralId: string, db: D1Database): Promise<num
 export async function checkEphemeralIdFraud(
 	ephemeralId: string,
 	db: D1Database,
-	config: FraudDetectionConfig
+	config: FraudDetectionConfig,
+	erfid?: string
 ): Promise<FraudCheckResult & { ephemeralIdCount?: number; validationCount?: number; uniqueIPCount?: number }> {
 	const warnings: string[] = [];
 
@@ -332,6 +333,7 @@ export async function checkEphemeralIdFraud(
 					timeout_hours: timeoutHours,
 					detected_at: new Date().toISOString(),
 				},
+				erfid, // Request tracking ID
 			});
 
 			logger.warn(

@@ -306,7 +306,7 @@ app.post('/', async (c) => {
 			// FRAUD DETECTION ON ALL REQUESTS (failed and successful validations)
 			// Check if this ephemeral ID is making repeated attempts (even with failed tokens)
 			// This catches attackers who repeatedly try with expired/invalid tokens
-			fraudCheck = await checkEphemeralIdFraud(validation.ephemeralId, db, config);
+			fraudCheck = await checkEphemeralIdFraud(validation.ephemeralId, db, config, erfid);
 
 			if (!fraudCheck.allowed) {
 				// Determine detection type based on fraud check reason
@@ -372,7 +372,8 @@ app.post('/', async (c) => {
 				metadata.ja4,
 				validation.ephemeralId || null,  // Phase 1.8: Pass ephemeral ID for blacklisting (handle undefined)
 				db,
-				config
+				config,
+				erfid
 			);
 
 			if (!ja4FraudCheck.allowed) {
