@@ -11,12 +11,14 @@
 ## Problem Solved
 
 ### Before Erfid:
+
 - **Data Integrity Confusion**: 35 validation records, but unclear relationship between validations, submissions, and blocks
 - **No Correlation**: Cannot trace a single request through validation → fraud check → submission/block
 - **Analytics Confusion**: Counts don't align (35 validations, 10 submissions, 25 blocked - but how are they related?)
 - **Debugging Difficulty**: Cannot see full history of a blocked request
 
 ### With Erfid:
+
 - **Single Source of Truth**: One erfid tracks entire request lifecycle
 - **Complete Audit Trail**: See all events (validation, fraud checks, blocks) for a single request
 - **Accurate Analytics**: Count unique requests, not just records
@@ -57,48 +59,56 @@ Erfid is fully customizable to fit your needs:
 
 ```jsonc
 {
-  "ERFID_CONFIG": {
-    // Custom prefix for IDs (default: "erf")
-    "prefix": "myapp",
+	"ERFID_CONFIG": {
+		// Custom prefix for IDs (default: "erf")
+		"prefix": "myapp",
 
-    // ID format: "uuid" | "nano" | "custom" (default: "uuid")
-    "format": "uuid",
+		// ID format: "uuid" | "nano" | "custom" (default: "uuid")
+		"format": "uuid",
 
-    // Include timestamp in ID (default: false)
-    "includeTimestamp": true
-  }
+		// Include timestamp in ID (default: false)
+		"includeTimestamp": true,
+	},
 }
 ```
 
 ### ID Formats
 
 **1. UUID (default)**
+
 ```
 erf_550e8400-e29b-41d4-a716-446655440000
 ```
+
 - Standard UUID v4
 - 36 characters (without prefix)
 - Globally unique, collision-resistant
 
 **2. Nano ID**
+
 ```
 erf_V1StGXR8_Z5jdHi6B-myT
 ```
+
 - Shorter alternative (21 chars)
 - URL-safe alphabet
 - Still highly unique
 
 **3. Custom Prefix**
+
 ```
 myapp_550e8400-e29b-41d4-a716-446655440000
 ```
+
 - Use your own brand/app name
 - Helps identify source in logs
 
 **4. With Timestamp**
+
 ```
 erf_1700000000000_550e8400-e29b-41d4-a716-446655440000
 ```
+
 - Includes millisecond timestamp
 - Enables time-based sorting/filtering
 
@@ -110,12 +120,12 @@ erf_1700000000000_550e8400-e29b-41d4-a716-446655440000
 
 ```jsonc
 {
-  "vars": {
-    "ERFID_CONFIG": {
-      "prefix": "form",
-      "format": "uuid"
-    }
-  }
+	"vars": {
+		"ERFID_CONFIG": {
+			"prefix": "form",
+			"format": "uuid",
+		},
+	},
 }
 ```
 
@@ -151,6 +161,7 @@ CREATE INDEX idx_blacklist_erfid ON fraud_blacklist(erfid);
 ```
 
 **Apply Migration:**
+
 ```bash
 wrangler d1 migrations apply DB --remote
 ```
@@ -214,7 +225,7 @@ wrangler d1 migrations apply DB --remote
    - `getRecentBlockedValidations()`: Returns erfid
    - `getActiveBlacklistEntries()`: Returns erfid
    - `getSubmissionById()`: Returns erfid
-   - `getValidationById()`: Returns erfid (via SELECT *)
+   - `getValidationById()`: Returns erfid (via SELECT \*)
 
 9. **Error Handling**
    - All error responses include erfid in JSON body
@@ -244,7 +255,6 @@ wrangler d1 migrations apply DB --remote
     - ERFID-TRACKING.md: Complete guide
     - ERFID-RESEARCH.md: Industry research and rationale
     - API-REFERENCE.md: Updated with erfid fields
-    - CLAUDE.md: Updated with erfid information
 
 ---
 
@@ -262,21 +272,24 @@ wrangler d1 migrations apply DB --remote
 #### 1. Error Response Testing ✅
 
 **Test**: POST without Turnstile token
+
 ```json
 {
-  "error": "ValidationError",
-  "message": "Security verification token is missing...",
-  "erfid": "erf_4e25915f-cc67-4d0f-bb0b-b07a0da9dfdc"
+	"error": "ValidationError",
+	"message": "Security verification token is missing...",
+	"erfid": "erf_4e25915f-cc67-4d0f-bb0b-b07a0da9dfdc"
 }
 ```
 
 **Headers**:
+
 ```
 X-Request-Id: erf_4e25915f-cc67-4d0f-bb0b-b07a0da9dfdc
 access-control-expose-headers: X-Request-Id
 ```
 
 **Verified**:
+
 - ✅ erfid present in JSON response
 - ✅ X-Request-Id header set correctly
 - ✅ CORS exposes header to JavaScript
@@ -285,43 +298,49 @@ access-control-expose-headers: X-Request-Id
 #### 2. Email Fraud Detection Error ✅
 
 **Test**: POST with fraudulent email pattern
+
 ```json
 {
-  "error": "ValidationError",
-  "message": "This email address cannot be used...",
-  "details": {
-    "signals": {
-      "markovDetected": true,
-      "oodDetected": true
-    }
-  },
-  "erfid": "erf_e477c20a-401c-400a-a406-64cf1c748fba"
+	"error": "ValidationError",
+	"message": "This email address cannot be used...",
+	"details": {
+		"signals": {
+			"markovDetected": true,
+			"oodDetected": true
+		}
+	},
+	"erfid": "erf_e477c20a-401c-400a-a406-64cf1c748fba"
 }
 ```
 
 **Verified**:
+
 - ✅ erfid included even when blocked by Layer 1
 - ✅ markov-mail integration working correctly
 
 #### 3. Analytics API Testing ✅
 
 **Endpoint**: GET /api/analytics/submissions
+
 ```json
 {
-  "success": true,
-  "data": [{
-    "id": 13,
-    "email": "cohesivetweety@nodomainneeded.com",
-    "erfid": null,
-    "validation_erfid": null,
-    "created_at": "2025-11-17 12:22:40"
-  }]
+	"success": true,
+	"data": [
+		{
+			"id": 13,
+			"email": "cohesivetweety@nodomainneeded.com",
+			"erfid": null,
+			"validation_erfid": null,
+			"created_at": "2025-11-17 12:22:40"
+		}
+	]
 }
 ```
 
 **Response Schema**: 20 fields including `erfid` and `validation_erfid`
 
 **Verified**:
+
 - ✅ API authentication working
 - ✅ erfid fields present in schema
 - ✅ NULL values expected (old records)
@@ -329,6 +348,7 @@ access-control-expose-headers: X-Request-Id
 #### 4. Database Schema Verification ✅
 
 **Query**: Check erfid columns exist
+
 ```sql
 SELECT id, email, erfid FROM submissions ORDER BY created_at DESC LIMIT 5;
 SELECT id, erfid, allowed FROM turnstile_validations ORDER BY created_at DESC LIMIT 5;
@@ -336,24 +356,26 @@ SELECT id, erfid, block_reason FROM fraud_blacklist ORDER BY blocked_at DESC LIM
 ```
 
 **Results**:
+
 - ✅ erfid column exists in all 3 tables
 - ✅ Indexes created for fast lookups
 - ✅ All existing records have erfid=NULL (expected)
 
 ### Verification Status
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Database Schema | ✅ Pass | erfid columns exist in all 3 tables |
-| Error Responses | ✅ Pass | erfid in JSON + X-Request-Id header |
-| CORS Configuration | ✅ Pass | X-Request-Id exposed to clients |
-| Analytics Endpoints | ✅ Pass | erfid fields in all queries |
-| TypeScript Compilation | ✅ Pass | No errors, clean build |
-| Production Deployment | ✅ Pass | Deployed successfully |
+| Component              | Status  | Notes                               |
+| ---------------------- | ------- | ----------------------------------- |
+| Database Schema        | ✅ Pass | erfid columns exist in all 3 tables |
+| Error Responses        | ✅ Pass | erfid in JSON + X-Request-Id header |
+| CORS Configuration     | ✅ Pass | X-Request-Id exposed to clients     |
+| Analytics Endpoints    | ✅ Pass | erfid fields in all queries         |
+| TypeScript Compilation | ✅ Pass | No errors, clean build              |
+| Production Deployment  | ✅ Pass | Deployed successfully               |
 
 ### Next Real Submission
 
 When the next real submission comes through:
+
 1. erfid generated at request entry
 2. Passed to all fraud detection functions
 3. Written to database via logValidation() and createSubmission()
@@ -361,6 +383,7 @@ When the next real submission comes through:
 5. Available in analytics queries
 
 **Verification Command** (after real traffic):
+
 ```bash
 wrangler d1 execute DB --command="SELECT id, email, erfid FROM submissions WHERE erfid IS NOT NULL LIMIT 5" --remote
 ```
@@ -499,6 +522,7 @@ wrangler d1 execute DB --command="SELECT erfid FROM submissions WHERE erfid IS N
 **Cause**: Old records created before migration
 
 **Solution**: This is expected. New records will have erfids. To clean up old records:
+
 ```sql
 -- Count records without erfid
 SELECT COUNT(*) FROM submissions WHERE erfid IS NULL;
@@ -510,6 +534,7 @@ DELETE FROM submissions WHERE erfid IS NULL AND created_at < datetime('now', '-7
 ### Issue: Custom prefix not working
 
 **Check configuration:**
+
 ```bash
 # View current config
 wrangler secret list
@@ -543,6 +568,7 @@ wrangler secret put ERFID_CONFIG
 **Summary**: Complete erfid request tracking system deployed to production
 
 **Changes**:
+
 - ✅ Core erfid generation system (UUID, Nano ID, custom formats)
 - ✅ Database migration applied (erfid columns + indexes)
 - ✅ Full integration with all fraud detection layers
@@ -552,6 +578,7 @@ wrangler secret put ERFID_CONFIG
 - ✅ Production testing completed and verified
 
 **Commits**:
+
 - `129cfb6`: Initial erfid implementation (Phase 1 & 2)
 - `e1a0f18`: Pass erfid to fraud detection blacklist operations
 - `aed5985`: Sync schema.sql with migration
@@ -566,6 +593,7 @@ wrangler secret put ERFID_CONFIG
 **Summary**: Initial erfid design and research
 
 **Changes**:
+
 - Research on industry standards (Cloudflare Ray ID, AWS Request ID, etc.)
 - ErfidConfig interface design
 - Initial implementation planning

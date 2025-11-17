@@ -73,48 +73,51 @@ Forminator and Markov-Mail are integrated using **Cloudflare Worker-to-Worker RP
 ### Forminator (Consumer)
 
 **wrangler.jsonc**:
+
 ```jsonc
 {
-  "services": [
-    {
-      "binding": "FRAUD_DETECTOR",    // TypeScript binding name
-      "service": "markov-mail",        // Target worker name
-      "entrypoint": "FraudDetectionService"  // RPC class name
-    }
-  ]
+	"services": [
+		{
+			"binding": "FRAUD_DETECTOR", // TypeScript binding name
+			"service": "markov-mail", // Target worker name
+			"entrypoint": "FraudDetectionService", // RPC class name
+		},
+	],
 }
 ```
 
 **TypeScript (src/lib/types.ts)**:
+
 ```typescript
 export interface Env {
-  FRAUD_DETECTOR: {
-    validate(request: {
-      email: string;
-      consumer?: string;
-      flow?: string;
-      headers?: Record<string, string | null>;
-    }): Promise<ValidationResult>;
-  };
-  // ... other bindings
+	FRAUD_DETECTOR: {
+		validate(request: {
+			email: string;
+			consumer?: string;
+			flow?: string;
+			headers?: Record<string, string | null>;
+		}): Promise<ValidationResult>;
+	};
+	// ... other bindings
 }
 ```
 
 ### Markov-Mail (Provider)
 
 **src/index.ts**:
+
 ```typescript
 import { WorkerEntrypoint } from 'cloudflare:workers';
 
 class FraudDetectionService extends WorkerEntrypoint<Env> {
-  async validate(request: {
-    email: string;
-    consumer?: string;
-    flow?: string;
-    headers?: Record<string, string | null>;
-  }): Promise<ValidationResult> {
-    // RPC method implementation
-  }
+	async validate(request: {
+		email: string;
+		consumer?: string;
+		flow?: string;
+		headers?: Record<string, string | null>;
+	}): Promise<ValidationResult> {
+		// RPC method implementation
+	}
 }
 
 export default FraudDetectionService;
@@ -132,38 +135,38 @@ export default FraudDetectionService;
 const headers: Record<string, string | null> = {};
 
 if (request) {
-  const cf = request.cf as any;
+	const cf = request.cf as any;
 
-  // Basic headers
-  headers['cf-connecting-ip'] = request.headers.get('cf-connecting-ip');
-  headers['user-agent'] = request.headers.get('user-agent');
+	// Basic headers
+	headers['cf-connecting-ip'] = request.headers.get('cf-connecting-ip');
+	headers['user-agent'] = request.headers.get('user-agent');
 
-  // Geographic headers (prefer request.cf over headers)
-  headers['cf-ipcountry'] = request.headers.get('cf-ipcountry') || cf?.country;
-  headers['cf-region'] = request.headers.get('cf-region') || cf?.region;
-  headers['cf-ipcity'] = request.headers.get('cf-ipcity') || cf?.city;
-  headers['cf-postal-code'] = cf?.postalCode;
-  headers['cf-timezone'] = cf?.timezone;
-  headers['cf-iplatitude'] = cf?.latitude;
-  headers['cf-iplongitude'] = cf?.longitude;
-  headers['cf-ipcontinent'] = cf?.continent;
+	// Geographic headers (prefer request.cf over headers)
+	headers['cf-ipcountry'] = request.headers.get('cf-ipcountry') || cf?.country;
+	headers['cf-region'] = request.headers.get('cf-region') || cf?.region;
+	headers['cf-ipcity'] = request.headers.get('cf-ipcity') || cf?.city;
+	headers['cf-postal-code'] = cf?.postalCode;
+	headers['cf-timezone'] = cf?.timezone;
+	headers['cf-iplatitude'] = cf?.latitude;
+	headers['cf-iplongitude'] = cf?.longitude;
+	headers['cf-ipcontinent'] = cf?.continent;
 
-  // Bot detection headers (Enterprise features)
-  headers['cf-bot-score'] = cf?.botManagement?.score;
-  headers['cf-verified-bot'] = cf?.botManagement?.verifiedBot ? 'true' : 'false';
-  headers['cf-ja3-hash'] = cf?.botManagement?.ja3Hash;
-  headers['cf-ja4'] = cf?.botManagement?.ja4;
+	// Bot detection headers (Enterprise features)
+	headers['cf-bot-score'] = cf?.botManagement?.score;
+	headers['cf-verified-bot'] = cf?.botManagement?.verifiedBot ? 'true' : 'false';
+	headers['cf-ja3-hash'] = cf?.botManagement?.ja3Hash;
+	headers['cf-ja4'] = cf?.botManagement?.ja4;
 }
 ```
 
 **Fields Extracted** (40+ total):
 
-| Category | Fields |
-|----------|--------|
-| **Geographic** | country, region, city, postalCode, timezone, latitude, longitude, continent, isEUCountry |
-| **Network** | asn, asOrganization, colo, httpProtocol, tlsVersion, tlsCipher |
-| **Bot Detection** | botScore, clientTrustScore, verifiedBot, jsDetectionPassed, detectionIds |
-| **Fingerprints** | ja3Hash, ja4, ja4Signals (object with h2h3_ratio, heuristic_ratio, etc.) |
+| Category          | Fields                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| **Geographic**    | country, region, city, postalCode, timezone, latitude, longitude, continent, isEUCountry |
+| **Network**       | asn, asOrganization, colo, httpProtocol, tlsVersion, tlsCipher                           |
+| **Bot Detection** | botScore, clientTrustScore, verifiedBot, jsDetectionPassed, detectionIds                 |
+| **Fingerprints**  | ja3Hash, ja4, ja4Signals (object with h2h3_ratio, heuristic_ratio, etc.)                 |
 
 ### Phase 2: RPC Call
 
@@ -171,10 +174,10 @@ if (request) {
 
 ```typescript
 const result = await env.FRAUD_DETECTOR.validate({
-  email,
-  consumer: 'FORMINATOR',
-  flow: 'REGISTRATION',
-  headers,  // ← All request.cf metadata passed here
+	email,
+	consumer: 'FORMINATOR',
+	flow: 'REGISTRATION',
+	headers, // ← All request.cf metadata passed here
 });
 ```
 
@@ -186,27 +189,27 @@ RPC method creates HTTP request with headers:
 
 ```typescript
 const requestHeaders = new Headers({
-  'Content-Type': 'application/json'
+	'Content-Type': 'application/json',
 });
 
 // Add provided headers for fingerprinting
 if (request.headers) {
-  for (const [key, value] of Object.entries(request.headers)) {
-    if (value) {
-      requestHeaders.set(key, value);
-    }
-  }
+	for (const [key, value] of Object.entries(request.headers)) {
+		if (value) {
+			requestHeaders.set(key, value);
+		}
+	}
 }
 
 // Create internal HTTP request
 const httpRequest = new Request('http://localhost/validate', {
-  method: 'POST',
-  headers: requestHeaders,
-  body: JSON.stringify({
-    email: request.email,
-    consumer: request.consumer,
-    flow: request.flow
-  }),
+	method: 'POST',
+	headers: requestHeaders,
+	body: JSON.stringify({
+		email: request.email,
+		consumer: request.consumer,
+		flow: request.flow,
+	}),
 });
 ```
 
@@ -220,36 +223,36 @@ const cf = (c.req.raw as any).cf || {};
 const headers = c.req.raw.headers;
 
 writeValidationMetric(c.env.DB, {
-  // ... existing fields ...
+	// ... existing fields ...
 
-  // Enhanced request.cf metadata (v2.5+)
-  // Geographic
-  region: cf.region || headers.get('cf-region') || undefined,
-  city: cf.city || headers.get('cf-ipcity') || undefined,
-  postalCode: cf.postalCode || headers.get('cf-postal-code') || undefined,
-  timezone: cf.timezone || headers.get('cf-timezone') || undefined,
-  latitude: cf.latitude || headers.get('cf-iplatitude') || undefined,
-  longitude: cf.longitude || headers.get('cf-iplongitude') || undefined,
-  continent: cf.continent || headers.get('cf-ipcontinent') || undefined,
-  isEuCountry: cf.isEUCountry,
+	// Enhanced request.cf metadata (v2.5+)
+	// Geographic
+	region: cf.region || headers.get('cf-region') || undefined,
+	city: cf.city || headers.get('cf-ipcity') || undefined,
+	postalCode: cf.postalCode || headers.get('cf-postal-code') || undefined,
+	timezone: cf.timezone || headers.get('cf-timezone') || undefined,
+	latitude: cf.latitude || headers.get('cf-iplatitude') || undefined,
+	longitude: cf.longitude || headers.get('cf-iplongitude') || undefined,
+	continent: cf.continent || headers.get('cf-ipcontinent') || undefined,
+	isEuCountry: cf.isEUCountry,
 
-  // Network
-  asOrganization: cf.asOrganization,
-  colo: cf.colo,
-  httpProtocol: cf.httpProtocol,
-  tlsVersion: cf.tlsVersion,
-  tlsCipher: cf.tlsCipher,
+	// Network
+	asOrganization: cf.asOrganization,
+	colo: cf.colo,
+	httpProtocol: cf.httpProtocol,
+	tlsVersion: cf.tlsVersion,
+	tlsCipher: cf.tlsCipher,
 
-  // Bot Detection (Enhanced)
-  clientTrustScore: cf.clientTrustScore,
-  verifiedBot: cf.botManagement?.verifiedBot || headers.get('cf-verified-bot') === 'true',
-  jsDetectionPassed: (cf.botManagement as any)?.jsDetection?.passed,
-  detectionIds: (cf.botManagement as any)?.detectionIds,
+	// Bot Detection (Enhanced)
+	clientTrustScore: cf.clientTrustScore,
+	verifiedBot: cf.botManagement?.verifiedBot || headers.get('cf-verified-bot') === 'true',
+	jsDetectionPassed: (cf.botManagement as any)?.jsDetection?.passed,
+	detectionIds: (cf.botManagement as any)?.detectionIds,
 
-  // Fingerprints (Enhanced)
-  ja3Hash: cf.botManagement?.ja3Hash || headers.get('cf-ja3-hash') || undefined,
-  ja4: (cf.botManagement as any)?.ja4 || headers.get('cf-ja4') || undefined,
-  ja4Signals: (cf.botManagement as any)?.ja4Signals,
+	// Fingerprints (Enhanced)
+	ja3Hash: cf.botManagement?.ja3Hash || headers.get('cf-ja3-hash') || undefined,
+	ja4: (cf.botManagement as any)?.ja4 || headers.get('cf-ja4') || undefined,
+	ja4Signals: (cf.botManagement as any)?.ja4Signals,
 });
 ```
 
@@ -305,6 +308,7 @@ CREATE INDEX IF NOT EXISTS idx_validations_client_trust_score ON validations(cli
 ### Applying Migration
 
 In the markov-mail repository ([github.com/erfianugrah/markov-mail](https://github.com/erfianugrah/markov-mail)):
+
 ```bash
 wrangler d1 migrations apply DB --remote
 ```
@@ -314,29 +318,34 @@ wrangler d1 migrations apply DB --remote
 ## Benefits of Enhanced RPC Integration
 
 ### 1. **Comprehensive Fraud Analysis**
+
 - Markov-Mail now has access to **all 40+ Cloudflare signals**
 - Geographic patterns: Track fraud by region, city, timezone
 - Network patterns: Identify suspicious ASNs, datacenters, TLS configurations
 - Bot patterns: Correlate bot scores with fraud attempts
 
 ### 2. **Better Training Data**
+
 - D1 database contains full context for each validation
 - Enable location-based model training
 - Analyze fraud patterns by network characteristics
 - Correlate bot detection signals with Markov predictions
 
 ### 3. **Advanced Analytics**
+
 - Query fraud by geographic region
 - Identify suspicious Cloudflare datacenters (colo)
 - Track TLS fingerprint patterns
 - Analyze JA4 signal correlations
 
 ### 4. **No Performance Impact**
+
 - RPC calls remain **0.1-0.5ms**
 - Headers are lightweight (serialized strings)
 - Database writes are async (don't block response)
 
 ### 5. **Unified Data Model**
+
 - Both forminator and markov-mail store similar metadata
 - Cross-reference fraud patterns between services
 - Consistent analytics across platforms
@@ -346,6 +355,7 @@ wrangler d1 migrations apply DB --remote
 ## Example Queries
 
 ### Geographic Fraud Analysis
+
 ```sql
 -- Top cities with highest fraud rates
 SELECT
@@ -363,6 +373,7 @@ LIMIT 20;
 ```
 
 ### Network Pattern Analysis
+
 ```sql
 -- Suspicious ASNs and datacenters
 SELECT
@@ -380,6 +391,7 @@ ORDER BY avg_risk DESC;
 ```
 
 ### Bot Detection Correlation
+
 ```sql
 -- Correlation between bot scores and fraud
 SELECT
@@ -399,6 +411,7 @@ ORDER BY AVG(risk_score) DESC;
 ```
 
 ### JA4 Fingerprint Analysis
+
 ```sql
 -- Most common JA4 fingerprints with fraud rates
 SELECT
@@ -420,12 +433,15 @@ LIMIT 30;
 ## Verification
 
 ### Check RPC Binding
+
 In this repository (forminator):
+
 ```bash
 grep -A5 "services" wrangler.jsonc
 ```
 
 Expected output:
+
 ```jsonc
 "services": [
   {
@@ -437,6 +453,7 @@ Expected output:
 ```
 
 ### Test RPC Call
+
 ```bash
 # From forminator directory
 wrangler dev --remote
@@ -454,7 +471,9 @@ curl -X POST http://localhost:8787/api/submissions \
 ```
 
 ### Verify Data Storage
+
 In the markov-mail repository ([github.com/erfianugrah/markov-mail](https://github.com/erfianugrah/markov-mail)):
+
 ```bash
 # Check recent validations with new fields
 wrangler d1 execute DB --command="
@@ -483,6 +502,7 @@ wrangler d1 execute DB --command="
 **Symptom**: New fields are NULL in markov-mail database
 
 **Solution**:
+
 1. Check forminator is passing `c.req.raw` to `checkEmailFraud()`
 2. Verify headers extraction logic in `email-fraud-detection.ts`
 3. Check markov-mail middleware is reading headers correctly
@@ -492,6 +512,7 @@ wrangler d1 execute DB --command="
 **Symptom**: Error `env.FRAUD_DETECTOR.validate is not a function`
 
 **Solution**:
+
 1. Verify service binding in `wrangler.jsonc`
 2. Check markov-mail worker is deployed
 3. Ensure `FraudDetectionService` is exported from markov-mail
@@ -502,6 +523,7 @@ wrangler d1 execute DB --command="
 
 **Solution**:
 In the markov-mail repository, check and apply migrations:
+
 ```bash
 wrangler d1 migrations list DB --remote
 wrangler d1 migrations apply DB --remote
@@ -511,20 +533,22 @@ wrangler d1 migrations apply DB --remote
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| v2.5 | 2025-11-17 | Enhanced RPC integration with full request.cf metadata |
-| v2.0 | 2025-11-06 | Initial RPC integration (basic email + consumer/flow) |
+| Version | Date       | Changes                                                |
+| ------- | ---------- | ------------------------------------------------------ |
+| v2.5    | 2025-11-17 | Enhanced RPC integration with full request.cf metadata |
+| v2.0    | 2025-11-06 | Initial RPC integration (basic email + consumer/flow)  |
 
 ---
 
 ## Files Modified
 
 ### Forminator
+
 - `src/lib/email-fraud-detection.ts` - Enhanced RPC call with metadata extraction
 - `src/routes/submissions.ts` - Pass `c.req.raw` to `checkEmailFraud()`
 
 ### Markov-Mail
+
 - `migrations/0007_add_enhanced_request_metadata.sql` - Database schema update
 - `src/utils/metrics.ts` - Enhanced `ValidationMetric` interface
 - `src/database/metrics.ts` - Updated SQL INSERT with new columns
@@ -535,13 +559,13 @@ wrangler d1 migrations apply DB --remote
 ## Related Documentation
 
 ### This Repository (Forminator)
-- [Main Documentation (CLAUDE.md)](../CLAUDE.md) - Complete project guide
+
 - [Schema Initialization](./SCHEMA-INITIALIZATION.md) - Database setup guide
 - [API Reference](./API-REFERENCE.md) - Complete API documentation
 - [Fraud Detection](./FRAUD-DETECTION.md) - Fraud detection strategy
 
 ### External Resources
-- [Markov-Mail Documentation](https://github.com/erfianugrah/markov-mail/blob/main/CLAUDE.md) - Email fraud detection service
+
 - [Markov-Mail RPC Integration](https://github.com/erfianugrah/markov-mail/blob/main/docs/RPC-INTEGRATION.md) - RPC integration from Markov-Mail perspective
 - [Cloudflare RPC Documentation](https://developers.cloudflare.com/workers/runtime-apis/rpc/)
 - [Cloudflare request.cf Properties](https://developers.cloudflare.com/workers/runtime-apis/request/#incomingrequestcfproperties)

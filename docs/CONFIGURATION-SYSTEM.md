@@ -28,6 +28,7 @@ Comprehensive configuration system for fraud detection thresholds and risk scori
 Controls overall risk scoring and blocking behavior.
 
 #### `risk.blockThreshold` (default: `70`)
+
 - **Type**: Integer (0-100)
 - **Purpose**: Minimum risk score required to block a submission
 - **Rationale**: Set at 70 to balance security vs. user experience. Allows medium-risk submissions (40-69) while blocking high-risk (70+)
@@ -37,12 +38,14 @@ Controls overall risk scoring and blocking behavior.
   - `80`: Strict (may have false positives)
 
 #### `risk.levels` (default: `{low: {min: 0, max: 39}, medium: {min: 40, max: 69}, high: {min: 70, max: 100}}`)
+
 - **Type**: Object with min/max ranges
 - **Purpose**: Define risk level classifications for UI display
 - **Rationale**: Standard three-tier risk classification
 - **Note**: Should align with blockThreshold (high.min should equal blockThreshold)
 
 #### `risk.weights` (default: weights sum to 1.0)
+
 Component weights for normalized risk scoring. **Must sum to 1.0**.
 
 - **`tokenReplay`** (default: `0.35`): Token replay attack weight (35%)
@@ -74,36 +77,42 @@ Component weights for normalized risk scoring. **Must sum to 1.0**.
 Thresholds for Cloudflare Bot Management JA4 fingerprint signals. Requires Enterprise plan.
 
 #### `ja4.ipsQuantileThreshold` (default: `0.95`)
+
 - **Type**: Float (0.0-1.0)
 - **Purpose**: IP diversity percentile threshold
 - **Rationale**: High values indicate widespread JA4 use (legitimate browsers OR proxy networks). 95th percentile catches outliers while allowing Firefox/Chrome
 - **Common Values**: `0.90` (lenient), `0.95` (balanced), `0.99` (strict)
 
 #### `ja4.reqsQuantileThreshold` (default: `0.99`)
+
 - **Type**: Float (0.0-1.0)
 - **Purpose**: Request volume percentile threshold
 - **Rationale**: Only flags top 1% of request generators. Bot networks typically 99th+ percentile
 - **Common Values**: `0.95` (lenient), `0.99` (balanced), `0.995` (strict)
 
 #### `ja4.heuristicRatioThreshold` (default: `0.8`)
+
 - **Type**: Float (0.0-1.0)
 - **Purpose**: Minimum ratio of bot detections to consider suspicious
 - **Rationale**: 80% bot detections indicates likely bot traffic
 - **Range**: 0.5-0.9 (lower = more sensitive)
 
 #### `ja4.browserRatioThreshold` (default: `0.2`)
+
 - **Type**: Float (0.0-1.0)
 - **Purpose**: Minimum ratio of browser-like behavior
 - **Rationale**: <20% browser-like behavior suggests automation
 - **Range**: 0.1-0.3 (higher = more lenient)
 
 #### `ja4.h2h3RatioThreshold` (default: `0.9`)
+
 - **Type**: Float (0.0-1.0)
 - **Purpose**: HTTP/2-3 protocol usage threshold
 - **Rationale**: Modern browsers use HTTP/2-3. High ratio can indicate legitimate traffic or sophisticated bots
 - **Range**: 0.7-0.95 (context-dependent)
 
 #### `ja4.cacheRatioThreshold` (default: `0.5`)
+
 - **Type**: Float (0.0-1.0)
 - **Purpose**: Cacheable response ratio threshold
 - **Rationale**: Bots often have different caching patterns than browsers
@@ -114,6 +123,7 @@ Thresholds for Cloudflare Bot Management JA4 fingerprint signals. Requires Enter
 Core fraud detection behavior configuration.
 
 #### `detection.ephemeralIdSubmissionThreshold` (default: `2`)
+
 - **Type**: Integer
 - **Purpose**: Maximum submissions allowed per device in 24h window
 - **Rationale**: Registration forms should only be submitted ONCE. 2+ = definite fraud
@@ -121,6 +131,7 @@ Core fraud detection behavior configuration.
 - **Window**: 24 hours
 
 #### `detection.validationFrequencyBlockThreshold` (default: `3`)
+
 - **Type**: Integer
 - **Purpose**: Maximum validation attempts before blocking (1h window)
 - **Rationale**: Catches rapid-fire attacks before D1 replication completes
@@ -128,6 +139,7 @@ Core fraud detection behavior configuration.
 - **Window**: 1 hour
 
 #### `detection.validationFrequencyWarnThreshold` (default: `2`)
+
 - **Type**: Integer
 - **Purpose**: Validation attempts to trigger warning (not block)
 - **Rationale**: Allows one retry for form errors/network issues
@@ -135,6 +147,7 @@ Core fraud detection behavior configuration.
 - **Window**: 1 hour
 
 #### `detection.ipDiversityThreshold` (default: `2`)
+
 - **Type**: Integer
 - **Purpose**: Maximum unique IPs per ephemeral ID in 24h
 - **Rationale**: Same device from 2+ IPs = proxy rotation. Legitimate users rarely change IPs within 24h
@@ -174,6 +187,7 @@ JA4 session hopping detection for incognito/browser switching attacks.
 Progressive penalty system for repeat offenders.
 
 #### `timeouts.schedule` (default: `[3600, 14400, 28800, 43200, 86400]`)
+
 - **Type**: Array of integers (seconds)
 - **Purpose**: Escalating timeout durations for 1st, 2nd, 3rd, 4th, 5th+ offenses
 - **Default Values**:
@@ -186,6 +200,7 @@ Progressive penalty system for repeat offenders.
 - **Common Values**: Multiply all by 0.5 (lenient) or 2.0 (strict)
 
 #### `timeouts.maximum` (default: `86400`)
+
 - **Type**: Integer (seconds)
 - **Purpose**: Absolute maximum timeout duration
 - **Rationale**: 24h respects ~7 day ephemeral ID lifespan. Long enough to deter, short enough to not permanently block
@@ -196,24 +211,26 @@ Progressive penalty system for repeat offenders.
 ### Quick Reference (Partial Override Examples)
 
 **Lenient Configuration** (fewer blocks, more user-friendly):
+
 ```json
 {
-  "risk": {"blockThreshold": 80},
-  "detection": {
-    "ephemeralIdSubmissionThreshold": 5,
-    "validationFrequencyBlockThreshold": 10
-  }
+	"risk": { "blockThreshold": 80 },
+	"detection": {
+		"ephemeralIdSubmissionThreshold": 5,
+		"validationFrequencyBlockThreshold": 10
+	}
 }
 ```
 
 **Strict Configuration** (more blocks, security-focused):
+
 ```json
 {
-  "risk": {"blockThreshold": 60},
-  "detection": {
-    "ephemeralIdSubmissionThreshold": 2,
-    "validationFrequencyBlockThreshold": 2
-  }
+	"risk": { "blockThreshold": 60 },
+	"detection": {
+		"ephemeralIdSubmissionThreshold": 2,
+		"validationFrequencyBlockThreshold": 2
+	}
 }
 ```
 
@@ -233,25 +250,27 @@ Progressive penalty system for repeat offenders.
 **Note**: All configuration examples below show **partial overrides**. You only need to specify the values you want to change. For the complete default configuration, see [`fraud-config.example.json`](../config/fraud-config.example.json).
 
 **Via Cloudflare Dashboard (Recommended for Production):**
+
 1. Navigate to Workers & Pages → forminator → Settings → Variables
 2. Add environment variable: `FRAUD_CONFIG`
 3. Value (JSON string - partial override example):
 
 ```json
 {
-  "risk": {
-    "blockThreshold": 80,
-    "weights": {
-      "emailFraud": 0.25
-    }
-  },
-  "detection": {
-    "ephemeralIdSubmissionThreshold": 3
-  }
+	"risk": {
+		"blockThreshold": 80,
+		"weights": {
+			"emailFraud": 0.25
+		}
+	},
+	"detection": {
+		"ephemeralIdSubmissionThreshold": 3
+	}
 }
 ```
 
 **Via wrangler.toml:**
+
 ```toml
 [vars]
 FRAUD_CONFIG = '''
@@ -263,6 +282,7 @@ FRAUD_CONFIG = '''
 ```
 
 **Via wrangler CLI:**
+
 ```bash
 echo '{"risk":{"blockThreshold":80}}' | wrangler secret put FRAUD_CONFIG
 ```
@@ -270,14 +290,16 @@ echo '{"risk":{"blockThreshold":80}}' | wrangler secret put FRAUD_CONFIG
 ### Accessing Configuration
 
 **Backend (Worker):**
+
 ```typescript
 import { getConfig } from './lib/config';
 
 const config = getConfig(c.env);
-const threshold = config.risk.blockThreshold;  // 80 (custom) or 70 (default)
+const threshold = config.risk.blockThreshold; // 80 (custom) or 70 (default)
 ```
 
 **Frontend (React):**
+
 ```typescript
 import { useConfig } from './hooks/useConfig';
 
@@ -288,17 +310,21 @@ function MyComponent() {
 ```
 
 **API Endpoint:**
+
 ```bash
 curl https://form.erfi.dev/api/config | jq '.'
 ```
 
 Response:
+
 ```json
 {
-  "success": true,
-  "version": "2.0.0",
-  "customized": true,
-  "data": { /* full configuration */ }
+	"success": true,
+	"version": "2.0.0",
+	"customized": true,
+	"data": {
+		/* full configuration */
+	}
 }
 ```
 
@@ -343,57 +369,67 @@ Block if riskScore >= config.risk.blockThreshold
 ## Use Cases
 
 ### 1. A/B Testing
+
 Test different thresholds to optimize fraud detection vs. user experience:
+
 ```json
 {
-  "risk": {"blockThreshold": 75}  // Stricter (was 70)
+	"risk": { "blockThreshold": 75 } // Stricter (was 70)
 }
 ```
 
 ### 2. Fine-Tuning Based on Traffic
+
 Adjust based on production abuse patterns:
+
 ```json
 {
-  "detection": {
-    "validationFrequencyBlockThreshold": 5,  // More lenient (was 3)
-    "ephemeralIdSubmissionThreshold": 3      // More lenient (was 2)
-  }
+	"detection": {
+		"validationFrequencyBlockThreshold": 5, // More lenient (was 3)
+		"ephemeralIdSubmissionThreshold": 3 // More lenient (was 2)
+	}
 }
 ```
 
 ### 3. Email Fraud Focus
+
 Increase email fraud detection weight:
+
 ```json
 {
-  "risk": {
-    "weights": {
-      "emailFraud": 0.30,      // Increase from 0.17
-      "tokenReplay": 0.32      // Decrease from 0.35 (keep sum = 1.0)
-    }
-  }
+	"risk": {
+		"weights": {
+			"emailFraud": 0.3, // Increase from 0.17
+			"tokenReplay": 0.32 // Decrease from 0.35 (keep sum = 1.0)
+		}
+	}
 }
 ```
 
 ### 4. JA4 Sensitivity Adjustment
+
 Reduce false positives for popular browsers:
+
 ```json
 {
-  "ja4": {
-    "ipsQuantileThreshold": 0.99,  // More lenient (was 0.95)
-    "reqsQuantileThreshold": 0.995  // More lenient (was 0.99)
-  }
+	"ja4": {
+		"ipsQuantileThreshold": 0.99, // More lenient (was 0.95)
+		"reqsQuantileThreshold": 0.995 // More lenient (was 0.99)
+	}
 }
 ```
 
 ### 5. Progressive Hardening
+
 Start lenient, tighten based on abuse:
+
 ```json
 {
-  "risk": {"blockThreshold": 60},  // Week 1: Lenient
-  "detection": {
-    "ephemeralIdSubmissionThreshold": 4,
-    "validationFrequencyBlockThreshold": 6
-  }
+	"risk": { "blockThreshold": 60 }, // Week 1: Lenient
+	"detection": {
+		"ephemeralIdSubmissionThreshold": 4,
+		"validationFrequencyBlockThreshold": 6
+	}
 }
 ```
 
@@ -404,6 +440,7 @@ Then gradually increase over time as you understand traffic patterns.
 ### Code Verification (100% Complete)
 
 **No hardcoded thresholds remain:**
+
 ```bash
 # Check turnstile.ts
 grep -n "effectiveCount >= [0-9]" src/lib/turnstile.ts
@@ -419,6 +456,7 @@ grep -n "> 0\.95\|> 0\.99" src/lib/ja4-fraud-detection.ts
 ```
 
 **All function calls pass config:**
+
 ```bash
 grep -n "checkEphemeralIdFraud\|checkJA4FraudPatterns\|calculateNormalizedRiskScore" \
   src/routes/submissions.ts
@@ -426,6 +464,7 @@ grep -n "checkEphemeralIdFraud\|checkJA4FraudPatterns\|calculateNormalizedRiskSc
 ```
 
 **TypeScript compilation:**
+
 ```bash
 npx tsc --noEmit
 # Exit code: 0 ✅
@@ -434,12 +473,14 @@ npx tsc --noEmit
 ### Production Testing
 
 **Default configuration:**
+
 ```bash
 curl -s https://form.erfi.dev/api/config | jq '{customized, blockThreshold}'
 # {"customized": false, "blockThreshold": 70} ✅
 ```
 
 **Custom configuration:**
+
 ```bash
 echo '{"risk":{"blockThreshold":80}}' | wrangler secret put FRAUD_CONFIG
 sleep 3
@@ -448,6 +489,7 @@ curl -s https://form.erfi.dev/api/config | jq '{customized, blockThreshold}'
 ```
 
 **Deep merge verification:**
+
 ```bash
 curl -s https://form.erfi.dev/api/config | jq '.data.risk.weights.tokenReplay'
 # 0.35 (default preserved when only blockThreshold customized) ✅
@@ -458,21 +500,23 @@ curl -s https://form.erfi.dev/api/config | jq '.data.risk.weights.tokenReplay'
 ### Deep Merge Algorithm
 
 Custom configuration is deeply merged with defaults:
+
 ```typescript
 function mergeConfig(defaults, custom) {
-  const result = { ...defaults };
-  for (const [key, value] of Object.entries(custom)) {
-    if (typeof value === 'object' && !Array.isArray(value)) {
-      result[key] = mergeConfig(defaults[key] || {}, value);
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
+	const result = { ...defaults };
+	for (const [key, value] of Object.entries(custom)) {
+		if (typeof value === 'object' && !Array.isArray(value)) {
+			result[key] = mergeConfig(defaults[key] || {}, value);
+		} else {
+			result[key] = value;
+		}
+	}
+	return result;
 }
 ```
 
 **Example:**
+
 ```json
 // Custom: {"risk": {"blockThreshold": 80}}
 // Result: All weights preserved, only blockThreshold changed ✅
@@ -481,11 +525,12 @@ function mergeConfig(defaults, custom) {
 ### Type Safety
 
 Full TypeScript interfaces:
+
 ```typescript
 export interface FraudDetectionConfig {
-  risk: RiskConfig;
-  ja4: JA4Config;
-  detection: DetectionConfig;
+	risk: RiskConfig;
+	ja4: JA4Config;
+	detection: DetectionConfig;
 }
 ```
 
@@ -501,11 +546,13 @@ IDE autocomplete and compile-time type checking throughout codebase.
 ## Bug Fixes
 
 ### Bug #1: checkEphemeralIdFraud() Not Using Config
+
 **Discovered**: During "double check agin" verification
 **Impact**: 4 hardcoded thresholds prevented user customization
 **Fixed**: Commit cc0fa2f - Added config parameter, updated all threshold checks
 
 ### Bug #2: Detection Type Classification
+
 **Discovered**: During "double check again" verification
 **Impact**: Detection type classification used hardcoded values
 **Fixed**: Commit f817113 - Updated 2 threshold checks to use config
@@ -513,6 +560,7 @@ IDE autocomplete and compile-time type checking throughout codebase.
 ## Migration Guide
 
 No migration needed - system is backward compatible:
+
 - Without `FRAUD_CONFIG`: Uses defaults (identical to previous hardcoded values)
 - With `FRAUD_CONFIG`: Applies customizations via deep merge
 
@@ -527,13 +575,16 @@ No migration needed - system is backward compatible:
 ## Troubleshooting
 
 ### Configuration Not Applied
+
 **Symptoms**: Changes to FRAUD_CONFIG don't reflect in API
 **Causes**:
+
 - Invalid JSON syntax
 - Worker hasn't restarted (wait 1-2 minutes for propagation)
 - Environment variable set in wrong deployment/environment
 
 **Debug**:
+
 ```bash
 # Check if customized flag is true
 curl -s https://form.erfi.dev/api/config | jq '.customized'
@@ -543,40 +594,45 @@ curl -s https://form.erfi.dev/api/config | jq '.data.risk.blockThreshold'
 ```
 
 ### Unexpected Blocking
+
 **Symptoms**: Legitimate users blocked after config change
 **Causes**: Threshold too strict
 
 **Solution**:
+
 1. Check analytics for blocked validations
 2. Review risk score breakdown
 3. Temporarily increase threshold:
    ```json
-   {"risk": {"blockThreshold": 80}}
+   { "risk": { "blockThreshold": 80 } }
    ```
 4. Monitor for 24-48 hours
 5. Adjust individual component weights if needed
 
 ### Deep Merge Not Working
+
 **Symptoms**: Setting one value changes others
 **Causes**: Incorrect nesting or object structure
 
 **Example Problem**:
+
 ```json
 {
-  "risk": {
-    "weights": 0.5  // ❌ Wrong: Not an object
-  }
+	"risk": {
+		"weights": 0.5 // ❌ Wrong: Not an object
+	}
 }
 ```
 
 **Correct**:
+
 ```json
 {
-  "risk": {
-    "weights": {
-      "emailFraud": 0.25  // ✅ Correct: Nested object
-    }
-  }
+	"risk": {
+		"weights": {
+			"emailFraud": 0.25 // ✅ Correct: Nested object
+		}
+	}
 }
 ```
 
@@ -597,6 +653,7 @@ Returns current fraud detection configuration.
 **Authentication**: None required (public endpoint)
 
 **Response**:
+
 ```json
 {
   "success": true,
@@ -607,6 +664,7 @@ Returns current fraud detection configuration.
 ```
 
 **Example**:
+
 ```bash
 curl https://form.erfi.dev/api/config | jq '.data.risk.blockThreshold'
 ```
@@ -614,6 +672,7 @@ curl https://form.erfi.dev/api/config | jq '.data.risk.blockThreshold'
 ## Future Enhancements
 
 Potential features (not implemented):
+
 - Per-route configuration (different thresholds for different forms)
 - Time-based configuration (stricter at night, lenient during business hours)
 - Dynamic thresholds based on historical traffic patterns
@@ -622,12 +681,6 @@ Potential features (not implemented):
 
 ## Support
 
-**Documentation**: See `CLAUDE.md` for full project details
-**Issues**: Report at https://github.com/anthropics/claude-code/issues
 **Production URL**: https://form.erfi.dev
 
 ---
-
-**Last Verified**: 2025-11-16
-**Verification**: Code review, TypeScript compilation, production API testing
-**Status**: ✅ All tests passed, zero hardcoded values remain
