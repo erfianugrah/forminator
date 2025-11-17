@@ -2,14 +2,14 @@
 
 ## Overview
 
-Uses Cloudflare's built-in geolocation - no external APIs needed.
+Uses Cloudflare's built-in geolocation via request headers.
 
-**Purpose:**
+**Usage:**
 - Auto-detect user's country for phone input
 - Collect geographic metadata for submissions
 - Enable country-based analytics
 
-## How It Works
+## Implementation
 
 Cloudflare adds `CF-IPCountry` header to every request based on client IP.
 
@@ -52,16 +52,11 @@ useEffect(() => {
 }, []);
 ```
 
-**Timing:** ~100-150ms from page load to country detection
-
-**UX Flow:**
-1. Page loads with US flag (10ms)
-2. After ~100ms, updates to user's country
-3. No loading spinner needed (smooth transition)
+Page loads with US flag as default, then updates to user's country after API call.
 
 ## Extended Geolocation Data
 
-Cloudflare provides more than just country via `request.cf`:
+Cloudflare provides additional geographic data via `request.cf`:
 
 ```typescript
 const cf = c.req.raw.cf;
@@ -69,51 +64,40 @@ const cf = c.req.raw.cf;
 //            latitude, longitude, continent, asn, colo
 ```
 
-Currently only using `country` for phone input. Extended data stored with submissions for analytics.
+Currently using only `country` for phone input. Extended data stored with submissions for analytics.
 
-## Accuracy
-
-- **Country**: ~95-99% accurate (very reliable)
-- **Region/State**: ~80-90%
-- **City**: ~70-80% (±50km typical)
-- **Postal code**: ~50-70% (least reliable)
-
-## Limitations
+## Behavior with VPNs/Proxies
 
 **VPNs/Proxies:**
-- Shows VPN country, not user's actual country
-- Detected as `A1` (anonymous proxy)
-- Mitigation: Allow manual country selection
+- Returns VPN/proxy country, not user's actual country
+- May be detected as `A1` (anonymous proxy)
+- Phone input allows manual country selection
 
 **Mobile Networks:**
-- Often geolocates to carrier HQ, not user location
-- Country usually still correct
-- City/region unreliable
+- May geolocate to carrier headquarters
+- Country usually accurate
+- City/region may be inaccurate
 
 **Tor:**
-- Shows exit node country
+- Returns exit node country
 - Detected as `T1`
-- Respect privacy choice
 
 ## Testing
 
 **Production:**
 ```bash
 curl https://form.erfi.dev/api/geo
-# Returns your actual country
+# Returns detected country for your IP
 ```
-
-**With VPN:**
-Connect to VPN in different country, then test - should return VPN's country.
 
 **Development:**
 ```bash
-# Mock in wrangler dev
+# Mock country header in wrangler dev
 curl http://localhost:8787/api/geo -H "CF-IPCountry: JP"
 ```
 
-## Related
+## References
 
 - Phone input usage: PHONE-INPUT.md
 - Submission metadata collection: API-REFERENCE.md
-- Analytics by country: (analytics implementation)
+- Analytics by country: Analytics dashboard implementation
