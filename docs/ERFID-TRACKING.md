@@ -228,9 +228,9 @@ wrangler d1 migrations apply DB --remote
 
 10. **Production Deployment**
     - Deployed to production: 2025-11-17
-    - Worker Version: 33ffa571-310b-4ee2-9b2a-d5525376b041
+    - Worker Version: 9116a962-d523-48ab-90b1-f462bf778256 (latest)
     - Migration applied successfully
-    - Code deployed (15.47s deployment time)
+    - All erfid features verified and working
 
 11. **Production Testing**
     - Error responses: erfid in JSON + header ✅
@@ -254,8 +254,8 @@ wrangler d1 migrations apply DB --remote
 
 **Date**: 2025-11-17
 **Environment**: Production (form.erfi.dev)
-**Worker Version**: 33ffa571-310b-4ee2-9b2a-d5525376b041
-**Deployment Time**: 15.47 seconds
+**Worker Version**: 9116a962-d523-48ab-90b1-f462bf778256 (latest)
+**Deployment Time**: Multiple deployments (erfid + pagination fixes)
 
 ### Test Results
 

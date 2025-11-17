@@ -2,6 +2,43 @@
 
 All notable changes to Forminator will be documented in this file.
 
+## [2025-11-17] - Erfid Request Tracking & Analytics Pagination Fixes
+
+### Added
+- **Erfid (Erfi ID) Request Tracking System**: Complete request lifecycle tracking
+  - Unique identifier (erfid) for each request with UUID v4 or Nano ID format
+  - Customizable prefix and configuration via environment variables
+  - Database columns added to 3 tables (submissions, turnstile_validations, fraud_blacklist)
+  - Indexes created for fast erfid lookups
+  - Integration with all fraud detection layers
+  - Error responses include erfid in JSON body + X-Request-Id header
+  - CORS configured to expose X-Request-Id header to JavaScript clients
+  - Analytics API endpoints return erfid fields for request correlation
+  - Complete documentation in `docs/ERFID-TRACKING.md`
+
+### Fixed
+- **Analytics Dashboard Total Count**: Fixed incorrect reading of pagination metadata
+  - `useSubmissions.ts`: Now correctly reads `data.pagination.total` instead of `data.total`
+  - Dashboard displays accurate "Showing X to Y of N results" message
+
+- **Analytics Dashboard Pagination**: Fixed non-functional pagination controls
+  - `DataTable.tsx`: Added support for controlled pagination/sorting state in manual mode
+  - `RecentSubmissionsSection.tsx`: Pass pagination and sorting props to DataTable
+  - Next/Previous page buttons now functional
+  - State properly managed through parent component
+
+### Changed
+- **Database Schema**: Added erfid TEXT column to submissions, turnstile_validations, and fraud_blacklist tables
+- **Request Flow**: Generate erfid at request entry point and pass through entire lifecycle
+- **Error Handling**: Store erfid in Hono context for consistent error response tracking
+- **Analytics Queries**: Updated 4 queries to return erfid fields (submissions, validations, blacklist)
+
+### Improved
+- **Request Correlation**: Can now trace complete request history across all events
+- **Debugging**: Query by erfid to see validation → fraud detection → submission/blocking
+- **Analytics Accuracy**: Count unique requests instead of just database records
+- **Documentation**: Added ERFID-IMPLEMENTATION-SUMMARY.md with complete implementation details
+
 ## [2024-11-16] - Phase 4: Risk Visualization & Detailed Validation Views
 
 ### Added
