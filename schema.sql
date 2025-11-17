@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS submissions (
 	form_data TEXT, -- Complete raw JSON payload
 	extracted_email TEXT, -- Extracted email for querying
 	extracted_phone TEXT, -- Extracted phone for querying
+	-- Request tracking
+	erfid TEXT, -- Unique request identifier for lifecycle tracking
 	-- Timestamps
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -98,6 +100,8 @@ CREATE TABLE IF NOT EXISTS turnstile_validations (
 	-- Detection metadata (Phase 2)
 	detection_type TEXT, -- Layer-specific detection type (e.g., ja4_ip_clustering, ephemeral_id_fraud)
 	risk_score_breakdown TEXT, -- JSON: component scores for transparency
+	-- Request tracking
+	erfid TEXT, -- Unique request identifier for lifecycle tracking
 	-- Timestamps
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (submission_id) REFERENCES submissions(id)
@@ -124,6 +128,8 @@ CREATE TABLE IF NOT EXISTS fraud_blacklist (
 	detection_metadata TEXT,
 	-- Detection type (Phase 1.5+: layer-specific fraud detection types)
 	detection_type TEXT,
+	-- Request tracking
+	erfid TEXT, -- Unique request identifier that triggered this blacklist entry
 	-- Constraints: at least one identifier must be present
 	CHECK((ephemeral_id IS NOT NULL) OR (ip_address IS NOT NULL) OR (ja4 IS NOT NULL))
 );
