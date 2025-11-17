@@ -8,9 +8,7 @@ Forminator is a full-stack Cloudflare Turnstile demonstration showcasing:
 - **Database**: D1 for storing form submissions with rich metadata (40+ fields)
 - **Security**: Single-step Turnstile validation with fraud detection
 
-##
-
- Project Structure
+## Project Structure
 
 ```
 forminator/
@@ -112,8 +110,8 @@ forminator/
 │  │ 9. Log validation attempt                               │  │
 │  │ 10. Return success/error                                │  │
 │  └────────────────────────────────────────────────────────┘  │
-└───────┬──────────────────────┬───────────────────────────────┘
-        │                      │
+└───────┬──────────────┬───────────────────────────────────────┘
+        │              │
 ┌───────▼──────────┐    ┌──────────▼──────────────────────────┐
 │ Turnstile API    │    │ D1 Database                          │
 │ siteverify       │    │  • submissions (42 fields + metadata)│
@@ -128,9 +126,9 @@ forminator/
 └──────────────────┘    └──────────────────────────────────────┘
 ```
 
-## Key Design Decisions
+## Key Implementation Details
 
-### 1. Worker at Root Level
+### Worker at Root Level
 
 The Worker is the main project, with the frontend as a subdirectory:
 - `src/` contains Worker code (Hono app, routes, lib)
@@ -138,33 +136,24 @@ The Worker is the main project, with the frontend as a subdirectory:
 - Worker serves static assets from `frontend/dist` via ASSETS binding
 - Single deploy: `npm run deploy` builds frontend + deploys worker
 
-### 2. Single-Step Validation
+### Single-Step Validation
 
-**Why Single-Step**: Turnstile tokens are single-use. A two-step flow (separate verify + submit endpoints) would consume the token twice.
-
-**Implementation**:
+Turnstile tokens are single-use. The implementation uses a single endpoint:
 - Client collects form data + Turnstile token
 - Single POST to `/api/submissions` with all data
 - Server validates token, checks fraud, creates submission atomically
 - Token is hashed (SHA256) and stored to prevent replay attacks
 
-### 3. Static Site Generation
+### Static Site Generation
 
-**Why SSG**:
-- Fast load times (pre-rendered HTML)
-- Excellent SEO
-- Low bandwidth usage
-- Works with Workers Assets binding
-- No server-side rendering needed
-
-**Build Output**:
+Frontend uses Astro SSG:
 - `frontend/dist/` contains static HTML, CSS, JS
 - Worker serves these files directly
 - Hydration for React components (client:load)
 
-### 4. Fraud Detection Strategy
+### Fraud Detection Strategy
 
-**Ephemeral ID (Preferred)**:
+**Ephemeral ID Detection**:
 - Enterprise Bot Management feature
 - 7-day detection window (IDs rotate after a few days)
 - Checks: submission count, validation attempts, unique emails, rapid submissions
@@ -173,10 +162,9 @@ The Worker is the main project, with the frontend as a subdirectory:
 **IP-based Fallback**:
 - Used when ephemeral ID unavailable
 - 1-hour detection window
-- Less accurate (VPNs, proxies, shared IPs)
-- Lower risk scores to reduce false positives
+- Lower risk scores to reduce false positives on shared IPs
 
-### 5. Database Schema Design
+### Database Schema Design
 
 **Two Main Tables**:
 
@@ -200,9 +188,10 @@ The Worker is the main project, with the frontend as a subdirectory:
 - `created_at` - Time-based analytics
 - `email`, `country`, `ja3_hash`, `ja4`, `bot_score` - Analytics performance
 
-### 6. Metadata Extraction
+### Metadata Extraction
 
-**40+ Fields from request.cf**:
+40+ fields extracted from request.cf:
+
 ```typescript
 export function extractRequestMetadata(request: CloudflareRequest): RequestMetadata {
   const cf = request.cf;
@@ -244,9 +233,9 @@ export function extractRequestMetadata(request: CloudflareRequest): RequestMetad
 }
 ```
 
-### 7. Dynamic Routing System
+### Dynamic Routing System
 
-**Configurable API endpoints** via environment variables:
+Configurable API endpoints via environment variables:
 
 ```jsonc
 // wrangler.jsonc
@@ -308,21 +297,14 @@ export function stripRoutePrefix(path: string, routePattern: string): string {
 }
 ```
 
-**Why This Works:**
-- **Flexibility**: Deploy same worker to multiple domains with different paths
-- **Performance**: In-memory caching (single parse per worker instance)
-- **Safety**: Longest-prefix matching prevents `/api/sub` matching `/api/submissions`
-- **Transparency**: Route configuration visible in wrangler.jsonc
+Features:
+- In-memory caching (single parse per worker instance)
+- Longest-prefix matching prevents `/api/sub` matching `/api/submissions`
+- Route configuration visible in wrangler.jsonc
 
-**Use Cases:**
-- Multi-tenant deployments (`/client-a/submit`, `/client-b/submit`)
-- API versioning (`/v2/submissions`)
-- Legacy path support (`/sign-ups` → same handler as `/api/submissions`)
-- Custom branding (`/register` instead of `/api/submissions`)
+### Testing Bypass System
 
-### 8. Testing Bypass System
-
-**API key-authenticated testing mode** for CI/CD and local development:
+API key-authenticated testing mode for CI/CD and local development:
 
 **Configuration:**
 ```jsonc
@@ -344,17 +326,11 @@ if (env.ALLOW_TESTING_BYPASS === 'true' && apiKey && apiKey === env['X-API-KEY']
 }
 ```
 
-**Security:**
+Requirements:
 - Requires **both** `ALLOW_TESTING_BYPASS=true` AND valid `X-API-KEY` header
 - All fraud detection layers still run (email, JA4, IP diversity, etc.)
 - Only skips Turnstile site-verify API call
 - Never enabled in production
-
-**Benefits:**
-- Automated testing without Turnstile widget
-- CI/CD pipeline integration
-- curl/Postman API testing
-- Local development without token generation
 
 ## API Endpoints
 
@@ -397,7 +373,7 @@ Get bot score distribution.
 
 ## Deployment
 
-The project uses a unified deployment process:
+Unified deployment process:
 
 ```bash
 # Build frontend + deploy worker
@@ -450,7 +426,8 @@ wrangler secret put TURNSTILE-SITE-KEY
 
 ## Development
 
-**Local Development with Remote D1**:
+Local development with remote D1:
+
 ```bash
 # Terminal 1: Build frontend (watch mode)
 cd frontend && npm run dev
@@ -459,28 +436,9 @@ cd frontend && npm run dev
 cd .. && wrangler dev --remote
 ```
 
-**Why Remote D1?**
-- Consistency with production
-- No local/remote data sync issues
-- Realistic testing environment
-- Easier debugging
+Remote D1 usage provides consistency with production and avoids local/remote data sync issues.
 
-## Performance Considerations
-
-- **Static Assets**: Pre-rendered, served from edge
-- **D1 Queries**: Indexed for fast lookups
-- **Worker Execution**: < 50ms typical response time
-- **Turnstile Validation**: Adds ~100-300ms
-- **Total Submission Time**: Usually < 500ms
-
-## Scalability
-
-- **Workers**: Auto-scales globally
-- **D1**: Eventual consistency, suitable for form submissions
-- **Assets**: CDN-cached, instant delivery
-- **Rate Limiting**: Basic D1-based (can upgrade to Durable Objects for strict enforcement)
-
-## Security Highlights
+## Security Implementation
 
 1. **Single-Use Tokens**: Prevents replay attacks
 2. **Token Hashing**: SHA256, not stored in plaintext
@@ -499,7 +457,6 @@ cd .. && wrangler dev --remote
 - Success rate
 - Block rate
 - Fraud detection triggers
-- Average response time
 - Submissions per country
 - Bot score distribution
 
@@ -510,9 +467,9 @@ cd .. && wrangler dev --remote
 - Rate limit hits
 - Error codes
 
-## Further Reading
+## References
 
-- [SECURITY.md](./SECURITY.md) - Security fixes and best practices
-- [TURNSTILE.md](./TURNSTILE.md) - Turnstile integration guide
-- [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) - Ephemeral ID strategy
+- [SECURITY.md](./SECURITY.md) - Security implementation details
+- [TURNSTILE.md](./TURNSTILE.md) - Turnstile integration
+- [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) - Fraud detection system
 - [API-REFERENCE.md](./API-REFERENCE.md) - Complete API documentation

@@ -3,9 +3,9 @@
 ## Architecture
 
 Dual validation strategy using React Hook Form + Zod:
-- **Client**: Immediate feedback with `onBlur` mode for better UX
+- **Client**: Immediate feedback with `onBlur` mode
 - **Server**: Security enforcement using the same Zod schema
-- **Shared schema**: Both client and server use identical validation rules for consistency
+- **Shared schema**: Both client and server use identical validation rules
 
 ## File Structure
 
@@ -86,27 +86,26 @@ export const formSchema = z.object({
 });
 ```
 
-### Design Decisions
+### Field Requirements
 
-**Which fields are required?**
 - **Required**: First name, last name, email
 - **Optional**: Phone, address, date of birth
-- Rationale: Only collect essential data. Optional fields reduce friction while still capturing useful demographic info when users choose to provide it.
 
-**Why regex for names?**
-- Prevents injection attacks while allowing legitimate names
-- Allows hyphens (Mary-Jane) and apostrophes (O'Brien)
-- Rejects numbers and special characters that indicate suspicious input
+### Validation Rules
 
-**Why refine() for phone instead of regex?**
+**Names** use regex to:
+- Allow letters, spaces, hyphens (Mary-Jane), and apostrophes (O'Brien)
+- Reject numbers and special characters
+
+**Phone** uses `refine()` instead of regex:
 - Client accepts any format: `(555) 123-4567`, `555-123-4567`, `+1 555 123 4567`
-- We only care about digit count (7-15 digits)
-- Server transforms to E.164, so client validation is lenient
+- Validates digit count (7-15 digits)
+- Server transforms to E.164 format
 
-**Why complex age calculation?**
-- Simple year subtraction fails for birthdays that haven't occurred this year
-- Example: Born Dec 31, 2006. Today is Jan 1, 2024. They're still 17 until Dec 31, 2024
-- Calculation accounts for month and day to get accurate age
+**Date of Birth** validates age:
+- Checks date format (YYYY-MM-DD)
+- Calculates age accounting for month and day (not just year)
+- Enforces 18+ age requirement
 
 ## Client-Side Implementation
 
@@ -127,14 +126,11 @@ const {
 });
 ```
 
-**Why `onBlur` mode?**
-- **Not `onChange`**: Would validate on every keystroke, interrupting user while typing
-- **Not `onSubmit`**: Would only show errors after submit attempt, too late for good UX
-- **`onBlur`**: Validates when user finishes with a field, providing immediate feedback without interruption
+The `onBlur` mode validates when user finishes with a field, providing immediate feedback without interrupting typing.
 
 ### Field Registration Pattern
 
-**Standard inputs** use the spread operator with `register()`:
+Standard inputs use the spread operator with `register()`:
 
 ```typescript
 <Input
@@ -153,12 +149,7 @@ const {
 )}
 ```
 
-**What `{...register('firstName')}` does:**
-1. Adds `onChange` handler to capture input value
-2. Adds `onBlur` handler to trigger validation
-3. Adds `ref` to access DOM element
-4. Adds `name` attribute for form submission
-5. Connects field to React Hook Form state
+The `register()` function connects the field to React Hook Form, adding change/blur handlers and form state management.
 
 **Accessibility attributes:**
 - `aria-invalid`: Tells screen readers the input is invalid
@@ -182,11 +173,10 @@ const phoneValue = watch('phone');  // Subscribe to phone field changes
 />
 ```
 
-**Why this approach?**
-- `watch('phone')` creates a controlled component by subscribing to the field value
+Uses manual state management:
+- `watch('phone')` creates a controlled component
 - `setValue()` manually updates React Hook Form state
-- `shouldValidate: true` triggers validation on change (not waiting for blur)
-- This pattern required because PhoneInput has its own internal state
+- `shouldValidate: true` triggers validation on change
 
 ### Validation Timing Flow
 
@@ -266,12 +256,12 @@ submissions.post('/', async (c) => {
 });
 ```
 
-**Order matters:**
-1. **Parse** - Get data from request
-2. **Validate** - Ensure data matches schema
-3. **Sanitize** - Remove dangerous characters
-4. **Transform** - Normalize formats (phone → E.164)
-5. **Store** - Insert into database
+Processing sequence:
+1. Parse - Get data from request
+2. Validate - Ensure data matches schema
+3. Sanitize - Remove dangerous characters
+4. Transform - Normalize formats (phone → E.164)
+5. Store - Insert into database
 
 ### Server Schema with Transforms
 
@@ -296,16 +286,12 @@ phone: z
   ),
 ```
 
-**Transform examples:**
+Transform examples:
 - `+1 (555) 123-4567` → `+15551234567`
 - `555-123-4567` → `+15551234567` (assumes US)
 - `+44 20 7946 0958` → `+442079460958`
 
-**Why transform on server?**
-- Client sends user-friendly formatted number
-- Server normalizes to E.164 for database storage
-- E.164 enables international queries and SMS/calling integrations
-- Prevents duplicate detection issues (same number, different formatting)
+E.164 format enables international queries and SMS/calling integrations.
 
 ### Input Sanitization
 
@@ -323,15 +309,12 @@ export function normalizeEmail(email: string): string {
 }
 ```
 
-**What it prevents:**
+Prevents:
 - **XSS attacks**: Removes `<script>`, `<img>`, etc.
 - **Quote escaping**: Strips `'` and `"` that could break SQL queries
 - **HTML injection**: Removes all tags and dangerous characters
 
-**Why sanitize AFTER validation?**
-- Validation ensures required fields aren't empty
-- Sanitization might remove characters, making valid input invalid
-- Example: If name is `"<John>"`, validation passes, then sanitization makes it `"John"`
+Sanitization happens after validation to ensure required fields aren't empty before character removal.
 
 ## Error Handling
 
@@ -345,7 +328,7 @@ export function normalizeEmail(email: string): string {
 )}
 ```
 
-**Visual feedback:**
+Visual feedback:
 - Red border on input: `className={errors.firstName ? 'border-destructive' : ''}`
 - Error message below field
 - Icon indicator (if applicable)
@@ -389,7 +372,7 @@ export function normalizeEmail(email: string): string {
 }
 ```
 
-## Security Measures
+## Security Implementation
 
 ### XSS Prevention
 
@@ -400,7 +383,7 @@ sanitizeInput(data.firstName)  // Removes HTML tags and quotes
 
 **Output encoding:**
 - React automatically escapes JSX content
-- No `dangerouslySetInnerHTML` used anywhere in the app
+- No `dangerouslySetInnerHTML` used in the application
 
 ### SQL Injection Prevention
 
@@ -423,30 +406,10 @@ D1 automatically escapes parameters in `.bind()`, preventing injection.
 ### CSRF Protection
 
 Turnstile token provides CSRF protection:
-- Must be obtained from form page (can't be forged)
+- Must be obtained from form page
 - Single-use (replay protection via token hash in database)
 - Expires after 5 minutes
 - Validates origin domain
-
-## Performance
-
-**Client validation timing:**
-- Zod validation: 1-5ms per field (synchronous)
-- No network calls during validation
-- Instant feedback to user
-
-**Server validation timing:**
-- JSON parsing: ~1ms
-- Zod validation: ~2-5ms
-- Sanitization: ~1ms per field
-- **Total pre-processing: ~10-15ms**
-
-**Full request breakdown:**
-- Validation: ~15ms
-- Turnstile verification API call: ~100-200ms
-- Fraud detection queries: ~50-100ms
-- Database insert: ~20-50ms
-- **Total: ~200-400ms**
 
 ## Testing
 
@@ -473,9 +436,9 @@ test('should validate email format', async ({ page }) => {
 });
 ```
 
-## Related Documentation
+## References
 
 - Phone validation details: PHONE-INPUT.md
 - Geolocation for phone country: GEOLOCATION.md
 - Fraud detection after validation: FRAUD-DETECTION.md
-- Database schema: (see D1 migrations)
+- Database schema: schema.sql
