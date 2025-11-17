@@ -139,14 +139,7 @@ cd ..
 wrangler dev --remote
 ```
 
-The `--remote` flag uses your production D1 database for testing. This ensures consistency and avoids local/remote data sync issues.
-
-### Why Remote D1 for Development?
-
-- **Consistency**: Same data as production
-- **No sync issues**: Local D1 can drift from remote
-- **Realistic testing**: Test with actual Cloudflare infrastructure
-- **Easier debugging**: All data in one place
+The `--remote` flag uses your production D1 database for testing.
 
 ## API Endpoints
 
@@ -276,12 +269,12 @@ Auto-populated when risk score ≥70:
 ### 5-Layer Detection System
 
 **Layer 0: Pre-validation Blacklist**
-- Fast D1 lookup (~10ms) before Turnstile API (~150ms)
-- 85-90% reduction in API calls for repeat offenders
+- Fast D1 lookup before Turnstile API call
+- Significantly reduces API calls for repeat offenders
 - Checks ephemeral_id, ip_address, ja4 against fraud_blacklist table
 
 **Layer 1: Email Fraud Detection (Markov-Mail Integration)**
-- Worker-to-Worker RPC service binding (0.1-0.5ms latency)
+- Worker-to-Worker RPC service binding
 - Markov Chain pattern analysis (83% accuracy, 0% false positives)
 - Pattern classification: sequential, dated, formatted, gibberish
 - Out-of-Distribution (OOD) detection for unusual formats
@@ -328,70 +321,6 @@ Auto-blacklist with escalating timeouts:
 - 3rd offense: 8 hours
 - 4th offense: 12 hours
 - 5th+ offense: 24 hours (maximum)
-
-**Note**: This is pattern recognition enhanced with multi-layer checks. For strict real-time rate limiting, implement Durable Objects.
-
-## Security Notes
-
-### What's Implemented
-✅ Atomic validation (no token replay window)
-✅ Token replay protection (SHA256 hashing with unique index)
-✅ Pre-validation blacklist (85-90% API call reduction)
-✅ 5-layer fraud detection with normalized risk scoring (0-100 scale)
-✅ Email fraud detection via Markov-Mail RPC
-✅ JA4 session hopping detection (3 sub-layers)
-✅ Ephemeral ID fraud detection (7-day window)
-✅ Validation frequency monitoring (1h window)
-✅ IP diversity detection (proxy rotation)
-✅ Progressive timeout system (1h → 24h escalation)
-✅ Testing bypass with API key authentication
-✅ Dynamic routing system (configurable endpoints)
-✅ SQL injection prevention (parameterized queries)
-✅ Input sanitization (HTML stripping)
-✅ Comprehensive request metadata capture (40+ fields)
-✅ CORS restrictions
-✅ Content Security Policy headers
-✅ Analytics API authentication (X-API-KEY header)
-
-### What's NOT Implemented (By Design)
-❌ Strict real-time rate limiting (requires Durable Objects)
-❌ Advanced bot mitigation beyond Turnstile + fraud detection
-❌ Email verification
-❌ CSRF tokens (Turnstile provides protection)
-
-### Architecture Decisions
-
-**Pre-validation Blacklist:**
-- 10x faster than Turnstile API (10ms vs 150ms)
-- Massive API call reduction for repeat offenders
-- Automatic expiry prevents stale blocks
-- Progressive timeout system (1h → 24h escalation)
-
-**Multi-Layer Defense in Depth:**
-- Email fraud detection via Markov-Mail worker (0.1-0.5ms RPC latency)
-- JA4 TLS fingerprinting catches session hopping attacks
-- Normalized risk scoring (0-100) with mathematically weighted components
-- Each layer adds independent detection signal
-- Combined approach provides comprehensive fraud coverage
-
-**Pattern Recognition vs Rate Limiting:**
-- Turnstile already limits token acquisition rate
-- Ephemeral IDs enable pattern analysis across 7-day window
-- Multi-layer detection compensates for D1 eventual consistency
-- Validation frequency monitoring catches rapid attacks before DB lag
-- For strict "max N per window" enforcement, use Durable Objects
-
-**Fail-Open Strategy:**
-- Email fraud detection allows submission if service unavailable
-- No ephemeral ID = IP-based fallback fraud detection
-- Prioritizes legitimate users over aggressive blocking
-- Turnstile provides baseline protection
-
-**Testing Bypass:**
-- API key authentication enables CI/CD testing
-- All fraud detection layers still run (no security bypass)
-- Only skips Turnstile site-verify API call
-- Never enabled in production (ALLOW_TESTING_BYPASS=false)
 
 ## Custom Domain Setup
 
@@ -463,12 +392,6 @@ wrangler deploy
 - **[docs/TURNSTILE.md](./docs/TURNSTILE.md)** - Turnstile integration guide
 - **[docs/FRAUD-DETECTION.md](./docs/FRAUD-DETECTION.md)** - Ephemeral ID fraud detection strategy
 - **[docs/TURNSTILE-ENHANCEMENTS.md](./docs/TURNSTILE-ENHANCEMENTS.md)** - Optional enhancement opportunities
-
-> **New:** Documentation now includes exhaustive guides with diagrams, examples, and troubleshooting sections for every system component.
-
-## Project Status
-
-✅ **Production Ready** - All core features implemented and security hardened
 
 ## License
 

@@ -31,12 +31,12 @@ Only requests from configured allowed hostnames are accepted. Hostname validatio
 
 ### 5-Layer Detection System
 
-**Layer 0 - Pre-Validation Blacklist** (~10ms):
+**Layer 0 - Pre-Validation Blacklist**:
 - Fast D1 lookup before expensive Turnstile API call
-- 85-90% reduction in API calls for repeat offenders
+- Significantly reduces API calls for repeat offenders
 - Checks ephemeral_id, ip_address, ja4 against fraud_blacklist table
 
-**Layer 1 - Email Fraud Detection** (0.1-0.5ms):
+**Layer 1 - Email Fraud Detection**:
 - Worker-to-Worker RPC call to Markov-Mail service
 - Markov Chain pattern analysis (83% accuracy, 0% false positives)
 - Detects sequential, dated, formatted email patterns
@@ -45,7 +45,7 @@ Only requests from configured allowed hostnames are accepted. Hostname validatio
 
 **Layer 2 - Ephemeral ID Fraud Detection** (24h window):
 - Blocks 2+ submissions from same ephemeral ID
-- Registration forms should only be submitted once per user
+- Registration forms typically submitted once per user
 
 **Layer 3 - Validation Frequency Monitoring** (1h window):
 - Blocks 3+ validation attempts from same ephemeral ID
@@ -83,15 +83,15 @@ Repeat offenders receive escalating timeout periods:
 - 4th offense: 12 hours
 - 5th+ offense: 24 hours
 
-### Graceful Degradation
+### Detection Modes
 
-**Ephemeral ID** (Enterprise feature, preferred):
+**Ephemeral ID** (Enterprise feature):
 - Tracks users across ~7 days without cookies
-- More accurate fraud detection
+- Device-based fraud detection
 
 **IP-based fallback** (when ephemeral ID unavailable):
 - Higher thresholds to account for shared IPs
-- Less accurate but still effective
+- Network-based fraud detection
 
 ## Input Validation
 
@@ -126,8 +126,8 @@ HTML and potentially dangerous characters are stripped from user inputs before s
 ### Fraud Blacklist Cache
 
 - Pre-validation check against known fraudulent ephemeral IDs and IPs
-- 10x faster than Turnstile API (~10ms vs ~150ms)
-- Reduces API calls by 85-90%
+- Faster than Turnstile API (D1 lookup vs external service)
+- Significantly reduces API calls for repeat offenders
 - Automatic expiry based on progressive timeout
 
 ## CORS and CSRF Protection
@@ -176,7 +176,7 @@ Over 40 fields captured from Cloudflare's `request.cf` object:
 **Bot Signals**: bot score, client trust score, verified bot, detection IDs
 **Fingerprints**: JA3 hash, JA4 string, JA4 signals
 
-**Note**: Enterprise-only fields (bot_score, ja3_hash, ja4, detection_ids) require Cloudflare Bot Management.
+Enterprise-only fields (bot_score, ja3_hash, ja4, detection_ids) require Cloudflare Bot Management.
 
 ## Authentication
 
@@ -264,7 +264,7 @@ if (env.ALLOW_TESTING_BYPASS === 'true' && apiKey && apiKey === env['X-API-KEY']
 
 ### D1 Eventual Consistency
 
-D1 is eventually consistent. Fraud detection is pattern-based and tolerates this. For strict real-time guarantees, consider Durable Objects.
+D1 is eventually consistent. Fraud detection is pattern-based and tolerates this.
 
 ### Not Implemented
 
@@ -282,28 +282,6 @@ To report security vulnerabilities:
 2. Email security concerns to the repository owner
 3. Include detailed reproduction steps
 4. Allow reasonable time for response
-
-## Security Checklist
-
-When deploying or modifying the application:
-
-- [ ] Update allowed hostnames in environment configuration
-- [ ] Set Turnstile secret key via `wrangler secret put TURNSTILE-SECRET-KEY`
-- [ ] Set API key via `wrangler secret put X-API-KEY`
-- [ ] **Set `ALLOW_TESTING_BYPASS="false"` in production**
-- [ ] Configure CORS origins for production domains
-- [ ] Configure custom routes in `ROUTES` environment variable
-- [ ] Configure service binding to Markov-Mail worker
-- [ ] Initialize D1 schema with proper indexes
-- [ ] Test Turnstile widget on production domain
-- [ ] Verify CSP headers allow Turnstile iframe
-- [ ] Monitor logs for security events
-- [ ] Review fraud detection thresholds (risk score ≥ 70)
-- [ ] Test all 5 fraud detection layers
-- [ ] Test rate limiting configuration
-- [ ] Validate all endpoints require proper authentication
-- [ ] Verify dynamic routing matches expected paths
-- [ ] Test testing bypass is disabled in production
 
 ## References
 
