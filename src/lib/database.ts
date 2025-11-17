@@ -1101,7 +1101,7 @@ export async function getBlockReasonDistribution(db: D1Database) {
 					WHERE block_reason IS NOT NULL
 					GROUP BY block_reason
 				)
-				GROUP BY block_reason
+				GROUP BY block_reason, source
 				ORDER BY count DESC`
 			)
 			.all();
