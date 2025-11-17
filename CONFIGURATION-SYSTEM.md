@@ -19,49 +19,223 @@ Comprehensive configuration system for fraud detection thresholds and risk scori
 ✅ **Research-Backed Defaults** - All values documented with rationale
 ✅ **Zero Hardcoded Values** - All thresholds configurable
 
-## Default Configuration
+## Complete Configuration Reference
 
-```typescript
+**Example File**: [`fraud-config.example.json`](./fraud-config.example.json) contains the complete default configuration structure.
+
+### Risk Configuration (`risk`)
+
+Controls overall risk scoring and blocking behavior.
+
+#### `risk.blockThreshold` (default: `70`)
+- **Type**: Integer (0-100)
+- **Purpose**: Minimum risk score required to block a submission
+- **Rationale**: Set at 70 to balance security vs. user experience. Allows medium-risk submissions (40-69) while blocking high-risk (70+)
+- **Common Values**:
+  - `60`: Lenient (blocks only obvious fraud)
+  - `70`: Balanced (recommended default)
+  - `80`: Strict (may have false positives)
+
+#### `risk.levels` (default: `{low: {min: 0, max: 39}, medium: {min: 40, max: 69}, high: {min: 70, max: 100}}`)
+- **Type**: Object with min/max ranges
+- **Purpose**: Define risk level classifications for UI display
+- **Rationale**: Standard three-tier risk classification
+- **Note**: Should align with blockThreshold (high.min should equal blockThreshold)
+
+#### `risk.weights` (default: weights sum to 1.0)
+Component weights for normalized risk scoring. **Must sum to 1.0**.
+
+- **`tokenReplay`** (default: `0.35`): Token replay attack weight (35%)
+  - Highest weight because replays are definitive fraud
+  - Instant block indicator
+
+- **`emailFraud`** (default: `0.17`): Email pattern fraud weight (17%)
+  - Markov-Mail detection: sequential, dated, formatted patterns
+  - 83% accuracy, 0% false positives
+
+- **`ephemeralId`** (default: `0.18`): Device tracking weight (18%)
+  - Multiple submissions from same device
+  - Core fraud signal
+
+- **`validationFrequency`** (default: `0.13`): Validation attempt rate weight (13%)
+  - Rapid-fire submission attempts
+  - Catches attacks before D1 replication
+
+- **`ipDiversity`** (default: `0.09`): Proxy rotation detection weight (9%)
+  - Same device from multiple IPs
+  - Lower weight due to legitimate VPN usage
+
+- **`ja4SessionHopping`** (default: `0.08`): Browser hopping detection weight (8%)
+  - Incognito mode / browser switching attacks
+  - Lower weight due to complexity
+
+### JA4 Signal Configuration (`ja4`)
+
+Thresholds for Cloudflare Bot Management JA4 fingerprint signals. Requires Enterprise plan.
+
+#### `ja4.ipsQuantileThreshold` (default: `0.95`)
+- **Type**: Float (0.0-1.0)
+- **Purpose**: IP diversity percentile threshold
+- **Rationale**: High values indicate widespread JA4 use (legitimate browsers OR proxy networks). 95th percentile catches outliers while allowing Firefox/Chrome
+- **Common Values**: `0.90` (lenient), `0.95` (balanced), `0.99` (strict)
+
+#### `ja4.reqsQuantileThreshold` (default: `0.99`)
+- **Type**: Float (0.0-1.0)
+- **Purpose**: Request volume percentile threshold
+- **Rationale**: Only flags top 1% of request generators. Bot networks typically 99th+ percentile
+- **Common Values**: `0.95` (lenient), `0.99` (balanced), `0.995` (strict)
+
+#### `ja4.heuristicRatioThreshold` (default: `0.8`)
+- **Type**: Float (0.0-1.0)
+- **Purpose**: Minimum ratio of bot detections to consider suspicious
+- **Rationale**: 80% bot detections indicates likely bot traffic
+- **Range**: 0.5-0.9 (lower = more sensitive)
+
+#### `ja4.browserRatioThreshold` (default: `0.2`)
+- **Type**: Float (0.0-1.0)
+- **Purpose**: Minimum ratio of browser-like behavior
+- **Rationale**: <20% browser-like behavior suggests automation
+- **Range**: 0.1-0.3 (higher = more lenient)
+
+#### `ja4.h2h3RatioThreshold` (default: `0.9`)
+- **Type**: Float (0.0-1.0)
+- **Purpose**: HTTP/2-3 protocol usage threshold
+- **Rationale**: Modern browsers use HTTP/2-3. High ratio can indicate legitimate traffic or sophisticated bots
+- **Range**: 0.7-0.95 (context-dependent)
+
+#### `ja4.cacheRatioThreshold` (default: `0.5`)
+- **Type**: Float (0.0-1.0)
+- **Purpose**: Cacheable response ratio threshold
+- **Rationale**: Bots often have different caching patterns than browsers
+- **Range**: 0.3-0.7 (use case dependent)
+
+### Detection Thresholds (`detection`)
+
+Core fraud detection behavior configuration.
+
+#### `detection.ephemeralIdSubmissionThreshold` (default: `2`)
+- **Type**: Integer
+- **Purpose**: Maximum submissions allowed per device in 24h window
+- **Rationale**: Registration forms should only be submitted ONCE. 2+ = definite fraud
+- **Common Values**: `2` (strict for registration), `5` (lenient for contact forms), `10` (very lenient)
+- **Window**: 24 hours
+
+#### `detection.validationFrequencyBlockThreshold` (default: `3`)
+- **Type**: Integer
+- **Purpose**: Maximum validation attempts before blocking (1h window)
+- **Rationale**: Catches rapid-fire attacks before D1 replication completes
+- **Common Values**: `3` (strict), `5` (balanced), `10` (lenient)
+- **Window**: 1 hour
+
+#### `detection.validationFrequencyWarnThreshold` (default: `2`)
+- **Type**: Integer
+- **Purpose**: Validation attempts to trigger warning (not block)
+- **Rationale**: Allows one retry for form errors/network issues
+- **Common Values**: `2` (standard), `3` (lenient)
+- **Window**: 1 hour
+
+#### `detection.ipDiversityThreshold` (default: `2`)
+- **Type**: Integer
+- **Purpose**: Maximum unique IPs per ephemeral ID in 24h
+- **Rationale**: Same device from 2+ IPs = proxy rotation. Legitimate users rarely change IPs within 24h
+- **Common Values**: `2` (strict), `3` (balanced), `5` (lenient for mobile users)
+- **Window**: 24 hours
+- **Note**: VPN changes may trigger false positives (acceptable trade-off)
+
+#### `detection.ja4Clustering`
+
+JA4 session hopping detection for incognito/browser switching attacks.
+
+- **`ipClusteringThreshold`** (default: `2`): Ephemeral IDs from same IP/subnet (1h window)
+  - Catches incognito mode from same location
+  - IPv6 /64 subnet matching for privacy extensions
+  - **Common Values**: `2` (strict), `3` (balanced)
+
+- **`rapidGlobalThreshold`** (default: `3`): Ephemeral IDs globally (5min window)
+  - Legitimate users can't create 3 sessions in 5 minutes
+  - Catches VPN hopping and IPv4↔IPv6 switching
+  - **Common Values**: `3` (strict), `5` (lenient)
+
+- **`rapidGlobalWindowMinutes`** (default: `5`): Rapid detection window
+  - Very short window ensures high confidence
+  - **Common Values**: `5` (strict), `10` (balanced)
+
+- **`extendedGlobalThreshold`** (default: `5`): Ephemeral IDs globally (1h window)
+  - Catches slower, distributed attacks
+  - Higher threshold reduces false positives
+  - **Common Values**: `5` (balanced), `10` (lenient)
+
+- **`extendedGlobalWindowMinutes`** (default: `60`): Extended detection window
+  - Balances detection vs. legitimate multi-device use
+  - **Common Values**: `60` (standard), `120` (lenient)
+
+### Timeout Configuration (`timeouts`)
+
+Progressive penalty system for repeat offenders.
+
+#### `timeouts.schedule` (default: `[3600, 14400, 28800, 43200, 86400]`)
+- **Type**: Array of integers (seconds)
+- **Purpose**: Escalating timeout durations for 1st, 2nd, 3rd, 4th, 5th+ offenses
+- **Default Values**:
+  - 1st offense: 3600s (1 hour) - Might be legitimate error
+  - 2nd offense: 14400s (4 hours) - Suspicious pattern
+  - 3rd offense: 28800s (8 hours) - Clear abuse
+  - 4th offense: 43200s (12 hours) - Persistent attacker
+  - 5th+ offense: 86400s (24 hours) - Maximum deterrent
+- **Rationale**: Progressive escalation deters attackers while allowing legitimate user recovery
+- **Common Values**: Multiply all by 0.5 (lenient) or 2.0 (strict)
+
+#### `timeouts.maximum` (default: `86400`)
+- **Type**: Integer (seconds)
+- **Purpose**: Absolute maximum timeout duration
+- **Rationale**: 24h respects ~7 day ephemeral ID lifespan. Long enough to deter, short enough to not permanently block
+- **Common Values**: `43200` (12h, lenient), `86400` (24h, balanced), `604800` (7 days, very strict)
+
+---
+
+### Quick Reference (Partial Override Examples)
+
+**Lenient Configuration** (fewer blocks, more user-friendly):
+```json
 {
-  risk: {
-    blockThreshold: 70,                    // Block when risk >= 70
-    weights: {                             // Component weights (sum = 1.0)
-      tokenReplay: 0.35,                   // 35% - Token replay attacks
-      emailFraud: 0.17,                    // 17% - Email pattern fraud
-      ephemeralId: 0.18,                   // 18% - Device tracking
-      validationFrequency: 0.13,           // 13% - Attempt rate monitoring
-      ipDiversity: 0.09,                   //  9% - Proxy rotation detection
-      ja4SessionHopping: 0.08,             //  8% - Browser hopping attacks
-    },
-  },
-  ja4: {
-    ipsQuantileThreshold: 0.95,            // 95th percentile for IP diversity
-    reqsQuantileThreshold: 0.99,           // 99th percentile for request volume
-  },
-  detection: {
-    ephemeralIdSubmissionThreshold: 2,     // Block on 2+ submissions in 24h
-    validationFrequencyBlockThreshold: 3,  // Block on 3+ attempts in 1h
-    validationFrequencyWarnThreshold: 2,   // Warn on 2 attempts in 1h
-    ipDiversityThreshold: 2,               // Block on 2+ IPs per ephemeral ID
-    ja4Clustering: {
-      ipClusteringThreshold: 2,            // 2+ ephemeral IDs from same IP
-      rapidGlobalThreshold: 3,             // 3+ ephemeral IDs in 5 minutes
-      rapidGlobalWindowMinutes: 5,         // Rapid detection window
-      extendedGlobalThreshold: 5,          // 5+ ephemeral IDs in 1 hour
-      extendedGlobalWindowMinutes: 60,     // Extended detection window
-    },
-  },
+  "risk": {"blockThreshold": 80},
+  "detection": {
+    "ephemeralIdSubmissionThreshold": 5,
+    "validationFrequencyBlockThreshold": 10
+  }
+}
+```
+
+**Strict Configuration** (more blocks, security-focused):
+```json
+{
+  "risk": {"blockThreshold": 60},
+  "detection": {
+    "ephemeralIdSubmissionThreshold": 2,
+    "validationFrequencyBlockThreshold": 2
+  }
 }
 ```
 
 ## Usage
 
+### Quick Start
+
+1. **Review complete defaults**: Open [`fraud-config.example.json`](./fraud-config.example.json) to see all available configuration options
+2. **Identify changes**: Decide which values you want to customize
+3. **Create partial override**: Only include the fields you want to change (see examples below)
+4. **Deploy**: Set via Cloudflare Dashboard, wrangler CLI, or .dev.vars
+
+**Important**: The configuration system uses **deep merge** - you only need to specify values you want to change. All other values will use defaults from `fraud-config.example.json`.
+
 ### Setting Custom Configuration
 
-**Via Cloudflare Dashboard:**
+**Note**: All configuration examples below show **partial overrides**. You only need to specify the values you want to change. For the complete default configuration, see [`fraud-config.example.json`](./fraud-config.example.json).
+
+**Via Cloudflare Dashboard (Recommended for Production):**
 1. Navigate to Workers & Pages → forminator → Settings → Variables
 2. Add environment variable: `FRAUD_CONFIG`
-3. Value (JSON string):
+3. Value (JSON string - partial override example):
 
 ```json
 {
@@ -408,6 +582,7 @@ curl -s https://form.erfi.dev/api/config | jq '.data.risk.blockThreshold'
 
 ## Files
 
+- **`fraud-config.example.json`** - Complete configuration example with all fields and default values
 - `src/lib/config.ts` - Configuration definition and merge logic
 - `src/routes/config.ts` - API endpoint exposing configuration
 - `frontend/src/hooks/useConfig.ts` - React hook for configuration

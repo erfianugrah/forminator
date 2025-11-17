@@ -1,0 +1,58 @@
+{
+  "risk": {
+    "blockThreshold": 70,
+    "levels": {
+      "low": {
+        "min": 0,
+        "max": 39
+      },
+      "medium": {
+        "min": 40,
+        "max": 69
+      },
+      "high": {
+        "min": 70,
+        "max": 100
+      }
+    },
+    "weights": {
+      "tokenReplay": 0.35,
+      "emailFraud": 0.17,
+      "ephemeralId": 0.18,
+      "validationFrequency": 0.13,
+      "ipDiversity": 0.09,
+      "ja4SessionHopping": 0.08
+    }
+  },
+  "ja4": {
+    "ipsQuantileThreshold": 0.95,
+    "reqsQuantileThreshold": 0.99,
+    "heuristicRatioThreshold": 0.8,
+    "browserRatioThreshold": 0.2,
+    "h2h3RatioThreshold": 0.9,
+    "cacheRatioThreshold": 0.5
+  },
+  "detection": {
+    "ephemeralIdSubmissionThreshold": 2,
+    "validationFrequencyBlockThreshold": 3,
+    "validationFrequencyWarnThreshold": 2,
+    "ipDiversityThreshold": 2,
+    "ja4Clustering": {
+      "ipClusteringThreshold": 2,
+      "rapidGlobalThreshold": 3,
+      "rapidGlobalWindowMinutes": 5,
+      "extendedGlobalThreshold": 5,
+      "extendedGlobalWindowMinutes": 60
+    }
+  },
+  "timeouts": {
+    "schedule": [
+      3600,
+      14400,
+      28800,
+      43200,
+      86400
+    ],
+    "maximum": 86400
+  }
+}
