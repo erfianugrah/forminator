@@ -30,7 +30,7 @@ The fraud detection system uses multi-layer behavioral analysis combined with pr
 
 ## Configuration
 
-All fraud detection thresholds and risk scoring weights are configurable via environment variables. See [CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) for:
+All fraud detection thresholds and risk scoring weights are configurable via environment variables. See [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) for:
 
 - Complete configuration reference
 - Usage examples and use cases

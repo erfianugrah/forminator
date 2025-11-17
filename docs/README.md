@@ -35,7 +35,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 | [GEOLOCATION.md](./GEOLOCATION.md) | Country detection via Cloudflare |
 | [TURNSTILE.md](./TURNSTILE.md) | Turnstile integration and verification |
 | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) | Ephemeral ID fraud detection with progressive timeouts |
-| [../CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) | Fraud detection configuration and customization guide |
+| [./CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) | Fraud detection configuration and customization guide |
 | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) | Complete D1 database management guide |
 
 ## Document Summaries
@@ -333,7 +333,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 | Understand the architecture | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Security audit required | [SECURITY.md](./SECURITY.md) |
 | Fraud detection too aggressive | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) → Risk Score section |
-| Customize fraud detection thresholds | [../CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) |
+| Customize fraud detection thresholds | [./CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) |
 | Test API endpoints | [API-REFERENCE.md](./API-REFERENCE.md) → Testing section |
 | Clear database or view data | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Common Operations |
 | Manage fraud blacklist | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Fraud Management |

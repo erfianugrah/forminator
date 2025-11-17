@@ -1491,7 +1491,7 @@ echo '{"risk":{"blockThreshold":80}}' | wrangler secret put FRAUD_CONFIG
 
 **Deep merge:** Only specified values are overridden. All other values use defaults.
 
-**Documentation:** See [CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) for complete guide.
+**Documentation:** See [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) for complete guide.
 
 #### Implementation Details
 
@@ -1635,7 +1635,7 @@ describe('API Endpoints', () => {
 
 ## Related Documentation
 
-- [CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) - Fraud detection configuration guide
+- [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) - Fraud detection configuration guide
 - [FORM-VALIDATION.md](./FORM-VALIDATION.md) - Input validation details
 - [TURNSTILE.md](./TURNSTILE.md) - Turnstile verification
 - [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) - Fraud detection algorithm

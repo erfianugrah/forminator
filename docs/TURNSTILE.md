@@ -472,4 +472,4 @@ Pre-validation blacklist:
 - Fraud detection: `src/lib/fraud-prevalidation.ts`, `src/lib/ja4-fraud-detection.ts`
 - Error handling: `src/lib/turnstile-errors.ts`
 - Database schema: `schema.sql`
-- Related docs: `FRAUD-DETECTION.md`, `API-REFERENCE.md`, `CONFIGURATION-SYSTEM.md`
+- Related docs: `FRAUD-DETECTION.md`, `API-REFERENCE.md`, `./CONFIGURATION-SYSTEM.md`

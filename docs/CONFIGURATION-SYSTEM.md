@@ -21,7 +21,7 @@ Comprehensive configuration system for fraud detection thresholds and risk scori
 
 ## Complete Configuration Reference
 
-**Example File**: [`fraud-config.example.json`](./fraud-config.example.json) contains the complete default configuration structure.
+**Example File**: [`fraud-config.example.json`](../config/fraud-config.example.json) contains the complete default configuration structure.
 
 ### Risk Configuration (`risk`)
 
@@ -221,16 +221,16 @@ Progressive penalty system for repeat offenders.
 
 ### Quick Start
 
-1. **Review complete defaults**: Open [`fraud-config.example.json`](./fraud-config.example.json) to see all available configuration options
+1. **Review complete defaults**: Open [`fraud-config.example.json`](../config/fraud-config.example.json) to see all available configuration options
 2. **Identify changes**: Decide which values you want to customize
 3. **Create partial override**: Only include the fields you want to change (see examples below)
 4. **Deploy**: Set via Cloudflare Dashboard, wrangler CLI, or .dev.vars
 
-**Important**: The configuration system uses **deep merge** - you only need to specify values you want to change. All other values will use defaults from `fraud-config.example.json`.
+**Important**: The configuration system uses **deep merge** - you only need to specify values you want to change. All other values will use defaults from [`fraud-config.example.json`](../config/fraud-config.example.json).
 
 ### Setting Custom Configuration
 
-**Note**: All configuration examples below show **partial overrides**. You only need to specify the values you want to change. For the complete default configuration, see [`fraud-config.example.json`](./fraud-config.example.json).
+**Note**: All configuration examples below show **partial overrides**. You only need to specify the values you want to change. For the complete default configuration, see [`fraud-config.example.json`](../config/fraud-config.example.json).
 
 **Via Cloudflare Dashboard (Recommended for Production):**
 1. Navigate to Workers & Pages → forminator → Settings → Variables
@@ -582,7 +582,7 @@ curl -s https://form.erfi.dev/api/config | jq '.data.risk.blockThreshold'
 
 ## Files
 
-- **`fraud-config.example.json`** - Complete configuration example with all fields and default values
+- **[`fraud-config.example.json`](../config/fraud-config.example.json)** - Complete configuration example with all fields and default values
 - `src/lib/config.ts` - Configuration definition and merge logic
 - `src/routes/config.ts` - API endpoint exposing configuration
 - `frontend/src/hooks/useConfig.ts` - React hook for configuration

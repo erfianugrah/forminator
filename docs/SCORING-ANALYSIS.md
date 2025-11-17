@@ -1,6 +1,6 @@
 # Risk Scoring System: Re-Normalization Impact Analysis
 
-> **Note**: All weights and thresholds shown below are **default values** and are fully configurable. See [CONFIGURATION-SYSTEM.md](../CONFIGURATION-SYSTEM.md) for customization options.
+> **Note**: All weights and thresholds shown below are **default values** and are fully configurable. See [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) for customization options.
 
 ## Weight Changes
 
