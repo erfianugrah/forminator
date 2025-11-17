@@ -302,6 +302,114 @@ Detects: Slower distributed attacks across networks
 
 Subsequent attempts blocked by Layer 0 on any of the three identifiers.
 
+#### JA4 Signals Intelligence
+
+Cloudflare provides **global intelligence** about each JA4 fingerprint through `request.cf.botManagement.ja4Signals`. These signals represent aggregated data across Cloudflare's entire network in the last hour, providing context about whether a fingerprint is legitimate (popular browser) or suspicious (bot/proxy network).
+
+**Available Signals** (10 signals from `src/lib/ja4-fraud-detection.ts:32-53`):
+
+| Signal | Type | Description | Fraud Indicator |
+|--------|------|-------------|----------------|
+| `ips_quantile_1h` | Quantile (0-1) | Rank by unique IP count globally | >0.95 = high IP diversity (proxy/bot network) |
+| `ips_rank_1h` | Rank | Absolute rank by unique IPs | Lower number = more IPs |
+| `reqs_quantile_1h` | Quantile (0-1) | Rank by request volume globally | >0.99 = very high volume (bot network) |
+| `reqs_rank_1h` | Rank | Absolute rank by request volume | Lower number = more requests |
+| `heuristic_ratio_1h` | Ratio (0-1) | Flagged by CF heuristics | >0.8 = bot-like behavior |
+| `browser_ratio_1h` | Ratio (0-1) | Browser-like requests | <0.2 = likely automation |
+| `h2h3_ratio_1h` | Ratio (0-1) | HTTP/2 or HTTP/3 requests | >0.9 = modern browser |
+| `cache_ratio_1h` | Ratio (0-1) | Cacheable responses | Higher = more static content |
+| `uas_rank_1h` | Rank | User agent diversity | Lower = more diverse UAs |
+| `paths_rank_1h` | Rank | Path diversity | Lower = more diverse paths |
+
+**Active Detection Signals** (used in fraud scoring):
+
+1. **IP Diversity (Global)**: `ips_quantile_1h > 0.95`
+   - **Legitimate**: Popular browsers (Chrome, Firefox) have high IP diversity
+   - **Suspicious**: Bot networks also show high IP diversity, BUT combined with local clustering triggers detection
+   - **Detection**: High global diversity + local IP clustering = proxy/bot network
+   - **Threshold**: Configurable via `config.ja4.ipsQuantileThreshold` (default: 0.95)
+
+2. **Request Volume (Global)**: `reqs_quantile_1h > 0.99`
+   - **Legitimate**: Popular browsers generate high request volume
+   - **Suspicious**: Bot networks generate extreme volume
+   - **Detection**: High volume + rapid local submissions = bot pattern
+   - **Threshold**: Configurable via `config.ja4.reqsQuantileThreshold` (default: 0.99)
+
+**Monitoring Signals** (captured but not used for blocking):
+
+- **Heuristic Ratio**: Cloudflare's internal bot detection
+- **Browser Ratio**: Indicates legitimate browser traffic
+- **H2H3 Ratio**: Modern browser indicator (HTTP/2/3 support)
+- **Cache Ratio**: Content access patterns
+- **UA/Path Ranks**: Diversity indicators
+
+**Why Not Use All Signals?**
+
+The system uses only **2 signals** (IP diversity + request volume) to avoid false positives:
+
+- **Problem**: Popular browsers (Chrome) can have "suspicious" characteristics:
+  - High IP diversity (millions of users globally)
+  - High request volume (popular browser)
+  - These alone don't indicate fraud
+
+- **Solution**: Combine global signals with **local behavior**:
+  - High global IP diversity **ALONE** ≠ fraud
+  - High global IP diversity **+ same IP submitting multiple times** = fraud
+  - This distinguishes "popular browser" from "proxy/bot network"
+
+**Implementation** (`src/lib/ja4-fraud-detection.ts:393-420`):
+
+```typescript
+// Parse JA4 signals from Cloudflare
+const ja4Signals = parseJA4Signals(row.ja4_signals);
+
+// Global anomaly detection
+const signalAnalysis: SignalAnalysis = {
+  highGlobalDistribution:
+    ja4Signals.ips_quantile_1h !== null &&
+    ja4Signals.ips_quantile_1h > config.ja4.ipsQuantileThreshold,
+  highRequestVolume:
+    ja4Signals.reqs_quantile_1h !== null &&
+    ja4Signals.reqs_quantile_1h > config.ja4.reqsQuantileThreshold,
+  ipsQuantile: ja4Signals.ips_quantile_1h ?? null,
+  reqsQuantile: ja4Signals.reqs_quantile_1h ?? null,
+};
+
+// Risk scoring
+if (signalAnalysis.highGlobalDistribution &&
+    signalAnalysis.highRequestVolume) {
+  riskScore += 50; // Both signals = bot network
+} else if (signalAnalysis.highGlobalDistribution ||
+           signalAnalysis.highRequestVolume) {
+  riskScore += 40; // One signal = suspicious
+}
+```
+
+**Frontend Display** (`frontend/src/components/analytics/JA4SignalsDetail.tsx`):
+
+The analytics dashboard displays all 10 signals with:
+- **Active Detection Signals**: Highlighted with thresholds and risk indicators
+- **Behavioral Signals**: Monitored for visibility but not used for blocking
+- **Color coding**: Red (risky), yellow (warning), green (normal)
+- **Explanations**: Tooltips explaining what each signal means
+
+**Configuration** (via `FRAUD_CONFIG` environment variable):
+
+```json
+{
+  "ja4": {
+    "ipsQuantileThreshold": 0.95,
+    "reqsQuantileThreshold": 0.99,
+    "heuristicRatioThreshold": 0.8,
+    "browserRatioThreshold": 0.2,
+    "h2h3RatioThreshold": 0.9,
+    "cacheRatioThreshold": 0.5
+  }
+}
+```
+
+**Key Principle**: JA4 signals provide **context**, not definitive fraud indicators. They're most powerful when combined with local clustering patterns (Layer 4a/4b/4c).
+
 ---
 
 ## Attack Scenarios

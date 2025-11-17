@@ -101,6 +101,81 @@ export async function logValidation(
 }
 
 /**
+ * Log pre-Turnstile fraud block to database
+ * Used for fraud detection that happens BEFORE Turnstile validation
+ * (e.g., email fraud, IP reputation, etc.)
+ */
+export async function logFraudBlock(
+	db: D1Database,
+	data: {
+		detectionType: string;           // 'email_fraud', 'ip_reputation', etc.
+		blockReason: string;             // Human-readable reason
+		riskScore: number;               // 0-100 scale
+		metadata: RequestMetadata;       // Request metadata
+		fraudSignals?: Record<string, any>; // Detection-specific signals
+		erfid?: string;                  // Request tracking ID
+	}
+): Promise<void> {
+	try {
+		// Extract email fraud specific fields if present
+		const emailPatternType = data.fraudSignals?.patternType || null;
+		const emailMarkovDetected = data.fraudSignals?.markovDetected ? 1 : 0;
+		const emailOodDetected = data.fraudSignals?.oodDetected ? 1 : 0;
+		const emailDisposableDomain = data.fraudSignals?.isDisposableDomain ? 1 : 0;
+		const emailTldRiskScore = data.fraudSignals?.tldRiskScore || null;
+
+		await db
+			.prepare(
+				`INSERT INTO fraud_blocks (
+					detection_type, block_reason, risk_score,
+					remote_ip, user_agent, country,
+					email_pattern_type, email_markov_detected, email_ood_detected,
+					email_disposable_domain, email_tld_risk_score,
+					metadata_json, fraud_signals_json,
+					erfid
+				) VALUES (
+					?, ?, ?,
+					?, ?, ?,
+					?, ?, ?,
+					?, ?,
+					?, ?,
+					?
+				)`
+			)
+			.bind(
+				data.detectionType,
+				data.blockReason,
+				data.riskScore,
+				data.metadata.remoteIp,
+				data.metadata.userAgent || null,
+				data.metadata.country || null,
+				emailPatternType,
+				emailMarkovDetected,
+				emailOodDetected,
+				emailDisposableDomain,
+				emailTldRiskScore,
+				JSON.stringify(data.metadata),
+				data.fraudSignals ? JSON.stringify(data.fraudSignals) : null,
+				data.erfid || null
+			)
+			.run();
+
+		logger.info(
+			{
+				detection_type: data.detectionType,
+				risk_score: data.riskScore,
+				erfid: data.erfid,
+			},
+			'Fraud block logged to database'
+		);
+	} catch (error) {
+		logger.error({ error, detection_type: data.detectionType }, 'Error logging fraud block');
+		// Fail-open: Don't throw error, just log it
+		// The block should still happen even if logging fails
+	}
+}
+
+/**
  * Create form submission in database
  */
 export async function createSubmission(

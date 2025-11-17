@@ -26,7 +26,7 @@ import type { FraudDetectionConfig } from './config';
 // ============================================================================
 
 /**
- * JA4 Signals from Cloudflare (request.cf.ja4Signals)
+ * JA4 Signals from Cloudflare (request.cf.botManagement.ja4Signals)
  * Global intelligence about this JA4 fingerprint across all of Cloudflare's network
  */
 export interface JA4Signals {
