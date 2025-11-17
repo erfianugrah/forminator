@@ -19,21 +19,53 @@ export interface EmailFraudResult {
  * Check email for fraud patterns using markov-mail service
  *
  * Uses Worker-to-Worker RPC for low-latency fraud detection (0.1-0.5ms vs 10-50ms HTTP)
+ * Passes full request.cf metadata to markov-mail for comprehensive fraud analysis
  *
  * @param email - Email address to validate
  * @param env - Environment bindings
+ * @param request - Optional original request for extracting metadata
  * @returns Email fraud result or null if service unavailable (fail-open)
  */
 export async function checkEmailFraud(
 	email: string,
-	env: Env
+	env: Env,
+	request?: Request
 ): Promise<EmailFraudResult | null> {
 	try {
-		// Call markov-mail via RPC
+		// Extract request.cf metadata to pass via RPC
+		// This ensures markov-mail has access to all Cloudflare signals
+		const headers: Record<string, string | null> = {};
+
+		if (request) {
+			const cf = request.cf as any;
+
+			// Basic headers
+			headers['cf-connecting-ip'] = request.headers.get('cf-connecting-ip');
+			headers['user-agent'] = request.headers.get('user-agent');
+
+			// Geographic headers
+			headers['cf-ipcountry'] = request.headers.get('cf-ipcountry') || (cf?.country ? String(cf.country) : null);
+			headers['cf-region'] = request.headers.get('cf-region') || (cf?.region ? String(cf.region) : null);
+			headers['cf-ipcity'] = request.headers.get('cf-ipcity') || (cf?.city ? String(cf.city) : null);
+			headers['cf-postal-code'] = request.headers.get('cf-postal-code') || (cf?.postalCode ? String(cf.postalCode) : null);
+			headers['cf-timezone'] = request.headers.get('cf-timezone') || (cf?.timezone ? String(cf.timezone) : null);
+			headers['cf-iplatitude'] = request.headers.get('cf-iplatitude') || (cf?.latitude ? String(cf.latitude) : null);
+			headers['cf-iplongitude'] = request.headers.get('cf-iplongitude') || (cf?.longitude ? String(cf.longitude) : null);
+			headers['cf-ipcontinent'] = request.headers.get('cf-ipcontinent') || (cf?.continent ? String(cf.continent) : null);
+
+			// Bot detection headers
+			headers['cf-bot-score'] = request.headers.get('cf-bot-score') || (cf?.botManagement?.score ? String(cf.botManagement.score) : null);
+			headers['cf-verified-bot'] = request.headers.get('cf-verified-bot') || (cf?.botManagement?.verifiedBot ? 'true' : 'false');
+			headers['cf-ja3-hash'] = request.headers.get('cf-ja3-hash') || cf?.botManagement?.ja3Hash || null;
+			headers['cf-ja4'] = request.headers.get('cf-ja4') || cf?.botManagement?.ja4 || null;
+		}
+
+		// Call markov-mail via RPC with enhanced headers
 		const result = await env.FRAUD_DETECTOR.validate({
 			email,
 			consumer: 'FORMINATOR',
 			flow: 'REGISTRATION',
+			headers, // Pass request.cf metadata
 		});
 
 		const emailHash = await hashEmail(email);

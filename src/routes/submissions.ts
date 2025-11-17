@@ -114,9 +114,10 @@ app.post('/', async (c) => {
 
 		// EMAIL FRAUD DETECTION (Phase 2 - Layer 5)
 		// Check email for fraudulent patterns using markov-mail RPC
+		// Pass request.cf metadata for comprehensive fraud analysis
 		let emailFraudResult = null;
 		if (sanitized.email) {
-			emailFraudResult = await checkEmailFraud(sanitized.email, c.env);
+			emailFraudResult = await checkEmailFraud(sanitized.email, c.env, c.req.raw);
 
 			if (emailFraudResult && emailFraudResult.decision === 'block') {
 				logger.warn(
