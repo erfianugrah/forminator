@@ -268,7 +268,7 @@ export default function SubmissionForm() {
 				}
 
 				setFlowStep('error');
-				setFlowError(undefined); // Don't show in flow, only in Alert
+				setFlowError(undefined); // Show error only in Alert popup, not in flow indicator
 				setSubmitResult({
 					type: 'error',
 					message: userFriendlyMessage,
@@ -637,17 +637,17 @@ export default function SubmissionForm() {
 						</Alert>
 					)}
 
-					{submitResult && (
+					{submitResult && submitResult.type === 'error' && (
 						<Alert
-							variant={submitResult.type === 'success' ? 'success' : 'destructive'}
+							variant="destructive"
 							className="animate-in fade-in slide-in-from-top-2"
 						>
 							<AlertTitle className="font-semibold">
-								{submitResult.type === 'success' ? '✓ Success!' : '✗ Error'}
+								✗ Error
 							</AlertTitle>
 							<AlertDescription>
 								{submitResult.message}
-								{rateLimitInfo && submitResult.type === 'error' && (
+								{rateLimitInfo && (
 									<div className="mt-3 pt-3 border-t border-destructive/20">
 										<div className="flex items-center gap-2">
 											<svg className="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">

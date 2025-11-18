@@ -8,9 +8,9 @@ export function RiskScoreInfo() {
 				<div className="flex items-start gap-2">
 					<Shield className="h-5 w-5 text-primary mt-0.5" />
 					<div>
-						<h3 className="font-semibold text-sm">6-Layer Fraud Detection System</h3>
+						<h3 className="font-semibold text-sm">Behavioral Risk Scoring</h3>
 						<p className="text-xs text-muted-foreground mt-1">
-							Behavioral analysis with progressive timeouts (1h → 4h → 8h → 12h → 24h)
+							Signals collected, weighted, and combined (block at ≥70/100) • Progressive timeouts (1h → 24h)
 						</p>
 					</div>
 				</div>

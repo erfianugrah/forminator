@@ -12,6 +12,7 @@ export interface BlacklistEntry {
 	offense_count: number;
 	blocked_at: string;
 	expires_at: string;
+	erfid: string | null;
 }
 
 export interface UseBlacklistReturn {

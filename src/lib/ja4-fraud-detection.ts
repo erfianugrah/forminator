@@ -115,6 +115,20 @@ export interface FraudCheckResult {
 	detectionType?: string;
 }
 
+/**
+ * Combined JA4 signal data for holistic risk scoring (Phase 3)
+ */
+export interface JA4ClusteringResult {
+	/** Clustering analysis from IP-based or global detection */
+	clustering: ClusteringAnalysis | null;
+	/** Velocity analysis (rapid submissions) */
+	velocity: VelocityAnalysis | null;
+	/** Global signal comparison */
+	globalSignals: SignalAnalysis | null;
+	/** Which detection layer found patterns (null if no patterns) */
+	detectionLayer: '4a' | '4b' | '4c' | null;
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -595,11 +609,191 @@ async function blockForJA4Fraud(
 }
 
 // ============================================================================
+// Signal Collection Functions (Phase 3)
+// ============================================================================
+
+/**
+ * Collect JA4 fraud signals without blocking (Phase 3: Holistic Risk Scoring)
+ *
+ * Analyzes JA4 clustering patterns across three detection layers:
+ * - Layer 4a: IP clustering (same subnet + same JA4 + 2+ ephemeral IDs, 1h window)
+ * - Layer 4b: Rapid global (same JA4 + 3+ ephemeral IDs globally, 5min window)
+ * - Layer 4c: Extended global (same JA4 + 5+ ephemeral IDs globally, 1h window)
+ *
+ * @param remoteIp - IP address of the request
+ * @param ja4 - JA4 fingerprint from request.cf.ja4
+ * @param ephemeralId - Turnstile ephemeral ID (not used for signal collection)
+ * @param db - D1 database instance
+ * @param config - Fraud detection configuration
+ * @returns Signal data for risk scoring (does NOT make blocking decision)
+ */
+export async function collectJA4Signals(
+	remoteIp: string,
+	ja4: string,
+	ephemeralId: string | null,
+	db: D1Database,
+	config: FraudDetectionConfig
+): Promise<{
+	rawScore: number;
+	detectionType: string | null;
+	detectionLayer: '4a' | '4b' | '4c' | null;
+	signals: JA4ClusteringResult;
+	warnings: string[];
+}> {
+	logger.info({ remoteIp, ja4 }, 'JA4 signal collection started');
+
+	try {
+		// Layer 4a: JA4 + IP Clustering (same IP/subnet + same JA4)
+		const clusteringIP = await analyzeJA4Clustering(remoteIp, ja4, db);
+
+		if (clusteringIP && clusteringIP.ephemeralCount >= config.detection.ja4Clustering.ipClusteringThreshold) {
+			const velocity = analyzeVelocity(clusteringIP, config);
+			const signals = compareGlobalSignals(clusteringIP, config);
+			const rawScore = calculateCompositeRiskScore(clusteringIP, velocity, signals);
+			const warnings = generateWarnings(clusteringIP, velocity, signals);
+
+			logger.info(
+				{
+					remoteIp,
+					ja4,
+					layer: '4a',
+					ephemeralCount: clusteringIP.ephemeralCount,
+					rawScore,
+				},
+				'Layer 4a: IP clustering detected'
+			);
+
+			return {
+				rawScore,
+				detectionType: 'ja4_ip_clustering',
+				detectionLayer: '4a',
+				signals: {
+					clustering: clusteringIP,
+					velocity,
+					globalSignals: signals,
+					detectionLayer: '4a',
+				},
+				warnings,
+			};
+		}
+
+		// Layer 4b: JA4 + Rapid Global Clustering (5 min, 3+ ephemeral IDs, NO IP filter)
+		const clusteringRapid = await analyzeJA4GlobalClustering(
+			ja4,
+			db,
+			config.detection.ja4Clustering.rapidGlobalWindowMinutes
+		);
+
+		if (clusteringRapid && clusteringRapid.ephemeralCount >= config.detection.ja4Clustering.rapidGlobalThreshold) {
+			const velocity = analyzeVelocity(clusteringRapid, config);
+			const signals = compareGlobalSignals(clusteringRapid, config);
+			const rawScore = calculateCompositeRiskScore(clusteringRapid, velocity, signals);
+			const warnings = generateWarnings(clusteringRapid, velocity, signals);
+
+			logger.info(
+				{
+					remoteIp,
+					ja4,
+					layer: '4b',
+					ephemeralCount: clusteringRapid.ephemeralCount,
+					rawScore,
+				},
+				'Layer 4b: Rapid global clustering detected'
+			);
+
+			return {
+				rawScore,
+				detectionType: 'ja4_rapid_global',
+				detectionLayer: '4b',
+				signals: {
+					clustering: clusteringRapid,
+					velocity,
+					globalSignals: signals,
+					detectionLayer: '4b',
+				},
+				warnings,
+			};
+		}
+
+		// Layer 4c: JA4 + Extended Global Clustering (1 hour, 5+ ephemeral IDs, NO IP filter)
+		const clusteringExtended = await analyzeJA4GlobalClustering(
+			ja4,
+			db,
+			config.detection.ja4Clustering.extendedGlobalWindowMinutes
+		);
+
+		if (clusteringExtended && clusteringExtended.ephemeralCount >= config.detection.ja4Clustering.extendedGlobalThreshold) {
+			const velocity = analyzeVelocity(clusteringExtended, config);
+			const signals = compareGlobalSignals(clusteringExtended, config);
+			const rawScore = calculateCompositeRiskScore(clusteringExtended, velocity, signals);
+			const warnings = generateWarnings(clusteringExtended, velocity, signals);
+
+			logger.info(
+				{
+					remoteIp,
+					ja4,
+					layer: '4c',
+					ephemeralCount: clusteringExtended.ephemeralCount,
+					rawScore,
+				},
+				'Layer 4c: Extended global clustering detected'
+			);
+
+			return {
+				rawScore,
+				detectionType: 'ja4_extended_global',
+				detectionLayer: '4c',
+				signals: {
+					clustering: clusteringExtended,
+					velocity,
+					globalSignals: signals,
+					detectionLayer: '4c',
+				},
+				warnings,
+			};
+		}
+
+		// No patterns detected - return clean signals
+		logger.info({ remoteIp, ja4 }, 'JA4 signals collected - no patterns detected');
+		return {
+			rawScore: 0,
+			detectionType: null,
+			detectionLayer: null,
+			signals: {
+				clustering: null,
+				velocity: null,
+				globalSignals: null,
+				detectionLayer: null,
+			},
+			warnings: [],
+		};
+	} catch (error) {
+		logger.error({ error, remoteIp, ja4 }, 'Error collecting JA4 signals');
+		// Fail-open: Return clean signals if collection fails
+		return {
+			rawScore: 0,
+			detectionType: null,
+			detectionLayer: null,
+			signals: {
+				clustering: null,
+				velocity: null,
+				globalSignals: null,
+				detectionLayer: null,
+			},
+			warnings: ['JA4 signal collection error'],
+		};
+	}
+}
+
+// ============================================================================
 // Main Detection Function
 // ============================================================================
 
 /**
  * Check for JA4-based fraud patterns (Layer 4 - Session Hopping Detection)
+ *
+ * @deprecated Use collectJA4Signals() for holistic risk scoring (Phase 3)
+ * This function will be removed in Phase 4 when submissions.ts is refactored
  *
  * Detects attackers who:
  * - Use incognito mode to generate new ephemeral IDs

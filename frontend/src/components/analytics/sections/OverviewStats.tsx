@@ -22,8 +22,10 @@ function getRiskScoreStatus(score: number): { color: string; status: string } {
 export function OverviewStats({ stats }: OverviewStatsProps) {
 	const allowedRate = stats && stats.total > 0 ? (stats.allowed / stats.total) * 100 : 0;
 	const avgRiskScore = stats?.avg_risk_score || 0;
-	const markovDetected = stats?.email_fraud?.markov_detected || 0;
-	const ja4FraudBlocks = stats?.ja4_fraud_blocks || 0;
+	const activeBlacklist = stats?.active_blacklist || 0;
+	const highRiskRate = stats && stats.total > 0
+		? ((stats.total - stats.allowed) / stats.total) * 100
+		: 0;
 
 	const allowedStatus = getAllowedRateStatus(allowedRate);
 	const riskStatus = getRiskScoreStatus(avgRiskScore);
@@ -73,32 +75,32 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 
 			<Card className="min-w-0">
 				<CardHeader className="pb-2">
-					<CardTitle className="text-sm font-medium text-muted-foreground break-words" title="Session Hopping Blocks">
-						Session Hopping Blocks
+					<CardTitle className="text-sm font-medium text-muted-foreground break-words" title="Active Blacklist">
+						Active Blacklist
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
 					<div className="text-3xl font-bold text-destructive">
-						{ja4FraudBlocks}
+						{activeBlacklist}
 					</div>
 					<p className="text-xs text-muted-foreground mt-1 break-words">
-						JA4 fingerprint attacks
+						Currently timed out users
 					</p>
 				</CardContent>
 			</Card>
 
 			<Card className="min-w-0">
 				<CardHeader className="pb-2">
-					<CardTitle className="text-sm font-medium text-muted-foreground break-words" title="Email Fraud Blocks">
-						Email Fraud Blocks
+					<CardTitle className="text-sm font-medium text-muted-foreground break-words" title="High Risk Rate">
+						High Risk Rate
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
 					<div className="text-3xl font-bold text-destructive">
-						{markovDetected}
+						{highRiskRate.toFixed(1)}%
 					</div>
 					<p className="text-xs text-muted-foreground mt-1 break-words">
-						Markov Chain detections
+						Validations with elevated risk
 					</p>
 				</CardContent>
 			</Card>

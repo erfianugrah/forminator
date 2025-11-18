@@ -197,7 +197,128 @@ async function getOffenseCount(ephemeralId: string, db: D1Database): Promise<num
 }
 
 /**
+ * Collect ephemeral ID fraud signals without blocking (Phase 3: Holistic Risk Scoring)
+ *
+ * Extracts behavioral signals from ephemeral ID patterns:
+ * - Submission count (24h window)
+ * - Validation attempt frequency (1h window)
+ * - IP diversity (24h window)
+ *
+ * @param ephemeralId - Turnstile ephemeral ID
+ * @param db - D1 database instance
+ * @param config - Fraud detection configuration
+ * @returns Signal data for risk scoring (does NOT make blocking decision)
+ */
+export async function collectEphemeralIdSignals(
+	ephemeralId: string,
+	db: D1Database,
+	config: FraudDetectionConfig
+): Promise<{
+	submissionCount: number;
+	validationCount: number;
+	uniqueIPCount: number;
+	warnings: string[];
+}> {
+	const warnings: string[] = [];
+
+	try {
+		const oneHourAgo = toSQLiteDateTime(new Date(Date.now() - 60 * 60 * 1000));
+		const oneDayAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+		// Signal 1: Submission count (changed to 24h window for consistency)
+		const recentSubmissions = await db
+			.prepare(
+				`SELECT COUNT(*) as count
+				 FROM submissions
+				 WHERE ephemeral_id = ?
+				 AND created_at > ?`
+			)
+			.bind(ephemeralId, oneDayAgo)
+			.first<{ count: number }>();
+
+		const submissionCount = recentSubmissions?.count || 0;
+		const effectiveCount = submissionCount + 1; // +1 for current attempt
+
+		if (effectiveCount >= config.detection.ephemeralIdSubmissionThreshold) {
+			warnings.push(
+				`Multiple submissions detected (${effectiveCount} total in 24h) - registration forms should only be submitted once`
+			);
+		}
+
+		// Signal 2: Validation frequency (1h window for rapid-fire detection)
+		const recentValidations = await db
+			.prepare(
+				`SELECT COUNT(*) as count
+				 FROM turnstile_validations
+				 WHERE ephemeral_id = ?
+				 AND created_at > ?`
+			)
+			.bind(ephemeralId, oneHourAgo)
+			.first<{ count: number }>();
+
+		const validationCount = recentValidations?.count || 0;
+		const effectiveValidationCount = validationCount + 1; // +1 for current attempt
+
+		if (effectiveValidationCount >= config.detection.validationFrequencyBlockThreshold) {
+			warnings.push(
+				`Excessive validation attempts (${effectiveValidationCount} in 1h) - possible automated attack`
+			);
+		} else if (effectiveValidationCount >= config.detection.validationFrequencyWarnThreshold) {
+			warnings.push(`Multiple validation attempts detected (${effectiveValidationCount} in 1h)`);
+		}
+
+		// Signal 3: IP diversity (24h window)
+		const uniqueIps = await db
+			.prepare(
+				`SELECT COUNT(DISTINCT remote_ip) as count
+				 FROM submissions
+				 WHERE ephemeral_id = ?
+				 AND created_at > ?`
+			)
+			.bind(ephemeralId, oneDayAgo)
+			.first<{ count: number }>();
+
+		const ipCount = uniqueIps?.count || 0;
+
+		if (ipCount >= config.detection.ipDiversityThreshold && submissionCount > 0) {
+			warnings.push(`Multiple IPs for same ephemeral ID (${ipCount} IPs) - proxy rotation detected`);
+		}
+
+		logger.info(
+			{
+				ephemeralId,
+				submissions_24h: effectiveCount,
+				validations_1h: effectiveValidationCount,
+				unique_ips: ipCount,
+				warnings,
+			},
+			'Ephemeral ID signals collected'
+		);
+
+		return {
+			submissionCount: effectiveCount,
+			validationCount: effectiveValidationCount,
+			uniqueIPCount: ipCount,
+			warnings,
+		};
+	} catch (error) {
+		logger.error({ error, ephemeralId }, 'Error collecting ephemeral ID signals');
+		// Fail-open: Return minimal signals if collection fails
+		return {
+			submissionCount: 1,
+			validationCount: 1,
+			uniqueIPCount: 1,
+			warnings: ['Signal collection error'],
+		};
+	}
+}
+
+/**
  * Check for fraud patterns based on ephemeral ID
+ *
+ * @deprecated Use collectEphemeralIdSignals() for holistic risk scoring (Phase 3)
+ * This function will be removed in Phase 4 when submissions.ts is refactored
+ *
  * Research-based thresholds: Legitimate users submit once, 2+ = abuse for registration forms
  * Time window: 1 hour for validation attempts (progressive timeout for blocks)
  * Enhanced with IP diversity detection (rotating proxies/botnets)

@@ -13,6 +13,7 @@ import {
 	getEmailPatternDistribution,
 	getSubmissionById,
 	getValidationById,
+	getValidationByErfid,
 	getTimeSeriesData,
 	detectFraudPatterns,
 	getBlockedValidationStats,
@@ -926,6 +927,42 @@ app.get('/validations/:id', async (c) => {
 				success: false,
 				error: 'Internal server error',
 				message: 'Failed to fetch validation details',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/validations/by-erfid/:erfid - Get validation by erfid
+app.get('/validations/by-erfid/:erfid', async (c) => {
+	try {
+		const db = c.env.DB;
+		const erfid = c.req.param('erfid');
+
+		if (!erfid || erfid.trim() === '') {
+			return c.json({ error: 'Invalid erfid' }, 400);
+		}
+
+		const validation = await getValidationByErfid(db, erfid);
+
+		if (!validation) {
+			return c.json({ error: 'Validation not found for this erfid' }, 404);
+		}
+
+		logger.info({ erfid }, 'Validation details retrieved by erfid');
+
+		return c.json({
+			success: true,
+			data: validation,
+		});
+	} catch (error) {
+		logger.error({ error }, 'Error fetching validation by erfid');
+
+		return c.json(
+			{
+				success: false,
+				error: 'Internal server error',
+				message: 'Failed to fetch validation by erfid',
 			},
 			500
 		);

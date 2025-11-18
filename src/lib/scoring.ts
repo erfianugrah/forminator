@@ -44,7 +44,7 @@ export function calculateNormalizedRiskScore(
 		validationCount: number;
 		uniqueIPCount: number;
 		ja4RawScore: number; // 0-230
-		blockTrigger?: 'token_replay' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'duplicate_email' | 'turnstile_failed'; // Phase 1.6: Indicates which check triggered a block
+		blockTrigger?: 'token_replay' | 'email_fraud' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'duplicate_email' | 'turnstile_failed'; // Phase 1.6 + Phase 4: Indicates which check triggered a block
 	},
 	config: FraudDetectionConfig
 ): RiskScoreBreakdown {
@@ -168,6 +168,10 @@ export function calculateNormalizedRiskScore(
 				break;
 			case 'validation_frequency':
 				// Too many attempts - high risk
+				total = Math.max(baseScore, blockThreshold);
+				break;
+			case 'email_fraud':
+				// Fraudulent email pattern detected (Phase 4) - high risk
 				total = Math.max(baseScore, blockThreshold);
 				break;
 			case 'duplicate_email':

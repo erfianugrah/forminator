@@ -7,6 +7,7 @@ export interface ValidationStats {
 	avg_risk_score: number;
 	unique_ephemeral_ids: number;
 	ja4_fraud_blocks: number;
+	active_blacklist: number;
 	email_fraud?: {
 		total_with_email_check: number;
 		markov_detected: number;

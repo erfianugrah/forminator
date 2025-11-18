@@ -534,8 +534,18 @@ export async function getValidationStats(db: D1Database) {
 				avg_email_risk_score: number;
 			}>();
 
+		// Get active blacklist count
+		const blacklistCount = await db
+			.prepare(
+				`SELECT COUNT(*) as active_blacklist
+				 FROM fraud_blacklist
+				 WHERE expires_at > datetime('now')`
+			)
+			.first<{ active_blacklist: number }>();
+
 		return {
 			...stats,
+			active_blacklist: blacklistCount?.active_blacklist || 0,
 			email_fraud: emailStats || {
 				total_with_email_check: 0,
 				markov_detected: 0,
@@ -1297,6 +1307,26 @@ export async function getValidationById(db: D1Database, id: number) {
 		return validation;
 	} catch (error) {
 		logger.error({ error, id }, 'Error fetching validation by ID');
+		throw error;
+	}
+}
+
+export async function getValidationByErfid(db: D1Database, erfid: string) {
+	try {
+		const validation = await db
+			.prepare(`
+				SELECT *
+				FROM turnstile_validations
+				WHERE erfid = ?
+				ORDER BY created_at DESC
+				LIMIT 1
+			`)
+			.bind(erfid)
+			.first();
+
+		return validation;
+	} catch (error) {
+		logger.error({ error, erfid }, 'Error fetching validation by erfid');
 		throw error;
 	}
 }

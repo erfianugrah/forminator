@@ -12,6 +12,7 @@ interface SecurityEventsProps {
 	activeBlocks: BlacklistEntry[];
 	recentDetections: BlockedValidation[];
 	onLoadDetail: (id: number) => void;
+	apiKey: string;
 }
 
 type SecurityEvent = {
@@ -23,18 +24,18 @@ type SecurityEvent = {
 	identifierType: 'ephemeral' | 'ip';
 	blockReason: string;
 	riskScore: number;
-	detectionType: 'token_replay' | 'ephemeral_id_fraud' | 'ja4_ip_clustering' | 'ja4_rapid_global' | 'ja4_extended_global' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'turnstile_failed' | 'duplicate_email' | 'other' | null;
+	detectionType: 'token_replay' | 'ephemeral_id_fraud' | 'ja4_ip_clustering' | 'ja4_rapid_global' | 'ja4_extended_global' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'turnstile_failed' | 'duplicate_email' | 'email_fraud' | 'other' | null;
 	country?: string | null;
 	city?: string | null;
 	ja4?: string | null;
+	erfid?: string | null;
 	// For active blocks
 	expiresAt?: string;
 	offenseCount?: number;
 };
 
-export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }: SecurityEventsProps) {
+export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, apiKey }: SecurityEventsProps) {
 	// Filter states
-	const [detectionTypeFilter, setDetectionTypeFilter] = useState<string>('all');
 	const [statusFilter, setStatusFilter] = useState<string>('all');
 	const [riskLevelFilter, setRiskLevelFilter] = useState<string>('all');
 	const [dateRange, setDateRange] = useState({
@@ -59,6 +60,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 		detectionType: inferDetectionType(entry.block_reason),
 		expiresAt: entry.expires_at,
 		offenseCount: entry.offense_count,
+		erfid: entry.erfid,
 		// Enriched metadata from LEFT JOIN with turnstile_validations
 		country: entry.country,
 		city: entry.city,
@@ -99,11 +101,6 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 
 	// Apply filters
 	const filteredEvents = allEvents.filter((event) => {
-		// Detection type filter
-		if (detectionTypeFilter !== 'all' && event.detectionType !== detectionTypeFilter) {
-			return false;
-		}
-
 		// Status filter
 		if (statusFilter === 'active' && event.type !== 'active_block') {
 			return false;
@@ -138,7 +135,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 	// Reset pagination when filters change
 	useEffect(() => {
 		setPageIndex(0);
-	}, [detectionTypeFilter, statusFilter, riskLevelFilter, dateRange.start, dateRange.end]);
+	}, [statusFilter, riskLevelFilter, dateRange.start, dateRange.end]);
 
 	// Apply pagination
 	const totalPages = Math.ceil(filteredEvents.length / pageSize);
@@ -165,6 +162,12 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 				return (
 					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
 						Token Replay
+					</span>
+				);
+			case 'email_fraud':
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+						Email Fraud
 					</span>
 				);
 			case 'ephemeral_id_fraud':
@@ -194,7 +197,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 			case 'ja4_session_hopping':
 				return (
 					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
-						JA4 Session Hopping (Legacy)
+						Behavioral Risk Block
 					</span>
 				);
 			case 'ip_diversity':
@@ -270,7 +273,6 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 	const totalActiveBlocks = activeBlocks.length;
 	const totalDetections = recentDetections.length;
 	const hasActiveFilters =
-		detectionTypeFilter !== 'all' ||
 		statusFilter !== 'all' ||
 		riskLevelFilter !== 'all' ||
 		dateRange.start.getTime() !== subDays(new Date(), 7).setHours(0, 0, 0, 0) ||
@@ -291,27 +293,6 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 				{/* Filters */}
 				<div className="mb-4 pb-4 border-b border-border">
 					<div className="flex flex-wrap items-end gap-3">
-						<SingleSelect
-							label="Detection Type"
-							options={[
-								{ value: 'all', label: 'All Types' },
-								{ value: 'token_replay', label: 'Token Replay' },
-								{ value: 'ephemeral_id_fraud', label: 'Ephemeral ID' },
-								{ value: 'ja4_ip_clustering', label: 'JA4 IP Clustering' },
-								{ value: 'ja4_rapid_global', label: 'JA4 Rapid Global' },
-								{ value: 'ja4_extended_global', label: 'JA4 Extended Global' },
-								{ value: 'ja4_session_hopping', label: 'JA4 Session Hopping (Legacy)' },
-								{ value: 'ip_diversity', label: 'IP Diversity' },
-								{ value: 'validation_frequency', label: 'Validation Frequency' },
-								{ value: 'turnstile_failed', label: 'Turnstile Failed' },
-								{ value: 'duplicate_email', label: 'Duplicate Email' },
-								{ value: 'other', label: 'Other' }
-							]}
-							value={detectionTypeFilter}
-							onChange={setDetectionTypeFilter}
-							className="min-w-[200px]"
-						/>
-
 						<SingleSelect
 							label="Status"
 							options={[
@@ -347,7 +328,6 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 							<div className="flex items-end">
 								<button
 									onClick={() => {
-										setDetectionTypeFilter('all');
 										setStatusFilter('all');
 										setRiskLevelFilter('all');
 										setDateRange({
@@ -374,7 +354,11 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 					<>
 						<div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
 							{displayEvents.map((event) => {
-								const riskLevel = getRiskLevel(event.riskScore);
+								// Parse block_reason to get the actual calculated risk score
+							const parsed = parseBlockReason(event.blockReason);
+							// Use parsed risk score if available, otherwise fall back to database value
+							const actualRiskScore = parsed.riskScore ?? event.riskScore;
+							const riskLevel = getRiskLevel(actualRiskScore);
 
 								return (
 									<div
@@ -391,25 +375,50 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 													<span className="inline-flex px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 text-xs font-medium flex-shrink-0" title="Risk assessment score (0-100)">
 														Risk Score:
 													</span>
-													<span className={`text-xs font-semibold ${getRiskColor(event.riskScore)}`}>
-														{event.riskScore}
+													<span className={`text-xs font-semibold ${getRiskColor(actualRiskScore)}`}>
+														{actualRiskScore}
 														<span className="text-xs font-normal ml-1 text-muted-foreground">({riskLevel})</span>
 													</span>
-												</div>
-												<div className="flex items-center gap-2">
-													{getDetectionTypeBadge(event.detectionType)}
 												</div>
 											</div>
 											{/* View Details Button - Top Right */}
 											<button
-												onClick={() => {
-													const numericId = parseInt(event.id.split('-')[1], 10);
-													if (!isNaN(numericId)) {
-														onLoadDetail(numericId);
+												onClick={async () => {
+													if (event.type === 'detection') {
+														// For detections, use the validation ID directly
+														const numericId = parseInt(event.id.split('-')[1], 10);
+														if (!isNaN(numericId)) {
+															onLoadDetail(numericId);
+														}
+													} else if (event.erfid) {
+														// For active blocks, look up validation by erfid
+														try {
+															const response = await fetch(`/api/analytics/validations/by-erfid/${event.erfid}`, {
+																headers: {
+																	'X-API-KEY': apiKey
+																}
+															});
+
+															if (response.ok) {
+																const data = await response.json() as { success: boolean; data?: { id: number } };
+																if (data.success && data.data && data.data.id) {
+																	onLoadDetail(data.data.id);
+																} else {
+																	console.error('Invalid validation data received');
+																	alert('Could not load validation details');
+																}
+															} else {
+																console.error('Failed to fetch validation by erfid');
+																alert('Could not find validation record for this block');
+															}
+														} catch (error) {
+															console.error('Error fetching validation by erfid:', error);
+															alert('Error loading validation details');
+														}
 													}
 												}}
 												className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium flex-shrink-0"
-												title="View full details"
+												title="View validation details"
 											>
 												<Eye size={14} />
 												<span>Details</span>
@@ -464,9 +473,40 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 										{/* Block Reason */}
 										<div className="min-w-0 pt-3 border-t border-border/50">
 											<span className="inline-flex px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-medium mb-2">Detection Details</span>
-											<p className="text-xs text-foreground leading-relaxed mt-2" title={getDetailedReason(event.detectionType, event.blockReason)}>
-												{getDetailedReason(event.detectionType, event.blockReason)}
-											</p>
+											{(() => {
+												const parsed = parseBlockReason(event.blockReason);
+												return (
+													<div className="mt-2 space-y-2">
+														{/* Trigger Pills */}
+														{parsed.triggers.length > 0 ? (
+															<div className="space-y-1.5">
+																<span className="text-xs text-muted-foreground">Triggers:</span>
+																<div className="flex flex-wrap gap-1.5">
+																	{parsed.triggers.map((trigger, idx) => {
+																		// Truncate long trigger text for display
+																		const displayText = trigger.length > 80
+																			? trigger.substring(0, 80) + '...'
+																			: trigger;
+																		return (
+																			<span
+																				key={idx}
+																				className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium ${getTriggerPillColor(trigger)}`}
+																				title={trigger}
+																			>
+																				{displayText}
+																			</span>
+																		);
+																	})}
+																</div>
+															</div>
+														) : (
+															<p className="text-xs text-muted-foreground italic">
+																No detailed triggers available
+															</p>
+														)}
+													</div>
+												);
+											})()}
 										</div>
 									</div>
 								);
@@ -515,10 +555,13 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail }:
 	);
 }
 
-function inferDetectionType(blockReason: string): 'token_replay' | 'ephemeral_id_fraud' | 'ja4_ip_clustering' | 'ja4_rapid_global' | 'ja4_extended_global' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'turnstile_failed' | 'duplicate_email' | 'other' {
+function inferDetectionType(blockReason: string): 'token_replay' | 'ephemeral_id_fraud' | 'ja4_ip_clustering' | 'ja4_rapid_global' | 'ja4_extended_global' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'turnstile_failed' | 'duplicate_email' | 'email_fraud' | 'other' {
 	const reason = blockReason.toLowerCase();
 	if (reason.includes('token') && reason.includes('replay')) {
 		return 'token_replay';
+	}
+	if (reason.includes('email') && reason.includes('fraud')) {
+		return 'email_fraud';
 	}
 	// Phase 1.8: Layer-specific JA4 detection types
 	if (reason.includes('ja4') && reason.includes('ip_clustering')) {
@@ -553,38 +596,60 @@ function inferDetectionType(blockReason: string): 'token_replay' | 'ephemeral_id
 }
 
 /**
- * Generate detailed detection reason based on detection type
+ * Parse block reason to extract risk score and triggers
  */
-function getDetailedReason(
-	detectionType: SecurityEvent['detectionType'],
-	fallbackReason: string
-): string {
-	if (!detectionType || detectionType === 'other') {
-		return fallbackReason;
+function parseBlockReason(blockReason: string): {
+	riskScore?: number;
+	threshold?: number;
+	triggers: string[];
+	fullText: string;
+} {
+	// Try to parse "Risk score X >= Y. Triggers: ..." format
+	const riskScoreMatch = blockReason.match(/Risk score (\d+(?:\.\d+)?) >= (\d+)/);
+	const triggersMatch = blockReason.match(/Triggers: (.+)$/);
+
+	const riskScore = riskScoreMatch ? parseFloat(riskScoreMatch[1]) : undefined;
+	const threshold = riskScoreMatch ? parseInt(riskScoreMatch[2], 10) : undefined;
+
+	let triggers: string[] = [];
+	if (triggersMatch) {
+		// Split by comma, but preserve commas within trigger descriptions
+		triggers = triggersMatch[1].split(/,\s*(?=[A-Z])/).map(t => t.trim());
 	}
 
-	switch (detectionType) {
-		case 'token_replay':
-			return 'Token replay attack detected - submission used a previously validated CAPTCHA token';
-		case 'ephemeral_id_fraud':
-			return 'Multiple submissions detected from same device within fraud detection window';
-		case 'ja4_ip_clustering':
-			return 'JA4 fingerprint clustering detected - same subnet + same TLS fingerprint + multiple device IDs (likely incognito/browser hopping)';
-		case 'ja4_rapid_global':
-			return 'Rapid JA4 session hopping detected - same TLS fingerprint with 3+ device IDs in 5 minutes (fast distributed attack)';
-		case 'ja4_extended_global':
-			return 'Extended JA4 session hopping detected - same TLS fingerprint with 5+ device IDs in 1 hour (slower distributed attack)';
-		case 'ja4_session_hopping':
-			return 'Legacy JA4 session hopping detected - browser/session switching behavior identified';
-		case 'ip_diversity':
-			return 'IP diversity fraud detected - same device ID used from multiple IP addresses (proxy rotation)';
-		case 'validation_frequency':
-			return 'Excessive validation attempts detected - too many CAPTCHA validation requests in short time period';
-		case 'turnstile_failed':
-			return 'Cloudflare Turnstile validation failed - CAPTCHA challenge not passed';
-		case 'duplicate_email':
-			return 'Duplicate email address detected - this email has already been used for registration';
-		default:
-			return fallbackReason;
+	return {
+		riskScore,
+		threshold,
+		triggers,
+		fullText: blockReason,
+	};
+}
+
+/**
+ * Get pill color based on trigger keyword
+ */
+function getTriggerPillColor(trigger: string): string {
+	const lower = trigger.toLowerCase();
+
+	if (lower.includes('email')) {
+		return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
 	}
+	if (lower.includes('ja4') || lower.includes('session')) {
+		return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+	}
+	if (lower.includes('ip') || lower.includes('proxy')) {
+		return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300';
+	}
+	if (lower.includes('velocity') || lower.includes('rapid') || lower.includes('frequency')) {
+		return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+	}
+	if (lower.includes('bot') || lower.includes('global')) {
+		return 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300';
+	}
+	if (lower.includes('duplicate')) {
+		return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300';
+	}
+
+	// Default color
+	return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
 }

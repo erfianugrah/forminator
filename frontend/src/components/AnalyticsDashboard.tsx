@@ -342,6 +342,7 @@ export default function AnalyticsDashboard() {
 					activeBlocks={blacklistData.entries}
 					recentDetections={blockedValidationsData.validations}
 					onLoadDetail={loadValidationDetail}
+					apiKey={apiKey}
 				/>
 
 

@@ -50,85 +50,109 @@ flowchart TD
     ExtractMeta --> ValidateSchema{Schema<br/>Valid?}
     ValidateSchema -->|No| Block1[❌ 400 Bad Request<br/>Validation Error]
 
-    ValidateSchema -->|Yes| EmailCheck[Layer 1: Email Fraud<br/>Markov-Mail RPC 0.1-0.5ms]
-    EmailCheck --> EmailDecision{Email Fraud<br/>Decision}
-    EmailDecision -->|block| Block2[❌ 400 Bad Request<br/>Fraudulent Email Pattern]
+    %% PHASE 1: DEFINITIVE CHECKS
+    ValidateSchema -->|Yes| Phase1[PHASE 1: DEFINITIVE CHECKS]
 
-    EmailDecision -->|allow/warn| HashToken[Hash Token SHA256]
+    Phase1 --> Blacklist[Pre-Validation Blacklist<br/>Check email, ephemeral_id, ja4, ip]
+    Blacklist --> BlacklistHit{In Blacklist?}
+    BlacklistHit -->|Yes| Block2[❌ 429 Rate Limit<br/>Cached Block Decision]
+
+    BlacklistHit -->|No| HashToken[Hash Token SHA256]
     HashToken --> TokenReplay{Token<br/>Replay?}
-    TokenReplay -->|Yes| LogReplay[Log: risk=100<br/>token_replay]
-    LogReplay --> Block3[❌ 400 Bad Request<br/>Token Already Used]
+    TokenReplay -->|Yes| Block3[❌ 400 Bad Request<br/>Token Already Used]
 
-    TokenReplay -->|No| Blacklist[Layer 0: Pre-Validation<br/>Blacklist Check]
-    Blacklist --> BlacklistHit{In Blacklist?<br/>ephemeral_id<br/>ip_address<br/>ja4}
-    BlacklistHit -->|Yes| LogBlacklist[Log: validation attempt<br/>Update last_seen_at]
-    LogBlacklist --> Block4[❌ 429 Rate Limit<br/>Wait X hours]
+    TokenReplay -->|No| CallTurnstile[Validate Turnstile API]
+    CallTurnstile --> TurnstileValid{Turnstile<br/>Valid?}
+    TurnstileValid -->|No| Block4[❌ 403 Forbidden<br/>CAPTCHA Failed]
 
-    BlacklistHit -->|No| CallTurnstile[Validate Turnstile<br/>API Call]
-    CallTurnstile --> ExtractEID[Extract Ephemeral ID<br/>~7 day lifespan]
+    %% PHASE 2: COLLECT SIGNALS
+    TurnstileValid -->|Yes| Phase2[PHASE 2: COLLECT SIGNALS<br/>No Blocking]
 
-    ExtractEID --> EphemeralCheck[Layer 2: Ephemeral ID<br/>Fraud Detection]
-    EphemeralCheck --> SubmissionCount{2+ submissions<br/>in 24h?}
-    SubmissionCount -->|Yes| AddBlacklist1[Add to Blacklist<br/>Progressive Timeout]
-    AddBlacklist1 --> Block5[❌ 429 Rate Limit<br/>Multiple Submissions]
+    Phase2 --> EmailSignal[Collect Email Fraud Signal<br/>Markov-Mail RPC]
+    EmailSignal --> EphemeralSignal[Collect Ephemeral ID Signals<br/>submission count, validation freq, IP diversity]
+    EphemeralSignal --> JA4Signal[Collect JA4 Signals<br/>session hopping patterns]
+    JA4Signal --> DuplicateCheck[Check Duplicate Email<br/>flag only, don't block]
 
-    SubmissionCount -->|No| ValidationCount{3+ validations<br/>in 1h?}
-    ValidationCount -->|Yes| AddBlacklist2[Add to Blacklist<br/>Progressive Timeout]
-    AddBlacklist2 --> Block6[❌ 429 Rate Limit<br/>Rapid Fire Attack]
+    %% PHASE 3: HOLISTIC DECISION
+    DuplicateCheck --> Phase3[PHASE 3: HOLISTIC DECISION]
 
-    ValidationCount -->|No| IPDiversity{2+ unique IPs<br/>in 24h?}
-    IPDiversity -->|Yes| AddBlacklist3[Add to Blacklist<br/>Progressive Timeout]
-    AddBlacklist3 --> Block7[❌ 429 Rate Limit<br/>Proxy Rotation]
+    Phase3 --> CalcRisk[Calculate Total Risk Score<br/>from ALL signals]
+    CalcRisk --> DetectTrigger[Determine Block Trigger<br/>if any threshold exceeded]
+    DetectTrigger --> FinalScore[Recalculate with BlockTrigger<br/>for minimum score enforcement]
 
-    IPDiversity -->|No| JA4Check[Layer 4: JA4 Session<br/>Hopping Detection]
-    JA4Check --> JA4Layer4a{Layer 4a:<br/>Same IP + JA4<br/>2+ ephemeral IDs?}
-    JA4Layer4a -->|Yes| AddBlacklist4a[Add to Blacklist<br/>ephemeral_id + ja4 + ip]
-    AddBlacklist4a --> Block8[❌ 429 Rate Limit<br/>Session Hopping]
+    FinalScore --> RiskDecision{Risk Score<br/>>= 70?}
 
-    JA4Layer4a -->|No| JA4Layer4b{Layer 4b:<br/>Same JA4 globally<br/>3+ IDs in 5min?}
-    JA4Layer4b -->|Yes| AddBlacklist4b[Add to Blacklist<br/>ephemeral_id + ja4 + ip]
-    AddBlacklist4b --> Block9[❌ 429 Rate Limit<br/>Rapid Network Switch]
+    RiskDecision -->|Yes| AddBlacklist[Add to Blacklist:<br/>email + ephemeral_id + ja4 + ip<br/>Progressive Timeout]
+    AddBlacklist --> LogBlocked[Log Validation<br/>allowed=false]
+    LogBlocked --> Block5[❌ 429 Rate Limit<br/>Holistic Risk Block]
 
-    JA4Layer4b -->|No| JA4Layer4c{Layer 4c:<br/>Same JA4 globally<br/>5+ IDs in 1h?}
-    JA4Layer4c -->|Yes| AddBlacklist4c[Add to Blacklist<br/>ephemeral_id + ja4 + ip]
-    AddBlacklist4c --> Block10[❌ 429 Rate Limit<br/>Distributed Attack]
-
-    JA4Layer4c -->|No| TurnstileValid{Turnstile<br/>Valid?}
-    TurnstileValid -->|No| LogFailed[Log: risk=65<br/>turnstile_failed]
-    LogFailed --> Block11[❌ 403 Forbidden<br/>CAPTCHA Failed]
-
-    TurnstileValid -->|Yes| DuplicateEmail{Email<br/>Exists?}
-    DuplicateEmail -->|Yes| LogDuplicate[Log: risk=60<br/>duplicate_email]
-    LogDuplicate --> Block12[❌ 409 Conflict<br/>Email Already Registered]
-
-    DuplicateEmail -->|No| CalculateRisk[Calculate Normalized<br/>Risk Score 0-100]
-    CalculateRisk --> CreateSubmission[Create Submission<br/>Store in D1]
+    RiskDecision -->|No| CreateSubmission[Create Submission<br/>with risk score]
     CreateSubmission --> LogSuccess[Log Validation<br/>allowed=true]
-    LogSuccess --> Success[✅ 201 Created<br/>Submission ID]
+    LogSuccess --> Success[✅ 201 Created<br/>Submission Accepted]
 
     style Block1 fill:#ff6b6b,stroke:#c92a2a,color:#fff
-    style Block2 fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    style Block2 fill:#ff8b1f,stroke:#d66800,color:#fff
     style Block3 fill:#ff6b6b,stroke:#c92a2a,color:#fff
-    style Block4 fill:#ff8b1f,stroke:#d66800,color:#fff
+    style Block4 fill:#ff6b6b,stroke:#c92a2a,color:#fff
     style Block5 fill:#ff8b1f,stroke:#d66800,color:#fff
-    style Block6 fill:#ff8b1f,stroke:#d66800,color:#fff
-    style Block7 fill:#ff8b1f,stroke:#d66800,color:#fff
-    style Block8 fill:#ff8b1f,stroke:#d66800,color:#fff
-    style Block9 fill:#ff8b1f,stroke:#d66800,color:#fff
-    style Block10 fill:#ff8b1f,stroke:#d66800,color:#fff
-    style Block11 fill:#ff6b6b,stroke:#c92a2a,color:#fff
-    style Block12 fill:#ff6b6b,stroke:#c92a2a,color:#fff
     style Success fill:#51cf66,stroke:#2f9e44,color:#fff
-    style LogReplay fill:#ffd43b,stroke:#f59f00,color:#000
-    style LogBlacklist fill:#ffd43b,stroke:#f59f00,color:#000
-    style LogFailed fill:#ffd43b,stroke:#f59f00,color:#000
-    style LogDuplicate fill:#ffd43b,stroke:#f59f00,color:#000
-    style LogSuccess fill:#a3e635,stroke:#65a30d,color:#000
+    style Phase1 fill:#339af0,stroke:#1971c2,color:#fff
+    style Phase2 fill:#51cf66,stroke:#2f9e44,color:#fff
+    style Phase3 fill:#ffd43b,stroke:#fab005,color:#000
 ```
 
 ---
 
 ## Detection Layers
+
+### Logging vs Mitigation Tables
+
+The system uses two complementary tables for fraud management:
+
+#### fraud_blocks (Forensic Logging Only)
+
+**Purpose**: Analytics and forensic investigation
+
+- **Logs**: Pre-Turnstile fraud blocks (email fraud, IP reputation, etc.)
+- **No Caching**: Each attempt logged independently
+- **Use Case**: Analytics dashboard, pattern analysis, investigation
+- **Query Performance**: Not indexed for fast lookup (not in hot path)
+- **Table Structure** (`schema.sql:141-164`):
+  - Detection metadata (detection_type, block_reason, risk_score)
+  - Email fraud signals (pattern_type, markov_detected, ood_detected, etc.)
+  - Request metadata (IP, country, user agent)
+  - Full JSON snapshots for comprehensive analysis
+
+#### fraud_blacklist (Mitigation Cache)
+
+**Purpose**: High-performance repeat prevention
+
+- **Blocks**: Repeat offenders with progressive timeouts
+- **Fast Lookup**: Indexed for ~10ms pre-validation checks
+- **Use Case**: Layer 0 fast-path blocking (85-90% API call reduction)
+- **Query Performance**: Heavily indexed (ephemeral_id, ip_address, ja4, expires_at)
+- **Table Structure** (`schema.sql:112-135`):
+  - Multiple identifiers (ephemeral_id, ip_address, ja4)
+  - Progressive timeouts (expires_at with escalation)
+  - Offense tracking (submission_count, offense history)
+  - Minimal metadata (optimized for speed)
+
+**Key Difference**:
+
+```
+fraud_blocks:     Complete forensic record  →  Analytics visibility
+fraud_blacklist:  Fast mitigation cache     →  Performance optimization
+```
+
+**When Both Are Used**:
+
+Most fraud detection layers (ephemeral ID, JA4 session hopping) add to **both tables**:
+1. Write to `fraud_blacklist` → Future attempts blocked quickly
+2. Write to `fraud_blocks` OR `turnstile_validations` → Forensic record
+
+Email fraud detection follows this pattern with email-based blacklisting.
+
+---
 
 ### Layer 0: Pre-Validation Blacklist
 
@@ -192,12 +216,21 @@ const result = await env.FRAUD_DETECTOR.validate({
 - TLD risk profiling (143 TLDs analyzed)
 
 **Decision Flow**:
-- `block` → Reject immediately (before Turnstile validation), logged to `fraud_blocks` table
+- `block` → Reject immediately (before Turnstile validation)
 - `warn` → Continue but contribute to risk score (17% weight)
 - `allow` → Continue with risk_score=0 for email component
 - Service unavailable → Fail open (allows submission)
 
-**Logging**: Email fraud blocks are logged to the `fraud_blocks` table for analytics visibility. This complements `turnstile_validations` which captures blocks that occur AFTER Turnstile validation.
+**Mitigation** (`src/routes/submissions.ts:165-183`):
+
+When email fraud is detected (`decision='block'`):
+1. **Logs to `fraud_blocks` table** - Forensic logging for analytics
+2. **Adds to `fraud_blacklist` table** - IP-based blacklist for repeat prevention
+   - Timeout: 1 hour (first offense)
+   - Identifier: IP address (ephemeral_id not available yet)
+   - Subsequent attempts blocked by Layer 0 (pre-validation blacklist)
+
+**Performance Impact**: Repeat attempts with fraudulent emails hit the fast blacklist path (~10ms) instead of requiring Markov-Mail RPC (~150ms), reducing load on the fraud detection service.
 
 ---
 
@@ -264,16 +297,15 @@ WHERE ja4 = ? AND remote_ip IN (same /64 subnet)
 
 **Threshold**: 2+ ephemeral IDs from same IP/subnet + same JA4
 
-**Detection**: Multi-signal risk scoring (Phase 2):
-- Count threshold triggers risk assessment (not immediate block)
+**Detection**: Multi-signal risk scoring:
+- Analyzes three detection layers (4a: IP clustering, 4b: rapid global, 4c: extended global)
 - Calculates composite score from 4 signals:
   - Clustering (+80 points)
   - Velocity (<10 min apart: +60 points)
   - Global anomaly (+50 points)
   - Bot pattern (+40 points)
-- Normalizes raw score (0-230) to 0-100 scale
-- **Blocks only if normalized score ≥ 70**
-- Returns risk score for transparency when below threshold
+- Raw score contributes to holistic risk assessment
+- Combined with other signals (email, ephemeral ID, etc.) for blocking decision
 
 **Examples**:
 - **Family/Office**: 2 users, Chrome, 30 min apart → Score ~57 → **ALLOW**
@@ -313,13 +345,13 @@ WHERE ja4 = ?
 
 Detects: Slower distributed attacks across networks
 
-**Risk Scoring** (Phase 2):
+**Risk Scoring**:
 - JA4 clustering signal: +80 points (primary)
 - Rapid velocity (<10min): +60 points (configurable: `velocityThresholdMinutes`)
 - Global anomaly (high distribution): +50 points
 - Bot pattern (high volume): +40 points
-- Raw score: 0-230 (normalized to 0-100)
-- Block threshold: ≥70 (configurable: `risk.blockThreshold`)
+- Raw score: 0-230 contributes to holistic risk assessment
+- Holistic block threshold: ≥70 (configurable: `risk.blockThreshold`)
 
 **Mitigation**: Adds three identifiers to blacklist:
 - `ephemeral_id` (24h max)

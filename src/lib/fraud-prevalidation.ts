@@ -42,6 +42,7 @@ interface AddToBlacklistParams {
 	ephemeralId?: string | null;
 	ipAddress?: string | null;
 	ja4?: string | null;
+	email?: string | null;  // Phase 2: Email-based blacklisting
 	blockReason: string;
 	confidence: 'high' | 'medium' | 'low';
 	expiresIn: number; // seconds
@@ -52,16 +53,62 @@ interface AddToBlacklistParams {
 }
 
 /**
- * Check if ephemeral ID, IP, or JA4 is blacklisted before validation
- * This is the Layer 1 pre-validation blocking from FRAUD-DETECTION-ENHANCED.md
+ * Check if email, ephemeral ID, IP, or JA4 is blacklisted before validation
+ * Check order: email → ephemeral_id → ja4 → ip_address (most specific to least specific)
+ * This is the Layer 0 pre-validation blocking from fraud detection system
  */
 export async function checkPreValidationBlock(
 	ephemeralId: string | null,
 	remoteIp: string,
 	ja4: string | null,
+	email: string | null,  // Phase 2: Check email blacklist
 	db: D1Database
 ): Promise<PreValidationResult> {
 	const now = toSQLiteDateTime(new Date());
+
+	// Check email blacklist first (if available)
+	// Phase 2: Email-based blacklisting for fraud detection
+	if (email) {
+		const emailBlacklistCheck = await db
+			.prepare(
+				`
+			SELECT * FROM fraud_blacklist
+			WHERE email = ?
+			AND expires_at > ?
+			ORDER BY blocked_at DESC
+			LIMIT 1
+		`
+			)
+			.bind(email, now)
+			.first<BlacklistEntry>();
+
+		if (emailBlacklistCheck) {
+			// Update last_seen_at
+			await db
+				.prepare(
+					`
+				UPDATE fraud_blacklist
+				SET last_seen_at = ?,
+					submission_count = submission_count + 1
+				WHERE id = ?
+			`
+				)
+				.bind(now, emailBlacklistCheck.id)
+				.run();
+
+			const retryAfter = calculateCacheTime(emailBlacklistCheck.expires_at);
+
+			return {
+				blocked: true,
+				reason: `Blacklisted email: ${emailBlacklistCheck.block_reason}`,
+				confidence: emailBlacklistCheck.detection_confidence,
+				cacheFor: retryAfter,
+				expiresAt: emailBlacklistCheck.expires_at,
+				retryAfter,
+				blacklistEntry: emailBlacklistCheck,
+			};
+		}
+	}
 
 	// Check ephemeral ID blacklist (if available)
 	if (ephemeralId) {
@@ -197,17 +244,18 @@ export async function checkPreValidationBlock(
 }
 
 /**
- * Add ephemeral ID or IP to blacklist
+ * Add ephemeral ID, IP, JA4, or email to blacklist
+ * Phase 2: Added email-based blacklisting support
  */
 export async function addToBlacklist(
 	db: D1Database,
 	params: AddToBlacklistParams
 ): Promise<boolean> {
-	const { ephemeralId, ipAddress, ja4, blockReason, confidence, expiresIn, submissionCount = 1, detectionMetadata, detectionType, erfid } = params;
+	const { ephemeralId, ipAddress, ja4, email, blockReason, confidence, expiresIn, submissionCount = 1, detectionMetadata, detectionType, erfid } = params;
 
 	// Validate at least one identifier
-	if (!ephemeralId && !ipAddress && !ja4) {
-		throw new Error('At least one identifier (ephemeralId, ipAddress, or ja4) must be provided');
+	if (!ephemeralId && !ipAddress && !ja4 && !email) {
+		throw new Error('At least one identifier (ephemeralId, ipAddress, ja4, or email) must be provided');
 	}
 
 	const now = new Date();
@@ -222,6 +270,7 @@ export async function addToBlacklist(
 				ephemeral_id,
 				ip_address,
 				ja4,
+				email,
 				block_reason,
 				detection_confidence,
 				expires_at,
@@ -230,13 +279,14 @@ export async function addToBlacklist(
 				detection_metadata,
 				detection_type,
 				erfid
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 			)
 			.bind(
 				ephemeralId || null,
 				ipAddress || null,
 				ja4 || null,
+				email || null,  // Phase 2: Email binding
 				blockReason,
 				confidence,
 				toSQLiteDateTime(expiresAt),

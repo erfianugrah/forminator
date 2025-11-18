@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Submission } from '../../../hooks/useSubmissions';
 import { Badge } from '../../ui/badge';
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowUpDown, Eye } from 'lucide-react';
 
 export function createSubmissionColumns(
 	loadSubmissionDetail: (id: number) => void
@@ -107,9 +107,11 @@ export function createSubmissionColumns(
 			cell: ({ row }) => (
 				<button
 					onClick={() => loadSubmissionDetail(row.original.id)}
-					className="text-xs text-primary hover:underline"
+					className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium"
+					title="View submission details"
 				>
-					View Details
+					<Eye size={14} />
+					<span>Details</span>
 				</button>
 			),
 		},
