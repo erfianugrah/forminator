@@ -281,5 +281,5 @@ Before marking features as "fully implemented", verify:
 
 - All removed content is preserved in git history if needed
 - Features should only be added to implementation docs after verification
-- This document should be updated as features are implemented or verified
-- Consider creating a ROADMAP.md for planned features vs this document for verification
+- This document tracks optional enhancements and unverified features
+- Core fraud detection system is production-ready and fully implemented

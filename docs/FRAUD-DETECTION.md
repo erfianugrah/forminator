@@ -50,10 +50,10 @@ flowchart TD
     ExtractMeta --> ValidateSchema{Schema<br/>Valid?}
     ValidateSchema -->|No| Block1[❌ 400 Bad Request<br/>Validation Error]
 
-    %% PHASE 1: DEFINITIVE CHECKS
-    ValidateSchema -->|Yes| Phase1[PHASE 1: DEFINITIVE CHECKS]
+    %% STAGE 1: PRE-VALIDATION
+    ValidateSchema -->|Yes| Stage1[STAGE 1: PRE-VALIDATION<br/>Fast-Path Blocking]
 
-    Phase1 --> Blacklist[Pre-Validation Blacklist<br/>Check email, ephemeral_id, ja4, ip]
+    Stage1 --> Blacklist[Pre-Validation Blacklist<br/>Check email, ephemeral_id, ja4, ip]
     Blacklist --> BlacklistHit{In Blacklist?}
     BlacklistHit -->|Yes| Block2[❌ 429 Rate Limit<br/>Cached Block Decision]
 
@@ -65,18 +65,18 @@ flowchart TD
     CallTurnstile --> TurnstileValid{Turnstile<br/>Valid?}
     TurnstileValid -->|No| Block4[❌ 403 Forbidden<br/>CAPTCHA Failed]
 
-    %% PHASE 2: COLLECT SIGNALS
-    TurnstileValid -->|Yes| Phase2[PHASE 2: COLLECT SIGNALS<br/>No Blocking]
+    %% STAGE 2: SIGNAL COLLECTION
+    TurnstileValid -->|Yes| Stage2[STAGE 2: SIGNAL COLLECTION<br/>Behavioral Analysis]
 
-    Phase2 --> EmailSignal[Collect Email Fraud Signal<br/>Markov-Mail RPC]
+    Stage2 --> EmailSignal[Collect Email Fraud Signal<br/>Markov-Mail RPC]
     EmailSignal --> EphemeralSignal[Collect Ephemeral ID Signals<br/>submission count, validation freq, IP diversity]
     EphemeralSignal --> JA4Signal[Collect JA4 Signals<br/>session hopping patterns]
     JA4Signal --> DuplicateCheck[Check Duplicate Email<br/>flag only, don't block]
 
-    %% PHASE 3: HOLISTIC DECISION
-    DuplicateCheck --> Phase3[PHASE 3: HOLISTIC DECISION]
+    %% STAGE 3: RISK ASSESSMENT
+    DuplicateCheck --> Stage3[STAGE 3: RISK ASSESSMENT<br/>Holistic Scoring & Decision]
 
-    Phase3 --> CalcRisk[Calculate Total Risk Score<br/>from ALL signals]
+    Stage3 --> CalcRisk[Calculate Total Risk Score<br/>from ALL signals]
     CalcRisk --> DetectTrigger[Determine Block Trigger<br/>if any threshold exceeded]
     DetectTrigger --> FinalScore[Recalculate with BlockTrigger<br/>for minimum score enforcement]
 
@@ -96,9 +96,9 @@ flowchart TD
     style Block4 fill:#ff6b6b,stroke:#c92a2a,color:#fff
     style Block5 fill:#ff8b1f,stroke:#d66800,color:#fff
     style Success fill:#51cf66,stroke:#2f9e44,color:#fff
-    style Phase1 fill:#339af0,stroke:#1971c2,color:#fff
-    style Phase2 fill:#51cf66,stroke:#2f9e44,color:#fff
-    style Phase3 fill:#ffd43b,stroke:#fab005,color:#000
+    style Stage1 fill:#339af0,stroke:#1971c2,color:#fff
+    style Stage2 fill:#51cf66,stroke:#2f9e44,color:#fff
+    style Stage3 fill:#ffd43b,stroke:#fab005,color:#000
 ```
 
 ---

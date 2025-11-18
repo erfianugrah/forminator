@@ -546,6 +546,6 @@ When adding/updating a feature:
 
 **Setup issues?** See [../README.md](../README.md) Troubleshooting section
 
-**Missing documentation?** Open an issue or add a TODO comment in the doc
+**Missing documentation?** Open an issue on GitHub
 
-**Found an error?** Submit a correction or note it in the document
+**Found an error?** Submit a correction or create an issue
