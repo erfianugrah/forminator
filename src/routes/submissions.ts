@@ -336,15 +336,107 @@ app.post('/', async (c) => {
 			);
 		}
 
-		// 2.4: Duplicate email check (don't throw, just flag)
+		// 2.4: Duplicate email check (hybrid approach)
 		const existingSubmission = await db
 			.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
 			.bind(sanitized.email)
 			.first<{ id: number; created_at: string }>();
 
-		const isDuplicate = existingSubmission !== null;
-		if (isDuplicate) {
-			logger.info({ existing_id: existingSubmission.id }, 'Duplicate email detected');
+		if (existingSubmission !== null) {
+			// Check how many times this email/IP has tried duplicate submissions recently (24h)
+			const twentyFourHoursAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
+			const duplicateAttempts = await db
+				.prepare(`
+					SELECT COUNT(*) as count
+					FROM fraud_blacklist
+					WHERE (email = ? OR ip_address = ?)
+					AND detection_type = 'duplicate_email'
+					AND blocked_at > ?
+				`)
+				.bind(sanitized.email, metadata.remoteIp, twentyFourHoursAgo)
+				.first<{ count: number }>();
+
+			const attemptCount = (duplicateAttempts?.count || 0) + 1;
+
+			if (attemptCount >= 3) {
+				// Repeated duplicate attempts (3+) = fraud pattern
+				logger.warn(
+					{
+						email: sanitized.email,
+						ip: metadata.remoteIp,
+						attempt_count: attemptCount,
+						existing_id: existingSubmission.id,
+						erfid,
+					},
+					'Repeated duplicate email attempts detected (fraud pattern)'
+				);
+
+				// Add to blacklist with progressive timeout
+				const offenseCount = await getOffenseCount(db, sanitized.email, validation.ephemeralId || null, metadata.remoteIp);
+				const expiresIn = calculateProgressiveTimeout(offenseCount);
+				const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+				await addToBlacklist(db, {
+					email: sanitized.email,
+					ephemeralId: validation.ephemeralId || null,
+					ipAddress: metadata.remoteIp,
+					ja4: metadata.ja4 ?? null,
+					blockReason: `Repeated duplicate email attempts (${attemptCount} attempts in 24h)`,
+					confidence: 'high',
+					expiresIn,
+					submissionCount: attemptCount,
+					detectionType: 'duplicate_email',
+					detectionMetadata: {
+						attempt_count: attemptCount,
+						existing_submission_id: existingSubmission.id,
+						pattern: 'automated_duplicate_probing',
+					},
+					erfid,
+				});
+
+				const waitTime = formatWaitTime(expiresIn);
+				throw new RateLimitError(
+					`Repeated duplicate email attempts (${attemptCount} attempts)`,
+					expiresIn,
+					expiresAt,
+					`You have made too many duplicate submission attempts. Please wait ${waitTime} before trying again.`
+				);
+			} else {
+				// First or second attempt = legitimate user error
+				logger.info(
+					{
+						email: sanitized.email,
+						attempt_count: attemptCount,
+						existing_id: existingSubmission.id,
+						erfid,
+					},
+					'Duplicate email detected (legitimate user error)'
+				);
+
+				// Track this attempt for fraud pattern detection
+				await addToBlacklist(db, {
+					email: sanitized.email,
+					ephemeralId: validation.ephemeralId || null,
+					ipAddress: metadata.remoteIp,
+					ja4: metadata.ja4 ?? null,
+					blockReason: `Duplicate email attempt ${attemptCount} of 2`,
+					confidence: 'low',
+					expiresIn: 86400, // 24h tracking window
+					submissionCount: attemptCount,
+					detectionType: 'duplicate_email',
+					detectionMetadata: {
+						attempt_count: attemptCount,
+						existing_submission_id: existingSubmission.id,
+					},
+					erfid,
+				});
+
+				throw new ConflictError(
+					'Duplicate email',
+					'This email address has already been registered. If you believe this is an error, please contact support.',
+					{ email: sanitized.email, existingSubmissionId: existingSubmission.id }
+				);
+			}
 		}
 
 		// ========== PHASE 3: HOLISTIC DECISION ==========
@@ -361,7 +453,8 @@ app.post('/', async (c) => {
 
 		// 3.2: Determine blockTrigger if any specific threshold exceeded
 		// detectionType now represents the PRIMARY DETECTION LAYER that caught the fraud
-		let blockTrigger: 'email_fraud' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'duplicate_email' | undefined = undefined;
+		// Note: duplicate_email is handled earlier and throws ConflictError (not rate limit)
+		let blockTrigger: 'email_fraud' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | undefined = undefined;
 		let detectionType: string | null = null;
 
 		if (emailFraudResult && emailFraudResult.decision === 'block') {
@@ -379,9 +472,6 @@ app.post('/', async (c) => {
 		} else if (ja4Signals && ja4Signals.detectionType) {
 			blockTrigger = 'ja4_session_hopping';
 			detectionType = 'ja4_fingerprinting'; // Layer 4: TLS fingerprinting
-		} else if (isDuplicate) {
-			blockTrigger = 'duplicate_email';
-			detectionType = 'ephemeral_id_tracking'; // Layer 2: Device tracking (duplicate detection)
 		}
 
 		// 3.3: Recalculate with blockTrigger for proper minimum scores
@@ -429,13 +519,36 @@ app.post('/', async (c) => {
 
 			// Collect all warnings
 			const allWarnings = [
-				...(emailFraudResult ? [`Email: ${emailFraudResult.signals.patternType}`] : []),
+				...(emailFraudResult ? [`Email: ${emailFraudResult.signals.patternType || 'suspicious pattern'}`] : []),
 				...(ephemeralSignals?.warnings || []),
 				...(ja4Signals?.warnings || []),
-				...(isDuplicate ? ['Duplicate email'] : []),
 			];
 
 			const blockReason = `Risk score ${finalRiskScore.total} >= ${config.risk.blockThreshold}. Triggers: ${allWarnings.join(', ')}`;
+
+			// Generate user-friendly message based on primary block trigger
+			let userMessage: string;
+			const waitTime = formatWaitTime(expiresIn);
+
+			switch (blockTrigger) {
+				case 'email_fraud':
+					userMessage = `Suspicious email pattern detected. Please use a valid email address. If this is an error, please wait ${waitTime} and try again.`;
+					break;
+				case 'ephemeral_id_fraud':
+					userMessage = `You have already submitted this form. If you believe this is an error, please contact support.`;
+					break;
+				case 'validation_frequency':
+					userMessage = `Too many verification attempts. Please wait ${waitTime} before trying again.`;
+					break;
+				case 'ip_diversity':
+					userMessage = `Unusual network activity detected. Please wait ${waitTime} before trying again.`;
+					break;
+				case 'ja4_session_hopping':
+					userMessage = `Suspicious browser activity detected. Please wait ${waitTime} before trying again.`;
+					break;
+				default:
+					userMessage = `You have made too many submission attempts. Please wait ${waitTime} before trying again.`;
+			}
 
 			await addToBlacklist(db, {
 				email: sanitized.email,
@@ -465,7 +578,6 @@ app.post('/', async (c) => {
 						raw_score: ja4Signals.rawScore,
 						detection_layer: ja4Signals.detectionLayer,
 					} : null,
-					duplicate_email: isDuplicate,
 					detected_at: new Date().toISOString(),
 				},
 				erfid,
@@ -490,39 +602,62 @@ app.post('/', async (c) => {
 					block_trigger: blockTrigger,
 					detection_type: detectionType,
 					warnings: allWarnings,
+					user_message: userMessage,
 				},
 				'Submission blocked by holistic risk scoring'
 			);
 
-			const waitTime = formatWaitTime(expiresIn);
 			throw new RateLimitError(
 				blockReason,
 				expiresIn,
 				expiresAt,
-				`You have made too many submission attempts. Please wait ${waitTime} before trying again`
+				userMessage
 			);
 		}
 
 		// 3.5: ALLOW: Create submission
-		const submissionId = await createSubmission(
-			db,
-			{
-				firstName: sanitized.firstName,
-				lastName: sanitized.lastName,
-				email: sanitized.email,
-				phone: sanitized.phone,
-				address: sanitized.address,
-				dateOfBirth: sanitized.dateOfBirth,
-			},
-			metadata,
-			validation.ephemeralId,
-			finalRiskScore,
-			emailFraudResult,
-			rawPayload,
-			extractedEmail,
-			extractedPhone,
-			erfid
-		);
+		let submissionId: number;
+		try {
+			submissionId = await createSubmission(
+				db,
+				{
+					firstName: sanitized.firstName,
+					lastName: sanitized.lastName,
+					email: sanitized.email,
+					phone: sanitized.phone,
+					address: sanitized.address,
+					dateOfBirth: sanitized.dateOfBirth,
+				},
+				metadata,
+				validation.ephemeralId,
+				finalRiskScore,
+				emailFraudResult,
+				rawPayload,
+				extractedEmail,
+				extractedPhone,
+				erfid
+			);
+		} catch (dbError) {
+			// Handle UNIQUE constraint violation (duplicate email)
+			if (dbError instanceof Error && dbError.message.includes('UNIQUE constraint failed')) {
+				logger.warn(
+					{
+						email: sanitized.email,
+						ephemeral_id: validation.ephemeralId,
+						erfid,
+					},
+					'Duplicate email submission attempt (UNIQUE constraint)'
+				);
+
+				throw new ConflictError(
+					'Duplicate email',
+					'This email address has already been registered. If you believe this is an error, please contact support.',
+					{ email: sanitized.email }
+				);
+			}
+			// Re-throw other database errors
+			throw dbError;
+		}
 
 		// Log successful validation
 		await logValidation(db, {
