@@ -449,7 +449,7 @@ app.post('/', async (c) => {
 					ephemeralId: validation.ephemeralId || null,
 					ipAddress: metadata.remoteIp,
 					ja4: metadata.ja4 ?? null,
-					blockReason: `Duplicate email attempt ${attemptCount} of 2`,
+					blockReason: `Email already registered (submission #${existingSubmission.id}). Duplicate submission attempt blocked.`,
 					confidence: 'low',
 					expiresIn: 86400, // 24h tracking window
 					submissionCount: attemptCount,
