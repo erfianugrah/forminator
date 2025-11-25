@@ -361,6 +361,15 @@ Threshold: 2+ unique IPs → Block (same device from multiple IPs indicates prox
 
 Mitigation: Adds `ephemeral_id` to blacklist with progressive timeout.
 
+### Duplicate Email Guard (Layer 2.5)
+
+- Runs immediately after Layer 2 signals, using the sanitized email plus IP/JA4 fingerprints.
+- First duplicate attempt returns HTTP 409 (no timeout) so legitimate users can correct mistakes.
+- The second attempt within 24h is recorded in `fraud_blacklist` (`detection_confidence = 'low'`) but still returns 409.
+- The third attempt escalates to a high-confidence blacklist entry with a progressive timeout (1h → 4h → 8h → 12h → 24h) and responds with HTTP 429.
+- Every entry captures `email`, `ip_address`, `ja4`, optional `ephemeral_id`, and `erfid` so analytics can highlight abuse patterns.
+- Centralizes duplicate detection without relying on database UNIQUE constraints (which only catch writes and lack rate-limit context).
+
 ---
 
 ### Layer 4: JA4 Session Hopping Detection
@@ -871,6 +880,9 @@ Ephemeral IDs have a few days lifespan. The 24h maximum timeout respects this ro
 
 ## Database Schema
 
+- Every hot-path table (`submissions`, `turnstile_validations`, `fraud_blacklist`, and `fraud_blocks`) includes an `erfid` column so any record can be correlated with the `X-Request-Id` header returned to clients. See [ERFID-TRACKING.md](./ERFID-TRACKING.md) for deep dive and analytics queries.
+- `risk_score_breakdown` JSON blobs are stored alongside submissions/validations, giving the analytics UI and API endpoints the exact component contribution (tokenReplay/emailFraud/etc.) without recomputing scores.
+
 ### fraud_blacklist Table
 
 Fast pre-validation blocking cache.
@@ -990,6 +1002,15 @@ CREATE TABLE submissions (
 CREATE INDEX idx_submissions_ephemeral_id ON submissions(ephemeral_id);
 CREATE INDEX idx_submissions_email ON submissions(email);
 ```
+
+---
+
+## Observability & Analytics
+
+- **Trace any request**: Use the `erfid` returned in every API response (and the `X-Request-Id` header) to fetch the corresponding validation via `GET /api/analytics/validations/:id` or `GET /api/analytics/validations/by-erfid/:erfid`, or inspect blended data via `GET /api/analytics/blocked-validations`.
+- **Monitor aggregate health**: Dedicated endpoints surface layer-level metrics—`blocked-stats`, `block-reasons`, `blacklist`, `blacklist-stats`, and `email-patterns` all read directly from the tables described above.
+- **Explainability built-in**: Because `risk_score_breakdown` is stored with every submission and validation, support engineers and dashboards can show the exact contribution of token replay, email fraud, JA4 hopping, etc. without recomputing anything.
+- **Direct D1 queries**: `wrangler d1 execute ... WHERE erfid = ?` retrieves the submission, validation, and blacklist rows that share the same request ID, making it trivial to reconstruct an incident.
 
 ---
 

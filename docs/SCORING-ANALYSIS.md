@@ -52,10 +52,10 @@
 - **Total**: 41 points → ❌ **Allowed** (under 70)
 
 **After**:
-- Ephemeral (70): 70 * 0.18 = 12.6 points
-- Validation (100): 100 * 0.13 = 13 points
-- Email (60): 60 * 0.17 = 10.2 points
-- **Total**: 35.8 points → ❌ **Allowed** (under 70)
+- Ephemeral (70): 70 * 0.17 = 11.9 points
+- Validation (100): 100 * 0.12 = 12 points
+- Email (60): 60 * 0.16 = 9.6 points
+- **Total**: 33.5 points → ❌ **Allowed** (under 70)
 
 **Impact**: ✅ **Same behavior** - correctly allows, blockTrigger logic would handle if threshold crossed
 
@@ -68,11 +68,11 @@
 - **Total**: 55 points → ❌ **Allowed** (under 70, but blockTrigger ensures ≥70)
 
 **After**:
-- Ephemeral (100): 100 * 0.18 = 18 points
-- Validation (100): 100 * 0.13 = 13 points
-- IP Diversity (100): 100 * 0.09 = 9 points
-- JA4 (100): 100 * 0.08 = 8 points
-- **Total**: 48 points → ❌ **Allowed** (under 70, but blockTrigger ensures ≥70)
+- Ephemeral (100): 100 * 0.17 = 17 points
+- Validation (100): 100 * 0.12 = 12 points
+- IP Diversity (100): 100 * 0.08 = 8 points
+- JA4 (100): 100 * 0.07 = 7 points
+- **Total**: 44 points → ❌ **Allowed** (under 70, but blockTrigger ensures ≥70)
 
 **Impact**: ✅ **No change** - blockTrigger logic ensures blocked attempts score ≥70
 
@@ -86,11 +86,11 @@
 - **Total**: 73 points → ✅ **Blocked** (over 70)
 
 **After**:
-- Email (90): 90 * 0.17 = 15.3 points
-- Ephemeral (100): 100 * 0.18 = 18 points
-- Validation (100): 100 * 0.13 = 13 points
-- IP Diversity (100): 100 * 0.09 = 9 points
-- JA4 (100): 100 * 0.08 = 8 points
-- **Total**: 63.3 points → ❌ **Allowed** (under 70)
+- Email (90): 90 * 0.16 = 14.4 points
+- Ephemeral (100): 100 * 0.17 = 17 points
+- Validation (100): 100 * 0.12 = 12 points
+- IP Diversity (100): 100 * 0.08 = 8 points
+- JA4 (100): 100 * 0.07 = 7 points
+- **Total**: 58.4 points → ❌ **Allowed** (under 70)
 
 **Impact**: ⚠️ **Potential change** - this edge case would be allowed instead of blocked. This scenario is extremely unlikely (all 5 signals at max, no blockTrigger). In practice, any single high signal would trigger blockTrigger logic.

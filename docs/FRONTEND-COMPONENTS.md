@@ -681,13 +681,15 @@ const weights = config?.risk?.weights;
 - Error handling with user-friendly messages
 - Rate limit countdown timer
 - Optional fields (phone, address, date_of_birth)
+- Structured address object with `street`, `street2`, `city`, `state`, `postalCode`, `country` (country enforced when partial data exists)
+- Captures the `erfid`/`X-Request-Id` returned by the Worker for debugging toast + support links
 
 **Form Fields:**
 - firstName (required)
 - lastName (required)
 - email (required)
 - phone (optional)
-- address (optional)
+- address.street / address.street2 / address.city / address.state / address.postalCode / address.country (all optional, but `country` required when another address field is filled)
 - dateOfBirth (optional)
 
 **Validation:**
@@ -702,10 +704,20 @@ const form = useForm({
     lastName: '',
     email: '',
     phone: '',
-    address: '',
+    address: {
+      street: '',
+      street2: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: '',
+    },
     dateOfBirth: '',
   },
 });
+
+const [lastErfid, setLastErfid] = useState<string | null>(null);
+const [serverError, setServerError] = useState<string | null>(null);
 ```
 
 **Submission Flow:**
@@ -729,10 +741,17 @@ const onSubmit = async (data: FormData) => {
     body: JSON.stringify({ ...data, turnstileToken }),
   });
 
+  const payload = await response.json();
+
   if (response.ok) {
     setFlowStep('success');
+    // Persist erfid for receipts/support (falls back to header if body omitted)
+    const erfid = payload.erfid ?? response.headers.get('X-Request-Id');
+    setLastErfid(erfid);
   } else {
     setFlowStep('error');
+    setServerError(payload.message ?? 'Submission failed');
+    setLastErfid(payload.erfid ?? response.headers.get('X-Request-Id'));
   }
 };
 ```

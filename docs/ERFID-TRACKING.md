@@ -260,6 +260,41 @@ wrangler d1 migrations apply DB --remote
 
 ---
 
+## Querying by Erfid
+
+> Every API response echoes the `erfid` (and mirrors it via `X-Request-Id`). Use the same value across analytics endpoints, D1 queries, and log searches.
+
+### API Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/analytics/validations/:id` | Full validation record, including `risk_score_breakdown`, `detection_type`, and metadata |
+| `GET /api/analytics/validations/by-erfid/:erfid` | Fetch the latest validation directly by request ID (no numeric ID required) |
+| `GET /api/analytics/blocked-validations` | Mixed feed of recent blocks from both Turnstile validations and `fraud_blocks`, each row tagged with `erfid` |
+
+### Examples
+
+```bash
+# 1) User reports X-Request-Id=erf_abcd... from client UI
+curl -H "X-API-KEY: $X_API_KEY" \
+  "https://form.erfi.dev/api/analytics/validations/by-erfid/erf_abcd1234"
+
+# 2) Inspect the blacklist entry triggered by the same request
+wrangler d1 execute DB --remote --command "
+  SELECT id, block_reason, expires_at
+  FROM fraud_blacklist
+  WHERE erfid = 'erf_abcd1234'
+"
+```
+
+### Debugging Tips
+
+- Mirror the `erfid` in any client-side logging so QA can copy/paste directly into the analytics endpoints above.
+- When aggregating (e.g., `/api/analytics/blocked-stats`), the presence of `erfid` in every row means you can drill down from charts to individual requests without additional joins.
+- Combine `erfid` with timestamps to reconcile Cloudflare Logs, Wranger tail output, and D1 data.
+
+---
+
 ## Production Testing Results
 
 ### Deployment Summary

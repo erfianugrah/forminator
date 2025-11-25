@@ -2,7 +2,7 @@
 
 Comprehensive technical documentation for **Forminator** - I'm collecting all your data.
 
-**Last Updated:** 2025-11-14
+**Last Updated:** 2025-11-25
 
 ## Quick Start
 
@@ -271,6 +271,54 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 
 ---
 
+### [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md)
+**Full fraud configuration reference + API exposure**
+
+**You'll learn:**
+- Default values for every risk weight, threshold, timeout schedule, and JA4 signal
+- How to override values via `FRAUD_CONFIG` (deep-merge behavior)
+- Using `/api/config` + `getConfig()` to keep the UI in sync with Worker settings
+- Safe rollout strategies (feature flags, staged overrides)
+
+**Read this if:**
+- You need to change the block threshold or adjust weightings
+- Product wants different rules per environment
+- You plan to surface live config values in the frontend
+
+---
+
+### [SCORING-ANALYSIS.md](./SCORING-ANALYSIS.md)
+**Breakdown of the normalized 7-component scoring model**
+
+**You'll learn:**
+- Why weights were rebalanced to sum to 100%
+- Scenario-by-scenario impact analysis (token replay vs. email fraud vs. JA4)
+- How blockTrigger enforcement ensures blocked requests always score ≥ threshold
+- Residual edge cases and why they're acceptable
+
+**Read this if:**
+- You're validating the math behind `calculateNormalizedRiskScore`
+- Need to explain the scoring model to stakeholders
+- Want to tweak weights intelligently without reintroducing overflows
+
+---
+
+### [ERFID-TRACKING.md](./ERFID-TRACKING.md)
+**End-to-end request tracing via `erfid` + `X-Request-Id`**
+
+**You'll learn:**
+- How `generateErfid` works (prefixes, nanoid option, timestamp encoding)
+- Schema changes that add `erfid` to submissions, validations, blacklist, and fraud logs
+- How analytics endpoints expose `erfid` + `validation_erfid`
+- Operational runbook for correlating logs, API responses, and D1 records
+
+**Read this if:**
+- You need deterministic tracing for support tickets
+- Want to debug CI test failures by `erfid`
+- Planning to federate tracing across multiple Workers (Forminator ↔ Markov-Mail)
+
+---
+
 ### [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md)
 **Complete D1 database management guide**
 
@@ -304,6 +352,22 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 
 ---
 
+### [SCHEMA-INITIALIZATION.md](./SCHEMA-INITIALIZATION.md)
+**Bootstrapping and migrating the D1 schema**
+
+**You'll learn:**
+- How `schema.sql` and the `migrations/` directory stay in sync
+- The exact `wrangler d1 execute` commands for remote vs. local environments
+- Zero-downtime migration tips (adding columns, backfilling JSON)
+- Verification steps to ensure indexes exist (token, ja3, ja4, blacklist, etc.)
+
+**Read this if:**
+- You're provisioning a brand new environment
+- Need to apply pending migrations safely
+- Want a checklist before/after running schema changes
+
+---
+
 ### [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md)
 **Frontend architecture, UI/UX features, and component structure**
 
@@ -326,6 +390,22 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Adding new dashboard sections
 - Implementing custom themes
 - Understanding component relationships
+
+---
+
+### [RPC-INTEGRATION.md](./RPC-INTEGRATION.md)
+**Worker-to-Worker integration with Markov-Mail**
+
+**You'll learn:**
+- How the `FRAUD_DETECTOR` service binding is configured in `wrangler.jsonc`
+- Payload shape sent over RPC (headers, cf metadata, consumer/flow tags)
+- Fail-open behaviors when the remote Worker is unavailable
+- Observability tips (logging, retry strategy, feature flags)
+
+**Read this if:**
+- You're updating the Markov-Mail contract or adding new RPC consumers
+- Need to debug Worker-to-Worker failures in production
+- Want to add guardrails around external service dependencies
 
 ---
 
@@ -379,25 +459,18 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 
 ---
 
-### [TURNSTILE-ENHANCEMENTS.md](./TURNSTILE-ENHANCEMENTS.md)
-**Optional enhancement opportunities**
+### [MISSING-FEATURES.md](./MISSING-FEATURES.md)
+**Backlog + future enhancements**
 
 **You'll learn:**
-- Already implemented features (comprehensive checklist)
-- High-priority enhancements:
-  - Resource hints (preconnect to Cloudflare)
-  - Action parameter for analytics
-  - Testing key support (local development)
-- Medium/low-priority optional features
-- Features not recommended (with rationale)
-- Priority matrix and implementation guide
+- Features intentionally deferred (and why)
+- Nice-to-haves vs. stretch goals, each with rationale and rough scope
+- Suggested sequencing for high-impact items
 
 **Read this if:**
-- You want to improve Turnstile integration
-- Need ideas for enhancements
-- Planning future improvements
-- Want to optimize performance
-- Understanding what's already done
+- You're planning the next sprint or roadmap
+- Need context before tackling an open TODO
+- Want to understand trade-offs made to hit current milestones
 
 ---
 

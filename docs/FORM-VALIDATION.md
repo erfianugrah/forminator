@@ -23,73 +23,73 @@ src/
 
 ## Validation Schema
 
-Located in `/frontend/src/lib/validation.ts` (client) and `/src/lib/validation.ts` (server).
+Located in `/frontend/src/lib/validation.ts` (client) and `/src/lib/validation.ts` (server). Both share the same shape (server adds a few transforms):
 
 ```typescript
+const addressSchema = z.object({
+  street: z.string().max(100).optional(),
+  street2: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  state: z.string().max(100).optional(),
+  postalCode: z.string().max(20).optional(),
+  country: z.string().optional(),
+}).optional()
+  .refine((val) => {
+    if (!val) return true;
+    const hasAddressContent = val.street || val.street2 || val.city || val.state || val.postalCode;
+    if (!hasAddressContent) return true;
+    return !!val.country && val.country.length >= 2;
+  }, 'Country is required when providing an address')
+  .transform((val) => {
+    if (!val) return undefined;
+    const hasContent = val.street || val.street2 || val.city || val.state || val.postalCode || val.country;
+    return hasContent ? val : undefined;
+  });
+
 export const formSchema = z.object({
-  // Required fields
-  firstName: z
-    .string()
+  firstName: z.string()
     .min(1, 'First name is required')
     .max(50, 'First name must be less than 50 characters')
     .regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
-
-  lastName: z
-    .string()
+  lastName: z.string()
     .min(1, 'Last name is required')
     .max(50, 'Last name must be less than 50 characters')
     .regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
-
-  email: z
-    .string()
+  email: z.string()
     .min(1, 'Email is required')
     .email('Invalid email address')
     .max(100, 'Email must be less than 100 characters'),
-
-  // Optional fields
-  phone: z
-    .string()
-    .optional()
-    .refine((val) => {
-      if (!val || val.trim() === '') return true; // Allow empty
-      const digits = val.replace(/\D/g, '');
-      return digits.length >= 7 && digits.length <= 15;
-    }, 'Phone must contain 7-15 digits'),
-
-  address: z
-    .string()
-    .optional()
-    .refine((val) => {
-      if (!val || val.trim() === '') return true; // Allow empty
-      return val.length <= 200;
-    }, 'Address must be less than 200 characters'),
-
-  dateOfBirth: z
-    .string()
-    .optional()
-    .refine((val) => {
-      if (!val || val.trim() === '') return true; // Allow empty
-      return /^\d{4}-\d{2}-\d{2}$/.test(val);
-    }, 'Invalid date format (YYYY-MM-DD)')
-    .refine((val) => {
-      if (!val || val.trim() === '') return true; // Allow empty
-      const birthDate = new Date(val);
-      const today = new Date();
-      const age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      const actualAge =
-        monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
-          ? age - 1
-          : age;
-      return actualAge >= 18 && actualAge <= 120;
-    }, 'You must be at least 18 years old'),
+  phone: z.string().optional()
+    .transform((val) => {
+      if (!val || val.trim() === '') return undefined;
+      const cleaned = val.replace(/[^\d+]/g, '');
+      return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
+    })
+    .pipe(
+      z.string().regex(/^\+[1-9]\d{1,14}$/, 'Phone must contain 7-15 digits').optional()
+    ),
+  address: addressSchema,
+  dateOfBirth: z.string().optional()
+    .transform((val) => !val || val.trim() === '' ? undefined : val)
+    .pipe(
+      z.string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+        .refine((date) => {
+          const birthDate = new Date(date);
+          const today = new Date();
+          const age = today.getFullYear() - birthDate.getFullYear();
+          return age >= 18 && age <= 120;
+        }, 'You must be at least 18 years old')
+        .optional()
+    ),
 });
 ```
 
 ### Field Requirements
 
-- **Required**: First name, last name, email
-- **Optional**: Phone, address, date of birth
+- **Required**: `firstName`, `lastName`, `email`
+- **Optional**: `phone`, structured `address` object, `dateOfBirth`, `turnstileToken` (only optional when using the authenticated bypass in development/CI)
+- **Address nuance**: Individual address fields are optional, but if any value is present then `country` becomes required. Empty objects collapse to `undefined` so the payload stays clean.
 
 ### Validation Rules
 
@@ -97,10 +97,15 @@ export const formSchema = z.object({
 - Allow letters, spaces, hyphens (Mary-Jane), and apostrophes (O'Brien)
 - Reject numbers and special characters
 
-**Phone** uses `refine()` instead of regex:
-- Client accepts any format: `(555) 123-4567`, `555-123-4567`, `+1 555 123 4567`
-- Validates digit count (7-15 digits)
-- Server transforms to E.164 format
+**Phone** normalization:
+- Client accepts any format `(555) 123-4567`, `555-123-4567`, `+1 555 123 4567`
+- Schema strips formatting, prepends `+1` if no country code, and enforces the E.164 regex in a `.pipe()`
+- Empty string returns `undefined`, so optional phones simply disappear from the payload
+
+**Address** object:
+- Each field has its own max length (100 chars for lines/city/state, 20 for postal code)
+- If any field other than `country` has a value, the refinement enforces `country` to be present (prevents half-filled addresses)
+- The final `.transform()` collapses completely empty objects to `undefined`, keeping D1 rows tidy
 
 **Date of Birth** validates age:
 - Checks date format (YYYY-MM-DD)
@@ -247,7 +252,14 @@ submissions.post('/', async (c) => {
     lastName: sanitizeInput(data.lastName),
     email: normalizeEmail(data.email),
     phone: data.phone,  // Already normalized by transform
-    address: sanitizeInput(data.address),
+    address: data.address ? {
+      street: data.address.street ? sanitizeInput(data.address.street) : undefined,
+      street2: data.address.street2 ? sanitizeInput(data.address.street2) : undefined,
+      city: data.address.city ? sanitizeInput(data.address.city) : undefined,
+      state: data.address.state ? sanitizeInput(data.address.state) : undefined,
+      postalCode: data.address.postalCode ? sanitizeInput(data.address.postalCode) : undefined,
+      country: data.address.country ? sanitizeInput(data.address.country) : undefined,
+    } : undefined,
     dateOfBirth: data.dateOfBirth,
   };
 
@@ -264,33 +276,37 @@ Processing sequence:
 
 ### Server Schema with Transforms
 
-Server schema adds phone transformation for E.164 format:
+Server schema mirrors the client version but adds transforms so optional fields collapse cleanly:
 
 ```typescript
 // src/lib/validation.ts
-phone: z
-  .string()
-  .min(1, 'Phone is required')
-  .transform((val) => {
-    // Remove all non-digits except leading +
-    const cleaned = val.replace(/[^\d+]/g, '');
-    // Add +1 if no country code present
-    return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
-  })
-  .pipe(
-    z.string().regex(
-      /^\+[1-9]\d{1,14}$/,
-      'Phone must be in E.164 format'
-    )
-  ),
+export const formSubmissionSchema = z.object({
+  // ...
+  phone: z.string().optional()
+    .transform((val) => {
+      if (!val || val.trim() === '') return undefined;
+      const cleaned = val.replace(/[^\d+]/g, '');
+      return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
+    })
+    .pipe(
+      z.string().regex(/^\+[1-9]\d{1,14}$/, 'Phone must contain 7-15 digits').optional()
+    ),
+  address: addressSchema, // optional object, collapses to undefined when empty
+  dateOfBirth: z.string().optional()
+    .transform((val) => !val || val.trim() === '' ? undefined : val)
+    .pipe(/* YYYY-MM-DD regex + age check */),
+  turnstileToken: z.string().min(1, 'Turnstile token is required').optional(),
+});
 ```
 
-Transform examples:
+Transform examples (phone):
 - `+1 (555) 123-4567` → `+15551234567`
 - `555-123-4567` → `+15551234567` (assumes US)
 - `+44 20 7946 0958` → `+442079460958`
 
-E.164 format enables international queries and SMS/calling integrations.
+E.164 format enables international queries/SMS integrations while keeping the schema optional-friendly.
+
+> **Note:** `turnstileToken` only remains optional when `ALLOW_TESTING_BYPASS=true` **and** the request includes a valid `X-API-KEY`. In production/staging environments this field must be present or the request is rejected before fraud checks run.
 
 ### Input Sanitization
 

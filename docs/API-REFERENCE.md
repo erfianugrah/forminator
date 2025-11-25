@@ -12,16 +12,24 @@ This document provides exhaustive details on every API endpoint, including reque
   - [GET /api/geo](#get-apigeo)
   - [GET /api/analytics/stats](#get-apianalyticsstats)
   - [GET /api/analytics/submissions](#get-apianalyticssubmissions)
-  - [GET /api/analytics/submissions/:id](#get-apianalyticssubmissionsid)
+  - [GET /api/analytics/validations/:id](#get-apianalyticsvalidationsid)
+  - [GET /api/analytics/validations/by-erfid/:erfid](#get-apianalyticsvalidationsby-erfiderfid)
   - [GET /api/analytics/countries](#get-apianalyticscountries)
   - [GET /api/analytics/bot-scores](#get-apianalyticsbot-scores)
   - [GET /api/analytics/asn](#get-apianalyticsasn)
   - [GET /api/analytics/tls](#get-apianalyticstls)
   - [GET /api/analytics/ja3](#get-apianalyticsja3)
   - [GET /api/analytics/ja4](#get-apianalyticsja4)
+  - [GET /api/analytics/email-patterns](#get-apianalyticsemail-patterns)
+  - [GET /api/analytics/submissions/:id](#get-apianalyticssubmissionsid)
   - [GET /api/analytics/time-series](#get-apianalyticstime-series)
-  - [GET /api/analytics/fraud-patterns](#get-apianalyticsfraud-patterns)
   - [GET /api/analytics/export](#get-apianalyticsexport)
+  - [GET /api/analytics/fraud-patterns](#get-apianalyticsfraud-patterns)
+  - [GET /api/analytics/blocked-stats](#get-apianalyticsblocked-stats)
+  - [GET /api/analytics/block-reasons](#get-apianalyticsblock-reasons)
+  - [GET /api/analytics/blacklist](#get-apianalyticsblacklist)
+  - [GET /api/analytics/blacklist-stats](#get-apianalyticsblacklist-stats)
+  - [GET /api/analytics/blocked-validations](#get-apianalyticsblocked-validations)
   - [GET /api/health](#get-apihealth)
   - [GET /api/config](#get-apiconfig)
 
@@ -46,7 +54,11 @@ This document provides exhaustive details on every API endpoint, including reque
 ```typescript
 // src/routes/analytics.ts
 const apiKey = c.req.header('X-API-KEY');
-if (!apiKey || apiKey !== c.env['API-KEY']) {
+const expectedKey = c.env['X-API-KEY'];
+
+if (!expectedKey) {
+  console.warn('X-API-KEY not configured - analytics temporarily unprotected');
+} else if (!apiKey || apiKey !== expectedKey) {
   return c.json({ error: 'Unauthorized' }, 401);
 }
 ```
@@ -61,11 +73,14 @@ Pattern-based fraud detection (see FRAUD-DETECTION.md). Turnstile provides bot p
 
 ```json
 {
-  "success": false,
+  "error": "ValidationError",
   "message": "Human-readable error message",
-  "errors": {
-    "field": ["error 1", "error 2"]
-  }
+  "details": {
+    "errors": {
+      "field": ["error 1", "error 2"]
+    }
+  },
+  "erfid": "erf_123..."
 }
 ```
 
@@ -85,39 +100,57 @@ Pattern-based fraud detection (see FRAUD-DETECTION.md). Turnstile provides bot p
 **Validation error (400):**
 ```json
 {
-  "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "firstName": ["First name is required"],
-    "email": ["Invalid email address"],
-    "phone": ["Phone must contain 7-15 digits"]
-  }
+  "error": "ValidationError",
+  "message": "Please check your form data and try again",
+  "details": {
+    "errors": {
+      "firstName": ["First name is required"],
+      "email": ["Invalid email address"],
+      "phone": ["Phone must contain 7-15 digits"]
+    }
+  },
+  "erfid": "erf_c81c7b0b-9443-4ea0-9a4c-ae7b4a470d8b"
 }
 ```
 
 **Turnstile verification failed (400):**
 ```json
 {
-  "success": false,
-  "message": "Turnstile verification failed"
+  "error": "ExternalServiceError",
+  "message": "A required service is temporarily unavailable. Please try again in a moment",
+  "details": {
+    "service": "Turnstile",
+    "errors": ["timeout-or-duplicate"]
+  },
+  "erfid": "erf_c81c7b0b-9443-4ea0-9a4c-ae7b4a470d8b"
 }
 ```
 
 **Fraud detected (403):**
 ```json
 {
-  "success": false,
-  "message": "Submission blocked due to suspicious activity"
+  "error": "Too many requests",
+  "message": "Suspicious browser activity detected. Please wait 1 hour before trying again.",
+  "retryAfter": 3600,
+  "expiresAt": "2025-11-25T10:00:00.000Z",
+  "erfid": "erf_c81c7b0b-9443-4ea0-9a4c-ae7b4a470d8b"
 }
 ```
 
 **Server error (500):**
 ```json
 {
-  "success": false,
-  "message": "Internal server error"
+  "error": "Internal server error",
+  "message": "An unexpected error occurred. Please try again",
+  "erfid": "erf_c81c7b0b-9443-4ea0-9a4c-ae7b4a470d8b"
 }
 ```
+
+### Request Tracing
+
+- Every response includes an `erfid` for end-to-end tracing and mirrors the same value via the `X-Request-Id` header.
+- Analytics endpoints such as `/api/analytics/validations/by-erfid/:erfid` accept this identifier to fetch the exact validation record.
+- Rate-limit errors also emit a `Retry-After` HTTP header plus `retryAfter` + `expiresAt` fields in the JSON body.
 
 ## Endpoints
 
@@ -142,9 +175,15 @@ Content-Type: application/json
   "firstName": "John",
   "lastName": "Doe",
   "email": "john.doe@example.com",
-  "phone": "+1 (555) 123-4567",
-  "address": "123 Main St, San Francisco, CA 94102",
-  "dateOfBirth": "1990-01-15",
+  "phone": "+15551234567",
+  "address": {
+    "street": "123 Main St",
+    "city": "San Francisco",
+    "state": "CA",
+    "postalCode": "94102",
+    "country": "US"
+  },
+  "dateOfBirth": "1990-01-01",
   "turnstileToken": "0.AbCdEfGhIjKlMnOpQrStUvWxYz..."
 }
 ```
@@ -156,54 +195,70 @@ Content-Type: application/json
 | firstName | string | Yes | 1-50 chars, letters/spaces/hyphens/apostrophes only |
 | lastName | string | Yes | 1-50 chars, letters/spaces/hyphens/apostrophes only |
 | email | string | Yes | Valid email, max 100 chars |
-| phone | string | Yes | 7-15 digits (any format accepted) |
-| address | string | Yes | 1-200 chars |
-| dateOfBirth | string | Yes | YYYY-MM-DD format, age 18-120 |
-| turnstileToken | string | Yes | Valid Turnstile token |
+| phone | string | No | Normalized to E.164 (+countrycodeXXXXXXXX) if provided |
+| address | object | No | Fields: street, street2, city, state, postalCode, country. `country` is required when any other field is provided |
+| dateOfBirth | string | No | Optional, but must be `YYYY-MM-DD` and age 18-120 when supplied |
+| turnstileToken | string | Yes (see note) | Non-empty Turnstile token. Optional only when `ALLOW_TESTING_BYPASS=true` **and** a valid `X-API-KEY` header is sent |
 
 #### Response
 
-**Success (200):**
+**Success (201):**
 ```json
 {
   "success": true,
-  "message": "Form submitted successfully",
-  "submissionId": "12345"
+  "submissionId": 12345,
+  "erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8",
+  "message": "Form submitted successfully"
 }
 ```
+
+**Headers:**
+- `X-Request-Id`: mirrors the `erfid` in the JSON body for downstream logging
 
 **Validation error (400):**
 ```json
 {
-  "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "email": ["Invalid email address"]
-  }
+  "error": "ValidationError",
+  "message": "Please check your form data and try again",
+  "details": {
+    "errors": {
+      "email": ["Invalid email address"]
+    }
+  },
+  "erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8"
 }
 ```
 
 **Turnstile failed (400):**
 ```json
 {
-  "success": false,
-  "message": "Turnstile verification failed"
+  "error": "ExternalServiceError",
+  "message": "Please complete the verification challenge",
+  "details": {
+    "service": "Turnstile",
+    "errors": ["invalid-input-response"]
+  },
+  "erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8"
 }
 ```
 
 **Fraud detected (403):**
 ```json
 {
-  "success": false,
-  "message": "Submission blocked due to suspicious activity"
+  "error": "Too many requests",
+  "message": "Suspicious browser activity detected. Please wait 1 hour before trying again.",
+  "retryAfter": 3600,
+  "expiresAt": "2025-11-25T10:00:00.000Z",
+  "erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8"
 }
 ```
 
 **Server error (500):**
 ```json
 {
-  "success": false,
-  "message": "Internal server error"
+  "error": "Internal server error",
+  "message": "An unexpected error occurred. Please try again",
+  "erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8"
 }
 ```
 
@@ -261,29 +316,20 @@ curl -X POST http://localhost:8787/api/submissions \
 #### Processing Flow
 
 ```
-1. Parse request body → JSON
-2. Validate schema → Zod validation
-3. Sanitize inputs → Remove HTML, normalize
-
-4. [BYPASS CHECK]
-   - If X-API-KEY header present AND ALLOW_TESTING_BYPASS=true:
-     → Create mock validation object (skips steps 5-7)
-     → Generate mock ephemeral ID for testing fraud detection
-     → Continue to step 8
-   - Otherwise:
-     → Continue to step 5 (normal Turnstile flow)
-
-5. Hash token → SHA256
-6. Check token reuse → D1 lookup
-7. Verify Turnstile → API call to Cloudflare
-   → Extract real ephemeral ID from response
-
-8. Email fraud check → Markov-Mail RPC (Layer 1)
-9. Fraud check → Ephemeral ID / validation frequency / JA4 / IP patterns (Layers 2-5)
-10. Extract metadata → 40+ fields from request
-11. Insert submission → D1 transaction
-12. Insert validation log → Same transaction
-13. Return success → 201 Created
+1. Generate erfid → Set `X-Request-Id` header up-front for tracing
+2. Parse & validate → Zod schema (supports optional phone/address/DOB)
+3. Sanitize → Lowercase email, normalize phone/address, persist raw payload + extracted KV fields
+4. Determine bypass → Requires `ALLOW_TESTING_BYPASS=true` + valid `X-API-KEY`, otherwise Turnstile token is mandatory
+5. Hash token → SHA256 + replay check in D1 (`turnstile_validations.token_hash`)
+6. Layer 0 → Pre-validation blacklist (email, ephemeral_id, ja4, ip) with progressive timeout cache
+7. Turnstile verify → Siteverify call (or mock validation in bypass mode) + ephemeral ID extraction
+8. Collect signals → Email RPC (Markov-Mail), ephemeral ID telemetry (submissions/validations/IP diversity), JA4 session hopping, IP rate-limit behavioral score
+9. Duplicate email guard → First duplicate returns 409, repeated attempts escalate to blacklist + progressive timeout
+10. Normalize risk → 7-component scoring + block trigger detection (token replay, email fraud, validation frequency, IP diversity, JA4, etc.)
+11. Block path → Add to `fraud_blacklist` + `fraud_blocks`, log validation (`allowed=false`), throw `RateLimitError` (429 with Retry-After)
+12. Allow path → Create submission row with risk breakdown + email fraud signals + raw form payload
+13. Log validation → Always write `turnstile_validations` row with detection_type, risk breakdown, `erfid`
+14. Respond → `201 Created` with `{ success, submissionId, erfid }` + `X-Request-Id`
 ```
 
 **What "Generate mock ephemeral ID" means:**
@@ -310,8 +356,14 @@ curl -X POST https://form.erfi.dev/api/submissions \
     "lastName": "Doe",
     "email": "john.doe@example.com",
     "phone": "+15551234567",
-    "address": "123 Main St",
-    "dateOfBirth": "1990-01-15",
+    "address": {
+      "street": "123 Main St",
+      "city": "San Francisco",
+      "state": "CA",
+      "postalCode": "94102",
+      "country": "US"
+    },
+    "dateOfBirth": "1990-01-01",
     "turnstileToken": "0.test_token"
   }'
 ```
@@ -329,8 +381,14 @@ const response = await fetch('https://form.erfi.dev/api/submissions', {
     lastName: 'Doe',
     email: 'john.doe@example.com',
     phone: '+15551234567',
-    address: '123 Main St',
-    dateOfBirth: '1990-01-15',
+    address: {
+      street: '123 Main St',
+      city: 'San Francisco',
+      state: 'CA',
+      postalCode: '94102',
+      country: 'US',
+    },
+    dateOfBirth: '1990-01-01',
     turnstileToken: token,
   }),
 });
@@ -338,9 +396,10 @@ const response = await fetch('https://form.erfi.dev/api/submissions', {
 const data = await response.json();
 
 if (data.success) {
-  console.log('Submission successful:', data.submissionId);
+  console.log('Submission successful:', data.submissionId, data.erfid);
+  console.log('Trace via X-Request-Id header:', response.headers.get('X-Request-Id'));
 } else {
-  console.error('Submission failed:', data.message);
+  console.error('Submission failed:', data.message, data.erfid);
 }
 ```
 
@@ -354,7 +413,7 @@ Get user's country code based on IP geolocation.
 
 #### Request
 
-**Headers:** None required
+**Headers:** `X-API-KEY: your_api_key_here`
 
 **Query parameters:** None
 
@@ -435,13 +494,16 @@ const language = getLanguageForCountry(countryCode);
 
 ### GET /api/analytics/stats
 
+> **Authentication**  
+> Include `X-API-KEY: <value>` in every `/api/analytics/*` request (Wrangler `vars.X-API-KEY`).
+
 Get overall submission and validation statistics.
 
 **Location:** `/src/routes/analytics.ts`
 
 #### Request
 
-**Headers:** None required
+**Headers:** `X-API-KEY: your_api_key_here`
 
 **Query parameters:** None
 
@@ -458,7 +520,15 @@ Get overall submission and validation statistics.
     "successful": 145,
     "allowed": 140,
     "avg_risk_score": 12.5,
-    "unique_ephemeral_ids": 98
+    "unique_ephemeral_ids": 98,
+    "ja4_fraud_blocks": 12,
+    "active_blacklist": 23,
+    "email_fraud": {
+      "total_with_email_check": 150,
+      "markov_detected": 18,
+      "ood_detected": 4,
+      "avg_email_risk_score": 42.3
+    }
   }
 }
 ```
@@ -467,11 +537,14 @@ Get overall submission and validation statistics.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| total | number | Total submissions attempted |
-| successful | number | Successful Turnstile validations |
-| allowed | number | Submissions not blocked by fraud detection |
-| avg_risk_score | number \| null | Average fraud risk score (0-100) |
-| unique_ephemeral_ids | number | Unique users (Enterprise only) |
+| total | number | Total validation attempts recorded |
+| successful | number | Turnstile validations that returned `success=true` |
+| allowed | number | Attempts that passed fraud detection |
+| avg_risk_score | number \| null | Average normalized risk score (0-100) |
+| unique_ephemeral_ids | number | Unique Turnstile ephemeral IDs (Enterprise only) |
+| ja4_fraud_blocks | number | Blocks triggered by JA4 session hopping |
+| active_blacklist | number | Currently active entries in `fraud_blacklist` |
+| email_fraud.* | object | Aggregated metrics from Markov-Mail (counts + averages) |
 
 **Calculations:**
 
@@ -490,12 +563,28 @@ AVG(risk_score) FROM turnstile_validations WHERE risk_score IS NOT NULL
 
 -- Unique ephemeral IDs
 COUNT(DISTINCT ephemeral_id) FROM submissions WHERE ephemeral_id IS NOT NULL
+
+-- JA4 fraud blocks
+SUM(CASE WHEN allowed = 0 AND block_reason LIKE '%JA4%' THEN 1 ELSE 0 END)
+
+-- Active blacklist entries
+SELECT COUNT(*) FROM fraud_blacklist WHERE expires_at > datetime('now')
+
+-- Email fraud aggregate
+SELECT
+  COUNT(*) as total_with_email_check,
+  SUM(CASE WHEN email_markov_detected = 1 THEN 1 ELSE 0 END) as markov_detected,
+  SUM(CASE WHEN email_ood_detected = 1 THEN 1 ELSE 0 END) as ood_detected,
+  AVG(email_risk_score) as avg_email_risk_score
+FROM submissions
+WHERE email_risk_score IS NOT NULL
 ```
 
 #### cURL Example
 
 ```bash
-curl https://form.erfi.dev/api/analytics/stats
+curl https://form.erfi.dev/api/analytics/stats \
+  -H "X-API-KEY: $X_API_KEY"
 
 # Response:
 # {"success":true,"data":{"total":150,"successful":145,...}}
@@ -504,7 +593,9 @@ curl https://form.erfi.dev/api/analytics/stats
 #### JavaScript Example
 
 ```javascript
-const response = await fetch('/api/analytics/stats');
+const response = await fetch('/api/analytics/stats', {
+  headers: { 'X-API-KEY': process.env.ANALYTICS_KEY! },
+});
 const { data } = await response.json();
 
 console.log(`Total: ${data.total}`);
@@ -522,7 +613,7 @@ Get recent submissions with pagination.
 
 #### Request
 
-**Headers:** None required
+**Headers:** `X-API-KEY: your_api_key_here`
 
 **Query parameters:**
 
@@ -530,6 +621,17 @@ Get recent submissions with pagination.
 |-----------|------|---------|-------------|
 | limit | number | 50 | Number of submissions to return (max 100) |
 | offset | number | 0 | Number of submissions to skip |
+| sortBy | string | `created_at` | `created_at`, `bot_score`, `email`, `country`, `first_name`, `last_name`, `risk_score` |
+| sortOrder | string | `desc` | `asc` or `desc` |
+| countries | string | — | Comma-separated list (e.g. `US,GB,CA`) |
+| botScoreMin | number | — | Minimum bot score (0-100) |
+| botScoreMax | number | — | Maximum bot score (0-100) |
+| startDate | string | — | ISO datetime filter (inclusive) |
+| endDate | string | — | ISO datetime filter (inclusive) |
+| verifiedBot | boolean | — | `true` or `false` |
+| hasJa3 | boolean | — | `true` (only) or `false` (missing JA3) |
+| hasJa4 | boolean | — | `true` (only) or `false` (missing JA4) |
+| search | string | — | Fuzzy search across email, first_name, last_name, remote_ip |
 
 **Examples:**
 - `/api/analytics/submissions` - First 50
@@ -551,23 +653,40 @@ Get recent submissions with pagination.
       "phone": "+15551234567",
       "country": "US",
       "city": "San Francisco",
-      "bot_score": 1,
-      "allowed": 1,
-      "created_at": "2024-11-12T20:30:00Z"
-    },
-    {
-      "id": 122,
-      "first_name": "Jane",
-      "last_name": "Smith",
-      "email": "jane@example.com",
-      "phone": "+442079460958",
-      "country": "GB",
-      "city": "London",
-      "bot_score": 2,
-      "allowed": 1,
-      "created_at": "2024-11-12T19:45:00Z"
+      "remote_ip": "203.0.113.42",
+      "bot_score": 12,
+      "verified_bot": 0,
+      "created_at": "2024-11-12T20:30:00Z",
+      "tls_version": "TLSv1.3",
+      "asn": 13335,
+      "ja3_hash": "d4f7c2f0f7200fb71b021c1ac7d0263b",
+      "ja4": "t13d1515h_none_none",
+      "erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8",
+      "ephemeral_id": "AAABBBCCC",
+      "risk_score": 18.6,
+      "risk_score_breakdown": {
+        "tokenReplay": 0,
+        "emailFraud": 22,
+        "ephemeralId": 10,
+        "validationFrequency": 5,
+        "ipDiversity": 0,
+        "ja4SessionHopping": 0,
+        "ipRateLimit": 0,
+        "total": 18.6
+      },
+      "validation_erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8"
     }
-  ]
+  ],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "count": 20,
+    "total": 120
+  },
+  "filters": {
+    "countries": ["US", "CA"],
+    "botScoreMax": 50
+  }
 }
 ```
 
@@ -576,15 +695,23 @@ Get recent submissions with pagination.
 | Field | Type | Description |
 |-------|------|-------------|
 | id | number | Submission ID |
-| first_name | string | User's first name |
-| last_name | string | User's last name |
-| email | string | User's email (normalized) |
-| phone | string | User's phone (E.164 format) |
-| country | string | Country code (from IP) |
-| city | string \| null | City name |
-| bot_score | number \| null | Bot Management score (Enterprise) |
-| allowed | boolean | Whether submission was allowed |
+| first_name / last_name | string | Provided form values |
+| email | string | Normalized lowercase email |
+| phone | string \| null | Normalized E.164 phone (if provided) |
+| country / city | string \| null | Geo data from Cloudflare |
+| remote_ip | string | Connecting IP |
+| bot_score | number \| null | Cloudflare Bot Management score |
+| verified_bot | number | 1 = verified bot, 0 = unknown |
 | created_at | string | ISO 8601 timestamp |
+| tls_version | string \| null | TLS version reported by Cloudflare |
+| asn | number \| null | Autonomous System Number |
+| ja3_hash / ja4 | string \| null | TLS fingerprints |
+| risk_score | number \| null | Normalized score from latest validation |
+| risk_score_breakdown | object \| null | Component-level contributions |
+| erfid | string \| null | Request-level tracing identifier |
+| validation_erfid | string \| null | Validation record `erfid` (matches request for allowed submissions) |
+| pagination | object | Echoes limit/offset/count/total |
+| filters | object | Echoes applied filters for client-side display |
 
 **Ordering:** Most recent first (ORDER BY created_at DESC)
 
@@ -592,23 +719,145 @@ Get recent submissions with pagination.
 
 ```bash
 # Get first 10 submissions
-curl 'https://form.erfi.dev/api/analytics/submissions?limit=10'
+curl 'https://form.erfi.dev/api/analytics/submissions?limit=10' \
+  -H "X-API-KEY: $X_API_KEY"
 
 # Get page 2
-curl 'https://form.erfi.dev/api/analytics/submissions?limit=10&offset=10'
+curl 'https://form.erfi.dev/api/analytics/submissions?limit=10&offset=10' \
+  -H "X-API-KEY: $X_API_KEY"
 ```
 
 #### JavaScript Example
 
 ```javascript
 // Load initial page
-const response = await fetch('/api/analytics/submissions?limit=20');
+const response = await fetch('/api/analytics/submissions?limit=20&countries=US,CA', {
+  headers: { 'X-API-KEY': process.env.ANALYTICS_KEY! },
+});
 const { data } = await response.json();
 
 // Load next page
-const nextPage = await fetch('/api/analytics/submissions?limit=20&offset=20');
+const nextPage = await fetch('/api/analytics/submissions?limit=20&offset=20', {
+  headers: { 'X-API-KEY': process.env.ANALYTICS_KEY! },
+});
 const { data: moreData } = await nextPage.json();
 ```
+
+---
+
+### GET /api/analytics/validations/:id
+
+Fetch a single validation record (row from `turnstile_validations`).
+
+**Location:** `/src/routes/analytics.ts`
+
+#### Request
+
+**Headers:**
+```
+X-API-KEY: your_api_key_here
+```
+
+**Path parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| id | integer | Yes | Validation ID (`turnstile_validations.id`) |
+
+#### Response
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 987,
+    "token_hash": "f2c58c7c0b1b5f5a8d4b1b0d6e9c8a0a",
+    "success": 1,
+    "allowed": 0,
+    "block_reason": "Risk score 84 >= 70. Triggers: Email: sequential",
+    "detection_type": "email_fraud_detection",
+    "risk_score": 84.1,
+    "risk_score_breakdown": {
+      "emailFraud": 84,
+      "tokenReplay": 0,
+      "ephemeralId": 10,
+      "validationFrequency": 5,
+      "ipDiversity": 0,
+      "ja4SessionHopping": 0,
+      "ipRateLimit": 0,
+      "total": 84.1
+    },
+    "remote_ip": "203.0.113.42",
+    "country": "US",
+    "bot_score": 9,
+    "client_trust_score": 86,
+    "ja3_hash": "579ccef312d18482fc42e2b822ca2430",
+    "ja4": "t13d1517h2_5e1f3e8f3e5f_e3f5e3e5e3f5",
+    "detection_ids": "[12345,67890]",
+    "submission_id": 654,
+    "erfid": "erf_0d1b6f55-5ca1-4dc9-9a7d-1e4e9d82f7e1",
+    "created_at": "2025-11-25T09:44:00Z"
+  }
+}
+```
+
+**Notes:**
+- All columns from `turnstile_validations` are returned (cloud metadata, TLS info, bot signals, etc.).
+- `risk_score_breakdown` is JSON stored as text—parse on the client for visualizations.
+- Returns `404` with `{ "error": "Validation not found" }` if the ID does not exist.
+
+---
+
+### GET /api/analytics/validations/by-erfid/:erfid
+
+Look up the most recent validation by `erfid` (the value returned via `X-Request-Id`).
+
+**Location:** `/src/routes/analytics.ts`
+
+#### Request
+
+**Headers:**
+```
+X-API-KEY: your_api_key_here
+```
+
+**Path parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| erfid | string | Yes | Request identifier (`erf_*`) returned by `/api/submissions` |
+
+#### Response
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 990,
+    "submission_id": 12345,
+    "allowed": 1,
+    "risk_score": 12.5,
+    "risk_score_breakdown": {
+      "emailFraud": 5,
+      "ephemeralId": 8,
+      "total": 12.5
+    },
+    "remote_ip": "198.51.100.24",
+    "country": "NL",
+    "bot_score": 1,
+    "ja4": null,
+    "erfid": "erf_5f6824bf-7d43-4ab5-b0ce-ef9a2b7db7c8",
+    "created_at": "2025-11-25T10:15:00Z"
+  }
+}
+```
+
+**Notes:**
+- Useful for debugging client-reported `erfid` values without knowing the numeric validation ID.
+- Returns the most recent validation row that matches the supplied identifier.
+- Responds with `404` if no validation exists for that `erfid`.
 
 ---
 
@@ -620,7 +869,7 @@ Get submission counts by country.
 
 #### Request
 
-**Headers:** None required
+**Headers:** `X-API-KEY: your_api_key_here`
 
 **Query parameters:** None
 
@@ -670,13 +919,16 @@ ORDER BY count DESC
 #### cURL Example
 
 ```bash
-curl https://form.erfi.dev/api/analytics/countries
+curl https://form.erfi.dev/api/analytics/countries \
+  -H "X-API-KEY: $X_API_KEY"
 ```
 
 #### JavaScript Example
 
 ```javascript
-const response = await fetch('/api/analytics/countries');
+const response = await fetch('/api/analytics/countries', {
+  headers: { 'X-API-KEY': process.env.ANALYTICS_KEY! },
+});
 const { data } = await response.json();
 
 data.forEach(({ country, count }) => {
@@ -694,7 +946,7 @@ Get bot score distribution (Enterprise only).
 
 #### Request
 
-**Headers:** None required
+**Headers:** `X-API-KEY: your_api_key_here`
 
 **Query parameters:** None
 
@@ -758,13 +1010,16 @@ ORDER BY bot_score ASC
 #### cURL Example
 
 ```bash
-curl https://form.erfi.dev/api/analytics/bot-scores
+curl https://form.erfi.dev/api/analytics/bot-scores \
+  -H "X-API-KEY: $X_API_KEY"
 ```
 
 #### JavaScript Example
 
 ```javascript
-const response = await fetch('/api/analytics/bot-scores');
+const response = await fetch('/api/analytics/bot-scores', {
+  headers: { 'X-API-KEY': process.env.ANALYTICS_KEY! },
+});
 const { data } = await response.json();
 
 const humans = data.filter(d => d.bot_score < 30);
@@ -968,6 +1223,60 @@ X-API-KEY: your_api_key_here
 **Ordering:** Count descending (top 10)
 
 **Note:** JA4 fingerprints require Cloudflare Enterprise with Bot Management.
+
+---
+
+### GET /api/analytics/email-patterns
+
+Email fraud pattern distribution aggregated from Markov-Mail signals.
+
+**Location:** `/src/routes/analytics.ts`
+
+#### Request
+
+**Headers:**
+```
+X-API-KEY: your_api_key_here
+```
+
+**Query parameters:** None
+
+#### Response
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "email_pattern_type": "sequential",
+      "count": 42,
+      "avg_risk_score": 78.4,
+      "markov_detected_count": 39
+    },
+    {
+      "email_pattern_type": "formatted",
+      "count": 18,
+      "avg_risk_score": 33.2,
+      "markov_detected_count": 12
+    }
+  ]
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| email_pattern_type | string | Pattern class returned by Markov-Mail (`sequential`, `dated`, `formatted`, `gibberish`, etc.) |
+| count | number | Number of submissions classified with this pattern |
+| avg_risk_score | number | Average normalized email risk score (0-100) |
+| markov_detected_count | number | How many submissions triggered `markovDetected=true` |
+
+**Use cases:**
+- Trend email attack patterns over time
+- Build stacked bar charts in the analytics dashboard
+- Quickly see which pattern type contributes most to high-risk submissions
 
 ---
 
@@ -1289,6 +1598,181 @@ X-API-KEY: your_api_key_here
 
 ---
 
+### GET /api/analytics/blocked-stats
+
+Aggregate counts for blocked validations vs. pre-validation fraud blocks.
+
+**Headers:** `X-API-KEY: your_api_key_here`
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "total_blocked": 214,
+    "unique_ephemeral_ids": 58,
+    "unique_ips": 132,
+    "avg_risk_score": 71.3,
+    "validation_blocks": 180,
+    "fraud_blocks": 34,
+    "unique_block_reasons": 0
+  }
+}
+```
+
+**Notes:**
+- `validation_blocks` counts rows from `turnstile_validations` where `allowed = 0`.
+- `fraud_blocks` counts rows written to the `fraud_blocks` forensic log.
+- `unique_block_reasons` is included for parity with `block-reasons` (always 0 currently; computed there).
+
+---
+
+### GET /api/analytics/block-reasons
+
+Breakdown of block reasons across validation vs. fraud-block sources.
+
+**Headers:** `X-API-KEY: your_api_key_here`
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "block_reason": "Risk score 90 >= 70. Triggers: JA4 session hopping",
+      "count": 32,
+      "unique_ephemeral_ids": 11,
+      "unique_ips": 27,
+      "avg_risk_score": 88.2,
+      "source": "validation"
+    },
+    {
+      "block_reason": "Repeated duplicate email attempts (3 attempts)",
+      "count": 9,
+      "unique_ephemeral_ids": 0,
+      "unique_ips": 6,
+      "avg_risk_score": 74.5,
+      "source": "fraud_block"
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/analytics/blacklist
+
+List active entries from `fraud_blacklist` (max 100, newest first).
+
+**Headers:** `X-API-KEY: your_api_key_here`
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 512,
+      "ephemeral_id": "x:9f78e0ed210960d7693b167e",
+      "ip_address": "203.0.113.42",
+      "ja4": "t13d1517h2_5e1f3e8f3e5f_e3f5e3e5e3f5",
+      "block_reason": "Risk score 82 >= 70. Triggers: Email: sequential, Multiple submissions detected (3 total in 24h)",
+      "detection_confidence": "high",
+      "erfid": "erf_0d1b6f55-5ca1-4dc9-9a7d-1e4e9d82f7e1",
+      "blocked_at": "2025-11-25T09:45:00Z",
+      "expires_at": "2025-11-26T09:45:00Z",
+      "submission_count": 3,
+      "last_seen_at": "2025-11-25T09:40:00Z",
+      "detection_metadata": "{\"warnings\":[\"Multiple submissions detected\"],\"email_fraud\":{\"pattern\":\"sequential\"}}",
+      "country": "US",
+      "city": "San Francisco",
+      "offense_count": 2,
+      "risk_score": 100
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/analytics/blacklist-stats
+
+Snapshot of active blacklist totals grouped by confidence level and identifier type.
+
+**Headers:** `X-API-KEY: your_api_key_here`
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "total_active": 47,
+    "high_confidence": 19,
+    "medium_confidence": 18,
+    "low_confidence": 10,
+    "ephemeral_id_blocks": 35,
+    "ip_blocks": 28
+  }
+}
+```
+
+---
+
+### GET /api/analytics/blocked-validations
+
+Recent blocked validations from both Turnstile (post-check) and `fraud_blocks` (pre-check).
+
+**Headers:** `X-API-KEY: your_api_key_here`
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| limit | 50 | Number of rows to return (1-500) |
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 3210,
+      "ephemeral_id": "x:abc123",
+      "ip_address": "203.0.113.42",
+      "country": "US",
+      "city": "San Francisco",
+      "block_reason": "Risk score 90 >= 70. Triggers: Email: sequential",
+      "detection_type": "email_fraud_detection",
+      "risk_score": 90.2,
+      "bot_score": 8,
+      "user_agent": "Mozilla/5.0 ...",
+      "ja4": "t13d1517h2_5e1f3e8f3e5f_e3f5e3e5e3f5",
+      "erfid": "erf_b2c5c87c-b03c-4b88-9eea-8fdc0d1af5a4",
+      "challenge_ts": "2025-11-25T09:44:00Z",
+      "source": "validation"
+    },
+    {
+      "id": 118,
+      "ephemeral_id": null,
+      "ip_address": "198.51.100.24",
+      "country": null,
+      "city": null,
+      "block_reason": "Blocked by duplicate_email",
+      "detection_type": "duplicate_email",
+      "risk_score": 70,
+      "bot_score": null,
+      "user_agent": "curl/8.6.0",
+      "ja4": null,
+      "erfid": "erf_c1c2c3c4-aaaa-bbbb-cccc-ddddeeeeffff",
+      "challenge_ts": "2025-11-25T09:30:00Z",
+      "source": "fraud_block"
+    }
+  ]
+}
+```
+
+---
+
 ### GET /api/health
 
 Health check endpoint.
@@ -1297,7 +1781,7 @@ Health check endpoint.
 
 #### Request
 
-**Headers:** None required
+**Headers:** `X-API-KEY: your_api_key_here`
 
 **Query parameters:** None
 
