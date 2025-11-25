@@ -1174,59 +1174,98 @@ export async function getBlockReasonDistribution(db: D1Database) {
  * Get active blacklist entries
  */
 export async function getActiveBlacklistEntries(db: D1Database) {
-	try {
-		const result = await db
-			.prepare(
-				`SELECT
-					fb.id,
-					fb.ephemeral_id,
-					COALESCE(fb.ip_address, tv.remote_ip) as ip_address,
-					COALESCE(fb.ja4, tv.ja4) as ja4,
-					fb.block_reason,
-					fb.detection_type,
-					fb.detection_confidence,
-					fb.erfid,
-					REPLACE(fb.blocked_at, ' ', 'T') || 'Z' AS blocked_at,
-					REPLACE(fb.expires_at, ' ', 'T') || 'Z' AS expires_at,
-					fb.submission_count,
-					REPLACE(fb.last_seen_at, ' ', 'T') || 'Z' AS last_seen_at,
-					fb.detection_metadata,
-					tv.ja4_signals,
-					-- Enrich with metadata from most recent validation
-					tv.country,
-					tv.city,
-					-- Calculate offense count (how many times blocked in last 24h)
-					(SELECT COUNT(*)
-					 FROM fraud_blacklist
-					 WHERE (ephemeral_id = fb.ephemeral_id OR ip_address = fb.ip_address)
-					 AND blocked_at > datetime('now', '-24 hours')) as offense_count,
-					COALESCE(
-						fb.risk_score,
-						CASE fb.detection_confidence
-							WHEN 'high' THEN 100
-							WHEN 'medium' THEN 80
-							WHEN 'low' THEN 70
-							ELSE 50
-						END
-					) as risk_score,
-					fb.risk_score_breakdown
-				 FROM fraud_blacklist fb
-				 -- LEFT JOIN to get metadata from most recent validation
-				 LEFT JOIN turnstile_validations tv ON tv.id = (
-					SELECT id FROM turnstile_validations
-					WHERE (fb.ephemeral_id IS NOT NULL AND ephemeral_id = fb.ephemeral_id)
-					   OR (fb.ip_address IS NOT NULL AND remote_ip = fb.ip_address)
-					ORDER BY created_at DESC
-					LIMIT 1
-				 )
-				 WHERE fb.expires_at > datetime('now')
-				 ORDER BY fb.blocked_at DESC
-				 LIMIT 100`
-			)
-			.all();
+	const baseQuery = `SELECT
+		fb.id,
+		fb.ephemeral_id,
+		COALESCE(fb.ip_address, tv.remote_ip) as ip_address,
+		COALESCE(fb.ja4, tv.ja4) as ja4,
+		fb.block_reason,
+		fb.detection_type,
+		fb.detection_confidence,
+		fb.erfid,
+		REPLACE(fb.blocked_at, ' ', 'T') || 'Z' AS blocked_at,
+		REPLACE(fb.expires_at, ' ', 'T') || 'Z' AS expires_at,
+		fb.submission_count,
+		REPLACE(fb.last_seen_at, ' ', 'T') || 'Z' AS last_seen_at,
+		fb.detection_metadata,
+		tv.ja4_signals,
+		tv.country,
+		tv.city,
+		(SELECT COUNT(*)
+		 FROM fraud_blacklist
+		 WHERE (ephemeral_id = fb.ephemeral_id OR ip_address = fb.ip_address)
+		 AND blocked_at > datetime('now', '-24 hours')) as offense_count,
+		COALESCE(
+			fb.risk_score,
+			CASE fb.detection_confidence
+				WHEN 'high' THEN 100
+				WHEN 'medium' THEN 80
+				WHEN 'low' THEN 70
+				ELSE 50
+			END
+		) as risk_score,
+		fb.risk_score_breakdown
+	 FROM fraud_blacklist fb
+	 LEFT JOIN turnstile_validations tv ON tv.id = (
+		SELECT id FROM turnstile_validations
+		WHERE (fb.ephemeral_id IS NOT NULL AND ephemeral_id = fb.ephemeral_id)
+		   OR (fb.ip_address IS NOT NULL AND remote_ip = fb.ip_address)
+		ORDER BY created_at DESC
+		LIMIT 1
+	 )
+	 WHERE fb.expires_at > datetime('now')
+	 ORDER BY fb.blocked_at DESC
+	 LIMIT 100`;
 
+	const fallbackQuery = `SELECT
+		fb.id,
+		fb.ephemeral_id,
+		COALESCE(fb.ip_address, tv.remote_ip) as ip_address,
+		COALESCE(fb.ja4, tv.ja4) as ja4,
+		fb.block_reason,
+		fb.detection_type,
+		fb.detection_confidence,
+		fb.erfid,
+		REPLACE(fb.blocked_at, ' ', 'T') || 'Z' AS blocked_at,
+		REPLACE(fb.expires_at, ' ', 'T') || 'Z' AS expires_at,
+		fb.submission_count,
+		REPLACE(fb.last_seen_at, ' ', 'T') || 'Z' AS last_seen_at,
+		fb.detection_metadata,
+		tv.ja4_signals,
+		tv.country,
+		tv.city,
+		(SELECT COUNT(*)
+		 FROM fraud_blacklist
+		 WHERE (ephemeral_id = fb.ephemeral_id OR ip_address = fb.ip_address)
+		 AND blocked_at > datetime('now', '-24 hours')) as offense_count,
+		CASE fb.detection_confidence
+			WHEN 'high' THEN 100
+			WHEN 'medium' THEN 80
+			WHEN 'low' THEN 70
+			ELSE 50
+		END as risk_score,
+		NULL as risk_score_breakdown
+	 FROM fraud_blacklist fb
+	 LEFT JOIN turnstile_validations tv ON tv.id = (
+		SELECT id FROM turnstile_validations
+		WHERE (fb.ephemeral_id IS NOT NULL AND ephemeral_id = fb.ephemeral_id)
+		   OR (fb.ip_address IS NOT NULL AND remote_ip = fb.ip_address)
+		ORDER BY created_at DESC
+		LIMIT 1
+	 )
+	 WHERE fb.expires_at > datetime('now')
+	 ORDER BY fb.blocked_at DESC
+	 LIMIT 100`;
+
+	try {
+		const result = await db.prepare(baseQuery).all();
 		return result.results;
 	} catch (error) {
+		if (error instanceof Error && /no such column/i.test(error.message || '')) {
+			logger.warn({ error }, 'Blacklist risk columns missing, using fallback query');
+			const fallback = await db.prepare(fallbackQuery).all();
+			return fallback.results;
+		}
 		logger.error({ error }, 'Error fetching active blacklist entries');
 		throw error;
 	}
