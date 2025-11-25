@@ -1199,13 +1199,16 @@ export async function getActiveBlacklistEntries(db: D1Database) {
 					 FROM fraud_blacklist
 					 WHERE (ephemeral_id = fb.ephemeral_id OR ip_address = fb.ip_address)
 					 AND blocked_at > datetime('now', '-24 hours')) as offense_count,
-					-- Map confidence to risk score
-					CASE fb.detection_confidence
-						WHEN 'high' THEN 100
-						WHEN 'medium' THEN 80
-						WHEN 'low' THEN 70
-						ELSE 50
-					END as risk_score
+					COALESCE(
+						fb.risk_score,
+						CASE fb.detection_confidence
+							WHEN 'high' THEN 100
+							WHEN 'medium' THEN 80
+							WHEN 'low' THEN 70
+							ELSE 50
+						END
+					) as risk_score,
+					fb.risk_score_breakdown
 				 FROM fraud_blacklist fb
 				 -- LEFT JOIN to get metadata from most recent validation
 				 LEFT JOIN turnstile_validations tv ON tv.id = (
@@ -1277,11 +1280,13 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 					block_reason,
 					detection_type,
 					risk_score,
+					risk_score_breakdown,
 					bot_score,
 					user_agent,
 					ja4,
 					erfid,
 					challenge_ts,
+					fraud_signals_json,
 					source
 				FROM (
 					-- Post-Turnstile blocks (from turnstile_validations)
@@ -1294,12 +1299,14 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 						block_reason,
 						detection_type,
 						risk_score,
+						risk_score_breakdown,
 						bot_score,
 						user_agent,
 						ja4,
 						erfid,
 						REPLACE(created_at, ' ', 'T') || 'Z' AS challenge_ts,
 						created_at,
+						NULL as fraud_signals_json,
 						'validation' as source
 					FROM turnstile_validations
 					WHERE allowed = 0
@@ -1316,12 +1323,14 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 						block_reason,
 						detection_type,
 						risk_score,
+						NULL as risk_score_breakdown,
 						NULL as bot_score,
 						user_agent,
 						NULL as ja4,
 						erfid,
 						REPLACE(created_at, ' ', 'T') || 'Z' AS challenge_ts,
 						created_at,
+						fraud_signals_json,
 						'fraud_block' as source
 					FROM fraud_blocks
 				)

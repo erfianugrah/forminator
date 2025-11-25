@@ -288,7 +288,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [SCORING-ANALYSIS.md](./SCORING-ANALYSIS.md)
-**Breakdown of the normalized 7-component scoring model**
+**Breakdown of the normalized 10-component scoring model**
 
 **You'll learn:**
 - Why weights were rebalanced to sum to 100%

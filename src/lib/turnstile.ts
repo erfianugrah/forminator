@@ -3,6 +3,7 @@ import type { TurnstileValidationResult, FraudCheckResult } from './types';
 import type { FraudDetectionConfig } from './config';
 import logger from './logger';
 import { addToBlacklist } from './fraud-prevalidation';
+import { calculateNormalizedRiskScore } from './scoring';
 import {
 	getTurnstileError,
 	getUserErrorMessage,
@@ -438,6 +439,30 @@ export async function checkEphemeralIdFraud(
 			// Convert seconds to human-readable format for logging
 			const timeoutHours = expiresIn / 3600;
 
+			let blockTrigger: 'ephemeral_id_fraud' | 'validation_frequency' | 'ip_diversity' = 'ephemeral_id_fraud';
+			if (blockOnProxyRotation) {
+				blockTrigger = 'ip_diversity';
+			} else if (blockOnValidations) {
+				blockTrigger = 'validation_frequency';
+			}
+
+			const normalizedScore = calculateNormalizedRiskScore(
+				{
+					tokenReplay: false,
+					emailRiskScore: 0,
+					ephemeralIdCount: effectiveCount,
+					validationCount: effectiveValidationCount,
+					uniqueIPCount: Math.max(ipCount, 1),
+					ja4RawScore: 0,
+					ipRateLimitScore: 0,
+					headerFingerprintScore: 0,
+					tlsAnomalyScore: 0,
+					latencyMismatchScore: 0,
+					blockTrigger,
+				},
+				config
+			);
+
 			await addToBlacklist(db, {
 				ephemeralId,
 				blockReason: `Automated: Multiple submissions detected (${effectiveCount} in 1h, ${effectiveValidationCount} validations in 1h) - ${warnings.join(', ')}`,
@@ -455,6 +480,8 @@ export async function checkEphemeralIdFraud(
 					detected_at: new Date().toISOString(),
 				},
 				erfid, // Request tracking ID
+				riskScore: normalizedScore.total,
+				riskScoreBreakdown: normalizedScore,
 			});
 
 			logger.warn(

@@ -60,7 +60,7 @@ Captures 40+ fields from `request.cf` and headers:
 - **Real-time Analytics**: 20 endpoints covering submissions, validations, blacklist, fraud reasons, exports, and per-erfid lookups
 - **Form Validation**: Client and server-side with Zod schemas
 - **Visual Submission Flow**: 4-stage progress indicator with interactive callback integration
-- **Risk Transparency**: Educational component explaining the 7-component fraud detection scoring system
+- **Risk Transparency**: Educational component explaining the 10-component fraud detection scoring system
 - **Detailed Inspection**: Modal dialogs for both submissions and blocked validations with 35+ fields
 - **Security Events Detail View**: Comprehensive validation inspection with geographic, network, bot detection, and fingerprint data
 
@@ -184,7 +184,7 @@ Processing flow:
 6. Validate Turnstile (or inject a mock validation in bypass mode)
 7. Collect fraud signals: email RPC (Markov-Mail), ephemeral ID (submissions/validations/IP diversity), JA4 session hopping, and IP rate-limit behavior
 8. Detect duplicate email attempts (returns 409 for first duplicate, rate-limits recurring abuse)
-9. Normalize scores across the 7-component risk model and determine block triggers
+9. Normalize scores across the 10-component risk model and determine block triggers
 10. Apply progressive timeouts + blacklist writes for blocked attempts, otherwise insert the submission with risk breakdown + raw payload metadata
 11. Log every validation (allowed or blocked) with `erfid`, detection type, and normalized component scores for analytics dashboards
 
@@ -281,6 +281,7 @@ Service health check.
 ### fraud_blacklist (progressive mitigation cache)
 - **Identifiers**: email, ephemeral_id, ip_address, ja4 (any combination)
 - **Block metadata**: block_reason, detection_type, detection_confidence, detection_metadata JSON, submission_count, last_seen_at, erfid
+- **Risk transparency**: persisted risk_score plus risk_score_breakdown JSON (same structure as submissions/validations) so analytics can explain pre-validation blocks
 - **Timing**: blocked_at + expires_at derived from the progressive timeout schedule (1h → 4h → 8h → 12h → 24h) whenever risk ≥ 70
 - **Purpose**: Layer 0 cache so repeat offenders are blocked before Turnstile calls
 
@@ -345,13 +346,16 @@ Service health check.
 
 ### Normalized Risk Scoring
 All components contribute to normalized 0-100 risk score (weights total exactly 100%):
-- **Token Replay**: 32% (instant block, highest priority)
-- **Email Fraud**: 16% (Markov-Mail pattern detection)
-- **Ephemeral ID**: 17% (device tracking, core fraud signal)
-- **Validation Frequency**: 12% (attempt rate monitoring)
-- **IP Diversity**: 8% (proxy rotation detection)
-- **JA4 Session Hopping**: 7% (browser hopping detection)
-- **IP Rate Limit**: 8% (browser switching detection / behavioral signal only)
+- **Token Replay**: 28% (instant block, highest priority)
+- **Email Fraud**: 14% (Markov-Mail pattern detection)
+- **Ephemeral ID**: 15% (device tracking, core fraud signal)
+- **Validation Frequency**: 10% (attempt rate monitoring)
+- **IP Diversity**: 7% (proxy rotation detection)
+- **JA4 Session Hopping**: 6% (browser hopping detection)
+- **IP Rate Limit**: 7% (browser switching detection / behavioral signal only)
+- **Header Fingerprint**: 7% (shared header stack reuse across JA4/IP/email clusters)
+- **TLS Anomaly**: 4% (JA4 presents unknown ClientHello/TLS extension hash)
+- **Latency Mismatch**: 2% (claimed mobile devices with impossible RTT/device type)
 
 **Block Threshold**: riskScore >= 70
 

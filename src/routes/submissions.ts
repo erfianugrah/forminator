@@ -406,6 +406,23 @@ app.post('/', async (c) => {
 				const expiresIn = calculateProgressiveTimeout(offenseCount);
 				const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
+				const duplicateBlockBreakdown = calculateNormalizedRiskScore(
+					{
+						tokenReplay: false,
+						emailRiskScore: 100,
+						ephemeralIdCount: 1,
+						validationCount: 1,
+						uniqueIPCount: 1,
+						ja4RawScore: 0,
+						ipRateLimitScore: 0,
+						headerFingerprintScore: 0,
+						tlsAnomalyScore: 0,
+						latencyMismatchScore: 0,
+						blockTrigger: 'email_fraud',
+					},
+					config
+				);
+
 				await addToBlacklist(db, {
 					email: sanitized.email,
 					ephemeralId: validation.ephemeralId || null,
@@ -422,6 +439,8 @@ app.post('/', async (c) => {
 						pattern: 'automated_duplicate_probing',
 					},
 					erfid,
+					riskScore: duplicateBlockBreakdown.total,
+					riskScoreBreakdown: duplicateBlockBreakdown,
 				});
 
 				const waitTime = formatWaitTime(expiresIn);
@@ -639,9 +658,12 @@ app.post('/', async (c) => {
 						detection_layer: ja4Signals.detectionLayer,
 					} : null,
 					fingerprint_signals: fingerprintSignals.details || null,
+					ip_rate_limit: ipRateLimitSignals || null,
 					detected_at: new Date().toISOString(),
 				},
 				erfid,
+				riskScore: finalRiskScore.total,
+				riskScoreBreakdown: finalRiskScore,
 			});
 
 			// Log validation attempt

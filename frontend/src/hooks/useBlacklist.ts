@@ -11,6 +11,7 @@ export interface BlacklistEntry {
 	detection_confidence?: 'high' | 'medium' | 'low' | null;
 	block_reason: string;
 	risk_score: number;
+	risk_score_breakdown?: string | null;
 	offense_count: number;
 	blocked_at: string;
 	expires_at: string;

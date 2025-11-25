@@ -378,7 +378,7 @@ All fraud detection functions accept and use configuration:
    - Uses: `detection.ja4Clustering.*` (5 thresholds)
 
 3. **calculateNormalizedRiskScore()** - `src/lib/scoring.ts`
-   - Uses: `risk.weights.*` (7 components)
+   - Uses: `risk.weights.*` (10 components)
    - Uses: `risk.blockThreshold`
    - Uses: `detection.*` (4 thresholds: ephemeral, validation, IP diversity, IP rate limit)
 
@@ -431,8 +431,8 @@ Increase email fraud detection weight:
 {
 	"risk": {
 		"weights": {
-			"emailFraud": 0.3, // Increase from 0.16
-			"tokenReplay": 0.28 // Decrease from 0.32 (keep sum = 1.0)
+			"emailFraud": 0.3, // Increase from 0.14 (default)
+			"tokenReplay": 0.20 // Reduce token replay from 0.28 so the weights still sum to 1.0
 		}
 	}
 }
@@ -524,7 +524,7 @@ curl -s https://form.erfi.dev/api/config | jq '{customized, blockThreshold}'
 
 ```bash
 curl -s https://form.erfi.dev/api/config | jq '.data.risk.weights.tokenReplay'
-# 0.32 (default preserved when only blockThreshold customized) ✅
+# 0.28 (default preserved when only blockThreshold customized) ✅
 ```
 
 ## Implementation Details

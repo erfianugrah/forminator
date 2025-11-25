@@ -1,3 +1,5 @@
+import type { RiskScoreBreakdown } from './scoring';
+
 /**
  * Pre-validation fraud detection layer
  * Blocks known fraudulent ephemeral IDs and IPs before expensive Turnstile API calls
@@ -31,6 +33,8 @@ interface BlacklistEntry {
 	ip_address: string | null;
 	block_reason: string;
 	detection_confidence: 'high' | 'medium' | 'low';
+	risk_score: number | null;
+	risk_score_breakdown: string | null;
 	blocked_at: string;
 	expires_at: string;
 	submission_count: number;
@@ -50,6 +54,8 @@ interface AddToBlacklistParams {
 	detectionMetadata?: Record<string, any>;
 	detectionType?: string;  // Primary detection layer (email_fraud_detection, ephemeral_id_tracking, ja4_fingerprinting, etc.)
 	erfid?: string | null;  // Request tracking ID that triggered this blacklist entry
+	riskScore?: number;
+	riskScoreBreakdown?: RiskScoreBreakdown | null;
 }
 
 /**
@@ -251,7 +257,21 @@ export async function addToBlacklist(
 	db: D1Database,
 	params: AddToBlacklistParams
 ): Promise<boolean> {
-	const { ephemeralId, ipAddress, ja4, email, blockReason, confidence, expiresIn, submissionCount = 1, detectionMetadata, detectionType, erfid } = params;
+	const {
+		ephemeralId,
+		ipAddress,
+		ja4,
+		email,
+		blockReason,
+		confidence,
+		expiresIn,
+		submissionCount = 1,
+		detectionMetadata,
+		detectionType,
+		erfid,
+		riskScore,
+		riskScoreBreakdown,
+	} = params;
 
 	// Validate at least one identifier
 	if (!ephemeralId && !ipAddress && !ja4 && !email) {
@@ -261,6 +281,8 @@ export async function addToBlacklist(
 	const now = new Date();
 	const expiresAt = new Date(now.getTime() + expiresIn * 1000);
 	const metadata = detectionMetadata ? JSON.stringify(detectionMetadata) : null;
+	const riskScoreValue = typeof riskScore === 'number' ? riskScore : null;
+	const riskBreakdownJson = riskScoreBreakdown ? JSON.stringify(riskScoreBreakdown) : null;
 
 	try {
 		await db
@@ -273,13 +295,15 @@ export async function addToBlacklist(
 				email,
 				block_reason,
 				detection_confidence,
+				risk_score,
+				risk_score_breakdown,
 				expires_at,
 				submission_count,
 				last_seen_at,
 				detection_metadata,
 				detection_type,
 				erfid
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 			)
 			.bind(
@@ -289,6 +313,8 @@ export async function addToBlacklist(
 				email || null,  // Phase 2: Email binding
 				blockReason,
 				confidence,
+				riskScoreValue,
+				riskBreakdownJson,
 				toSQLiteDateTime(expiresAt),
 				submissionCount,
 				toSQLiteDateTime(now),

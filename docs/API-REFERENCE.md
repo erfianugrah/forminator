@@ -325,7 +325,7 @@ curl -X POST http://localhost:8787/api/submissions \
 7. Turnstile verify → Siteverify call (or mock validation in bypass mode) + ephemeral ID extraction
 8. Collect signals → Email RPC (Markov-Mail), ephemeral ID telemetry (submissions/validations/IP diversity), JA4 session hopping, IP rate-limit behavioral score
 9. Duplicate email guard → First duplicate returns 409, repeated attempts escalate to blacklist + progressive timeout
-10. Normalize risk → 7-component scoring + block trigger detection (token replay, email fraud, validation frequency, IP diversity, JA4, etc.)
+10. Normalize risk → 10-component scoring + block trigger detection (token replay, behavioral, and fingerprint layers)
 11. Block path → Add to `fraud_blacklist` + `fraud_blocks`, log validation (`allowed=false`), throw `RateLimitError` (429 with Retry-After)
 12. Allow path → Create submission row with risk breakdown + email fraud signals + raw form payload
 13. Log validation → Always write `turnstile_validations` row with detection_type, risk breakdown, `erfid`
@@ -1658,6 +1658,9 @@ Breakdown of block reasons across validation vs. fraud-block sources.
 }
 ```
 
+- `risk_score_breakdown` mirrors the normalized JSON stored with submissions/validations so dashboards can surface token/email/JA4 contributions even when the block happened before Turnstile.
+- `detection_metadata` remains a free-form JSON payload for layer-specific context (duplicate counts, JA4 cluster stats, fingerprint warnings, etc.).
+
 ---
 
 ### GET /api/analytics/blacklist
@@ -1687,7 +1690,15 @@ List active entries from `fraud_blacklist` (max 100, newest first).
       "country": "US",
       "city": "San Francisco",
       "offense_count": 2,
-      "risk_score": 100
+      "risk_score": 88.6,
+      "risk_score_breakdown": {
+        "total": 88.6,
+        "components": {
+          "ephemeralId": { "score": 100, "weight": 0.15, "contribution": 15, "reason": "3 submissions in 1h" },
+          "validationFrequency": { "score": 100, "weight": 0.10, "contribution": 10, "reason": "3 validations in 1h" },
+          "ipDiversity": { "score": 100, "weight": 0.07, "contribution": 7, "reason": "Proxy rotation detected" }
+        }
+      }
     }
   ]
 }
@@ -1744,11 +1755,19 @@ Recent blocked validations from both Turnstile (post-check) and `fraud_blocks` (
       "block_reason": "Risk score 90 >= 70. Triggers: Email: sequential",
       "detection_type": "email_fraud_detection",
       "risk_score": 90.2,
+      "risk_score_breakdown": {
+        "total": 90.2,
+        "components": {
+          "emailFraud": { "score": 100, "weight": 0.14, "contribution": 14, "reason": "Sequential pattern" },
+          "ephemeralId": { "score": 80, "weight": 0.15, "contribution": 12, "reason": "2 submissions detected" }
+        }
+      },
       "bot_score": 8,
       "user_agent": "Mozilla/5.0 ...",
       "ja4": "t13d1517h2_5e1f3e8f3e5f_e3f5e3e5e3f5",
       "erfid": "erf_b2c5c87c-b03c-4b88-9eea-8fdc0d1af5a4",
       "challenge_ts": "2025-11-25T09:44:00Z",
+      "fraud_signals_json": null,
       "source": "validation"
     },
     {
@@ -1765,11 +1784,16 @@ Recent blocked validations from both Turnstile (post-check) and `fraud_blocks` (
       "ja4": null,
       "erfid": "erf_c1c2c3c4-aaaa-bbbb-cccc-ddddeeeeffff",
       "challenge_ts": "2025-11-25T09:30:00Z",
+      "risk_score_breakdown": null,
+      "fraud_signals_json": "{\"duplicateCount\":3}",
       "source": "fraud_block"
     }
   ]
 }
 ```
+
+- `risk_score_breakdown` mirrors the JSON stored with validations. Parse it client-side to display component contributions.
+- `fraud_signals_json` surfaces detection-specific context for pre-validation (`source = "fraud_block"`) entries.
 
 ---
 
@@ -1856,13 +1880,16 @@ Get fraud detection configuration.
         "high": { "min": 70, "max": 100 }
       },
       "weights": {
-        "tokenReplay": 0.32,
-        "emailFraud": 0.16,
-        "ephemeralId": 0.17,
-        "validationFrequency": 0.12,
-        "ipDiversity": 0.08,
-        "ja4SessionHopping": 0.07,
-        "ipRateLimit": 0.08
+        "tokenReplay": 0.28,
+        "emailFraud": 0.14,
+        "ephemeralId": 0.15,
+        "validationFrequency": 0.10,
+        "ipDiversity": 0.07,
+        "ja4SessionHopping": 0.06,
+        "ipRateLimit": 0.07,
+        "headerFingerprint": 0.07,
+        "tlsAnomaly": 0.04,
+        "latencyMismatch": 0.02
       }
     },
     "ja4": {
@@ -1887,6 +1914,23 @@ Get fraud detection configuration.
         "extendedGlobalThreshold": 5,
         "extendedGlobalWindowMinutes": 60
       }
+    },
+    "fingerprint": {
+      "headerReuse": {
+        "windowMinutes": 60,
+        "minRequests": 3,
+        "minDistinctIps": 2,
+        "minDistinctJa4": 2
+      },
+      "tlsAnomaly": {
+        "baselineHours": 24,
+        "minJa4Observations": 5
+      },
+      "latency": {
+        "mobileRttThresholdMs": 6,
+        "inspectPlatforms": ["Android", "iOS"]
+      },
+      "datacenterAsns": [16509, 14618, 8075, 15169, 13335, 9009, 61317, 49544]
     },
     "timeouts": {
       "schedule": [3600, 14400, 28800, 43200, 86400],
@@ -1919,6 +1963,11 @@ Get fraud detection configuration.
 | data.detection.ipRateLimitThreshold | number | Threshold for IP rate limit risk curve (default: 3) |
 | data.detection.ipRateLimitWindow | number | Window for IP rate limiting in seconds (default: 3600 = 1 hour) |
 | data.detection.ja4Clustering | object | JA4 session hopping detection thresholds |
+| data.fingerprint | object | Header/TLS/latency fingerprint heuristics |
+| data.fingerprint.headerReuse | object | Rolling-window counts for header fingerprint reuse |
+| data.fingerprint.tlsAnomaly | object | Baseline size + lookback for TLS extension hashes |
+| data.fingerprint.latency | object | RTT thresholds per platform |
+| data.fingerprint.datacenterAsns | array<number> | Hosting ASNs that should never present mobile RTTs |
 | data.timeouts | object | Progressive timeout schedule |
 
 #### Usage

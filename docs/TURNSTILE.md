@@ -423,20 +423,25 @@ CREATE TABLE fraud_blacklist (
   ephemeral_id TEXT,
   ip_address TEXT,
   ja4 TEXT,
+  email TEXT,
   block_reason TEXT NOT NULL,
   detection_confidence TEXT CHECK(detection_confidence IN ('high','medium','low')),
+  risk_score REAL,
+  risk_score_breakdown TEXT,
   blocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   expires_at DATETIME NOT NULL,
   submission_count INTEGER DEFAULT 0,
   last_seen_at DATETIME,
   detection_metadata TEXT,
   detection_type TEXT,
-  CHECK((ephemeral_id IS NOT NULL) OR (ip_address IS NOT NULL) OR (ja4 IS NOT NULL))
+  erfid TEXT,
+  CHECK((ephemeral_id IS NOT NULL) OR (ip_address IS NOT NULL) OR (ja4 IS NOT NULL) OR (email IS NOT NULL))
 );
 
 CREATE INDEX idx_blacklist_ephemeral_id ON fraud_blacklist(ephemeral_id, expires_at);
 CREATE INDEX idx_blacklist_ip ON fraud_blacklist(ip_address, expires_at);
 CREATE INDEX idx_blacklist_ja4 ON fraud_blacklist(ja4, expires_at);
+CREATE INDEX idx_blacklist_email ON fraud_blacklist(email, expires_at);
 ```
 
 Supports lookup by any combination of ephemeral_id, ip_address, or ja4 fingerprint. Entries automatically expire based on progressive timeout system.

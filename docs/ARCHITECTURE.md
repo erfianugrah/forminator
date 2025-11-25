@@ -226,29 +226,29 @@ flowchart TD
     Layer0 -->|In Blacklist| BlockFast[❌ Block: Fast reject<br/>~10ms lookup<br/>85-90% API reduction]
     Layer0 -->|Not in Blacklist| TokenReplay{Token Replay<br/>Detection}
 
-    TokenReplay -->|Replay| Block1[❌ Block: Token replay<br/>risk_score=100<br/>32% weight]
+    TokenReplay -->|Replay| Block1[❌ Block: Token replay<br/>risk_score=100<br/>28% weight]
     TokenReplay -->|New Token| TurnstileCheck[Validate with<br/>Turnstile API]
 
     TurnstileCheck --> SignalCollection[SIGNAL COLLECTION:<br/>Email, Ephemeral ID,<br/>JA4, IP Rate Limit]
 
     SignalCollection --> Layer1{Layer 1:<br/>Email Fraud<br/>Markov-Mail RPC}
 
-    Layer1 -->|Fraud Detected| EmailBlock[Email fraud signal<br/>Pattern/OOD/Disposable<br/>16% weight]
+    Layer1 -->|Fraud Detected| EmailBlock[Email fraud signal<br/>Pattern/OOD/Disposable<br/>14% weight]
     Layer1 -->|Pass/Fail-open| Layer2{Layer 2:<br/>Ephemeral ID<br/>Tracking}
 
     EmailBlock --> RiskCalc
 
-    Layer2 -->|≥2 submissions<br/>or ≥3 validations<br/>or ≥2 IPs| EphemeralBlock[Ephemeral fraud signal<br/>Submission/Validation/IP<br/>17% + 12% + 8% weights]
+    Layer2 -->|≥2 submissions<br/>or ≥3 validations<br/>or ≥2 IPs| EphemeralBlock[Ephemeral fraud signal<br/>Submission/Validation/IP<br/>15% + 10% + 7% weights]
     Layer2 -->|Pass| Layer4{Layer 4:<br/>JA4 Session<br/>Hopping}
 
     EphemeralBlock --> RiskCalc
 
-    Layer4 -->|Clustering<br/>Rapid/Extended| JA4Block[JA4 fraud signal<br/>Browser hopping<br/>7% weight]
+    Layer4 -->|Clustering<br/>Rapid/Extended| JA4Block[JA4 fraud signal<br/>Browser hopping<br/>6% weight]
     Layer4 -->|Pass| Layer05{Layer 0.5:<br/>IP Rate Limit<br/>Behavioral}
 
     JA4Block --> RiskCalc
 
-    Layer05 -->|Multiple<br/>submissions| IPSignal[IP rate signal<br/>Browser switching<br/>8% weight]
+    Layer05 -->|Multiple<br/>submissions| IPSignal[IP rate signal<br/>Browser switching<br/>7% weight]
     Layer05 -->|Pass| RiskCalc[Calculate Total<br/>Risk Score<br/>All signals combined]
 
     IPSignal --> RiskCalc
@@ -276,7 +276,8 @@ flowchart TD
 
 **Behavioral Signal Architecture**:
 - All detection layers collect signals (not hard blocks)
-- Signals combined via weighted risk scoring (7 components)
+- Signals combined via weighted risk scoring (10 components total; 9 for submissions, token replay for validations)
+- Fingerprint heuristics (header reuse, TLS anomaly, latency mismatch) sit alongside IP rate limiting to catch single-attempt bots
 - Holistic decision made based on total risk ≥ 70
 - Prevents false positives from single signal triggers
 
@@ -284,14 +285,14 @@ flowchart TD
 - Detects browser-switching attacks (Firefox→Chrome→Safari)
 - 1-hour window, tracks submissions per IP
 - Non-linear risk curve: 1→0%, 2→25%, 3→50%, 4→75%, 5+→100%
-- 8% weight in total risk score
+- 7% weight in total risk score
 - Complements fingerprint-based detection (Layers 2 & 4)
 
 **Ephemeral ID Detection (Layer 2)**:
 - Enterprise Bot Management feature
 - 24h window for submissions, 1h for validation frequency
 - Tracks: submission count (≥2), validation attempts (≥3), IP diversity (≥2)
-- 17% + 12% + 8% combined weights in risk score
+- 15% + 10% + 7% combined weights in risk score
 
 ### Database Schema Design
 
@@ -377,13 +378,18 @@ erDiagram
         string ephemeral_id "Indexed with expires_at"
         string ip_address "Indexed with expires_at"
         string ja4
+        string email
         string block_reason
         int detection_confidence
         string detection_type
+        real risk_score
+        text risk_score_breakdown "JSON: risk_score_breakdown"
         datetime blocked_at
         datetime expires_at "Indexed - Auto-expiry"
+        int submission_count
         datetime last_seen_at
-        int offense_count "Progressive timeout"
+        text detection_metadata
+        string erfid
     }
 ```
 
@@ -410,11 +416,11 @@ erDiagram
    - Request metadata (remote_ip, user_agent, country)
    - Tracking (erfid, created_at)
 
-4. **fraud_blacklist** (13 fields)
-   - Active blocking cache (ephemeral_id, ip_address, ja4)
-   - Block metadata (block_reason, detection_confidence, detection_type)
-   - Timing (blocked_at, expires_at, last_seen_at)
-   - Progressive timeout tracking
+4. **fraud_blacklist** (15 fields)
+   - Active blocking cache (ephemeral_id, ip_address, ja4, email)
+   - Block metadata (block_reason, detection_confidence, detection_type, risk_score, risk_score_breakdown JSON)
+   - Timing (blocked_at, expires_at, last_seen_at, submission_count)
+   - Progressive timeout + forensic context (detection_metadata, erfid)
 
 **Key Indexes**:
 - `token_hash` (unique) - Prevents token reuse

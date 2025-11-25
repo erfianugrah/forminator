@@ -123,6 +123,8 @@ CREATE TABLE IF NOT EXISTS fraud_blacklist (
 	-- Block metadata
 	block_reason TEXT NOT NULL,
 	detection_confidence TEXT NOT NULL CHECK(detection_confidence IN ('high', 'medium', 'low')),
+	risk_score REAL,
+	risk_score_breakdown TEXT,
 	-- Timing
 	blocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	expires_at DATETIME NOT NULL,

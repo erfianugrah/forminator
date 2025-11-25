@@ -20,7 +20,7 @@ import logger from './logger';
 import { addToBlacklist } from './fraud-prevalidation';
 import { calculateProgressiveTimeout } from './turnstile';
 import type { FraudDetectionConfig } from './config';
-import { normalizeJA4Score } from './scoring';
+import { normalizeJA4Score, calculateNormalizedRiskScore } from './scoring';
 
 // ============================================================================
 // Type Definitions
@@ -539,6 +539,22 @@ async function blockForJA4Fraud(
 	const signals = compareGlobalSignals(clustering, config);
 	const rawScore = calculateCompositeRiskScore(clustering, velocity, signals);
 	const warnings = generateWarnings(clustering, velocity, signals);
+	const normalizedScore = calculateNormalizedRiskScore(
+		{
+			tokenReplay: false,
+			emailRiskScore: 0,
+			ephemeralIdCount: Math.max(clustering.ephemeralCount, 1),
+			validationCount: Math.max(clustering.submissionCount, 1),
+			uniqueIPCount: 1,
+			ja4RawScore: rawScore,
+			ipRateLimitScore: 0,
+			headerFingerprintScore: 0,
+			tlsAnomalyScore: 0,
+			latencyMismatchScore: 0,
+			blockTrigger: 'ja4_session_hopping',
+		},
+		config
+	);
 
 	// Map detection layer to specific detection type (Phase 1.8)
 	const detectionTypeMap = {
@@ -573,6 +589,8 @@ async function blockForJA4Fraud(
 			detected_at: new Date().toISOString(),
 		},
 		erfid, // Request tracking ID
+		riskScore: normalizedScore.total,
+		riskScoreBreakdown: normalizedScore,
 	});
 
 	logger.warn(

@@ -170,16 +170,16 @@ Validation (`src/lib/validation.ts`) should accept and sanitize this block; pers
 
 ### 4.2 Scoring integration
 
-Once the analyses above prove reliable indicators, add new normalized components in `calculateNormalizedRiskScore()`:
+Three fingerprint-driven components are now live in `calculateNormalizedRiskScore()` and backed by `config.risk.weights`:
 
-| Component | Source | Suggested weight |
-|-----------|--------|------------------|
-| `headerFingerprintReuse` | High `headersFingerprint` reuse across JA4/IP/email | 0.08 (shift from existing components) |
-| `tlsAnomaly` | JA4 + TLS hash not in baseline, or TLS hash seen only on proxy ASNs | 0.06 |
-| `latencyMismatch` | `clientTcpRtt` inconsistent with platform/geo claims | 0.04 |
-| `frontendMismatch` | Client-side fingerprint conflicts with UA/deviceType | 0.05 |
+| Component | Source | Weight | Status |
+|-----------|--------|--------|--------|
+| `headerFingerprint` | High `headersFingerprint` reuse across JA4/IP/email clusters | 0.07 | ✅ Active |
+| `tlsAnomaly` | JA4 + TLS extension hash not in baseline / only seen on proxy ASNs | 0.04 | ✅ Active |
+| `latencyMismatch` | `clientTcpRtt` inconsistent with platform/geo claims | 0.02 | ✅ Active |
+| `frontendMismatch` | Client-side fingerprint conflicts with UA/deviceType | _TBD_ | 🚧 Planned (reserved for future client-side capture) |
 
-Adjust `config.risk.weights` accordingly, ensuring totals stay at 1.0. Keep blockers declarative: e.g., when `tlsAnomaly` fires and the score crosses the threshold, log the detection type as `tls_fingerprint_anomaly`.
+Any additional fingerprint signal must borrow weight from existing components so that the totals stay at 1.0. When a new signal is promoted, expose it through `config.risk.weights`, log a dedicated detection identifier (e.g., `tls_fingerprint_anomaly`), and update the analytics UI + docs so end users know what pushed the score over the block threshold.
 
 ## 5. Operational Checklist
 

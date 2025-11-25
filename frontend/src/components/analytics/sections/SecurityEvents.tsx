@@ -16,6 +16,19 @@ interface SecurityEventsProps {
 	apiKey: string;
 }
 
+const RISK_COMPONENT_LABELS: Record<string, string> = {
+	tokenReplay: 'Token Replay',
+	emailFraud: 'Email Fraud',
+	ephemeralId: 'Device Tracking',
+	validationFrequency: 'Validation Frequency',
+	ipDiversity: 'IP Diversity',
+	ja4SessionHopping: 'Session Hopping',
+	ipRateLimit: 'IP Rate Limit',
+	headerFingerprint: 'Header Fingerprint',
+	tlsAnomaly: 'TLS Fingerprint Anomaly',
+	latencyMismatch: 'Latency / Device Mismatch',
+};
+
 type SecurityEvent = {
 	id: string;
 	type: 'active_block' | 'detection';
@@ -25,6 +38,7 @@ type SecurityEvent = {
 	identifierType: 'ephemeral' | 'ip';
 	blockReason: string;
 	riskScore: number;
+	riskBreakdown?: string | null;
 	detectionType:
 		| 'email_fraud_detection'
 		| 'ephemeral_id_tracking'
@@ -44,6 +58,8 @@ type SecurityEvent = {
 	city?: string | null;
 	ja4?: string | null;
 	erfid?: string | null;
+	source?: 'validation' | 'fraud_block';
+	fraudSignals?: string | null;
 	// For active blocks
 	expiresAt?: string;
 	offenseCount?: number;
@@ -73,10 +89,12 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 		identifierType: entry.ephemeral_id ? 'ephemeral' : 'ip',
 		blockReason: entry.block_reason,
 		riskScore: entry.risk_score,
+		riskBreakdown: entry.risk_score_breakdown || null,
 		detectionType: (entry.detection_type as SecurityEvent['detectionType']) ?? inferDetectionType(entry.block_reason),
 		expiresAt: entry.expires_at,
 		offenseCount: entry.offense_count,
 		erfid: entry.erfid,
+		source: 'fraud_block',
 		// Enriched metadata from LEFT JOIN with turnstile_validations
 		country: entry.country,
 		city: entry.city,
@@ -109,6 +127,9 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 			country: validation.country,
 			city: validation.city,
 			ja4: validation.ja4,
+			riskBreakdown: validation.risk_score_breakdown,
+			source: validation.source,
+			fraudSignals: validation.fraud_signals_json || null,
 		}));
 
 	// Merge and sort by timestamp (most recent first)
@@ -295,6 +316,46 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 		dateRange.start.getTime() !== subDays(new Date(), 7).setHours(0, 0, 0, 0) ||
 		dateRange.end.getTime() !== new Date().setHours(23, 59, 59, 999);
 
+	const handleViewDetails = async (event: SecurityEvent) => {
+		if (event.type === 'detection') {
+			const numericId = parseInt(event.id.split('-')[1], 10);
+			if (!isNaN(numericId)) {
+				onLoadDetail(numericId);
+			} else {
+				alert('Unable to load validation details for this detection');
+			}
+			return;
+		}
+
+		// Active block – prefer full validation details if available
+		if (event.erfid) {
+			try {
+				const response = await fetch(`/api/analytics/validations/by-erfid/${event.erfid}`, {
+					headers: {
+						'X-API-KEY': apiKey
+					}
+				});
+
+				if (response.ok) {
+					const data = await response.json() as { success: boolean; data?: { id: number } };
+					if (data.success && data.data && data.data.id) {
+						onLoadDetail(data.data.id);
+						return;
+					}
+				}
+			} catch (error) {
+				console.error('Error fetching validation by erfid:', error);
+			}
+		}
+
+		// Fall back to blacklist details if validation record not found
+		if (onLoadBlacklistDetail && event.blacklistEntry) {
+			onLoadBlacklistDetail(event.blacklistEntry);
+		} else {
+			alert('No validation or blacklist details available for this block');
+		}
+	};
+
 	return (
 		<Card>
 			<CardHeader>
@@ -376,6 +437,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 							// Use parsed risk score if available, otherwise fall back to database value
 							const actualRiskScore = parsed.riskScore ?? event.riskScore;
 							const riskLevel = getRiskLevel(actualRiskScore);
+							const breakdownSummary = summarizeRiskBreakdown(event.riskBreakdown);
 
 								return (
 									<div
@@ -397,51 +459,11 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 														<span className="text-xs font-normal ml-1 text-muted-foreground">({riskLevel})</span>
 													</span>
 												</div>
+												{getDetectionTypeBadge(event.detectionType)}
 											</div>
 											{/* View Details Button - Top Right */}
 											<button
-												onClick={async () => {
-													if (event.type === 'detection') {
-														// For detections, use the validation ID directly
-														const numericId = parseInt(event.id.split('-')[1], 10);
-														if (!isNaN(numericId)) {
-															onLoadDetail(numericId);
-														}
-													} else if (event.type === 'active_block') {
-														if (onLoadBlacklistDetail && event.blacklistEntry) {
-															onLoadBlacklistDetail(event.blacklistEntry);
-															return;
-														}
-														if (event.erfid) {
-															// Fallback: attempt validation lookup by erfid
-															try {
-																const response = await fetch(`/api/analytics/validations/by-erfid/${event.erfid}`, {
-																	headers: {
-																		'X-API-KEY': apiKey
-																	}
-																});
-
-																if (response.ok) {
-																	const data = await response.json() as { success: boolean; data?: { id: number } };
-																	if (data.success && data.data && data.data.id) {
-																		onLoadDetail(data.data.id);
-																	} else {
-																		console.error('Invalid validation data received');
-																		alert('Could not load validation details');
-																	}
-																} else {
-																	console.error('Failed to fetch validation by erfid');
-																	alert('Could not find validation record for this block');
-																}
-															} catch (error) {
-																console.error('Error fetching validation by erfid:', error);
-																alert('Error loading validation details');
-															}
-														} else {
-															alert('No validation record or blacklist details available for this block');
-														}
-													}
-												}}
+												onClick={() => handleViewDetails(event)}
 												className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium flex-shrink-0"
 												title="View validation details"
 											>
@@ -529,6 +551,11 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 																No detailed triggers available
 															</p>
 														)}
+
+														{/* Risk contribution summary */}
+														<div className="space-y-1.5 pt-2 border-t border-border/40">
+															{renderRiskBreakdownSummary(breakdownSummary, event.type === 'active_block')}
+														</div>
 													</div>
 												);
 											})()}
@@ -647,6 +674,90 @@ function parseBlockReason(blockReason: string): {
 		triggers,
 		fullText: blockReason,
 	};
+}
+
+type RiskBreakdownComponent = {
+	key: string;
+	label: string;
+	contribution: number;
+	score: number;
+	weight: number;
+	reason?: string;
+};
+
+type RiskBreakdownSummary = {
+	components: RiskBreakdownComponent[];
+};
+
+function summarizeRiskBreakdown(raw?: string | null): RiskBreakdownSummary | null {
+	if (!raw) {
+		return null;
+	}
+
+	try {
+		const parsed = JSON.parse(raw);
+		if (!parsed || typeof parsed !== 'object' || !parsed.components) {
+			return null;
+		}
+
+		const entries = Object.entries(parsed.components as Record<string, any>)
+			.filter(([, component]) => component && typeof component.contribution === 'number' && component.contribution > 0)
+			.map(([key, component]) => ({
+				key,
+				label: RISK_COMPONENT_LABELS[key] || key,
+				contribution: Number(component.contribution) || 0,
+				score: Number(component.score) || 0,
+				weight: Number(component.weight) || 0,
+				reason: typeof component.reason === 'string' ? component.reason : undefined,
+			}))
+			.sort((a, b) => b.contribution - a.contribution)
+			.slice(0, 4);
+
+		if (!entries.length) {
+			return null;
+		}
+
+		return { components: entries };
+	} catch (_error) {
+		return null;
+	}
+}
+
+function renderRiskBreakdownSummary(summary: RiskBreakdownSummary | null, isActiveBlock: boolean) {
+	if (!summary) {
+		return (
+			<p className="text-xs text-muted-foreground italic">
+				{isActiveBlock
+					? 'Detailed risk breakdown unavailable (blocked before Turnstile validation).'
+					: 'Risk breakdown unavailable.'}
+			</p>
+		);
+	}
+
+	return (
+		<div className="space-y-1">
+			<span className="text-xs text-muted-foreground">Top contributors:</span>
+			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+				{summary.components.map((component) => (
+					<div key={component.key} className="rounded-md border border-border/60 bg-muted/40 p-2">
+						<div className="flex items-center justify-between text-xs font-semibold">
+							<span>{component.label}</span>
+							<span>{component.contribution.toFixed(1)} pts</span>
+						</div>
+						<div className="text-[11px] text-muted-foreground flex items-center justify-between mt-1">
+							<span>{component.score.toFixed(0)}/100 score</span>
+							<span>{Math.round(component.weight * 100)}% weight</span>
+						</div>
+						{component.reason && (
+							<p className="text-[11px] text-muted-foreground mt-1">
+								{component.reason}
+							</p>
+						)}
+					</div>
+				))}
+			</div>
+		</div>
+	);
 }
 
 /**

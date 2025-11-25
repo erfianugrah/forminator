@@ -27,7 +27,7 @@ The application uses **Cloudflare D1**, a serverless SQLite database. All databa
 **Tables:**
 1. `submissions` - Form submissions (42 fields)
 2. `turnstile_validations` - Token validation attempts (35 fields)
-3. `fraud_blacklist` - Blocked ephemeral IDs/IPs (9 fields)
+3. `fraud_blacklist` - Blocked ephemeral IDs/IPs (15 fields)
 
 ---
 

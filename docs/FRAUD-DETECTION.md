@@ -869,24 +869,27 @@ All risk scores include component breakdown stored as JSON:
   "ipDiversity": 0,
   "ja4SessionHopping": 0,
   "ipRateLimit": 50,
-  "total": 67.3,
+  "headerFingerprint": 0,
+  "tlsAnomaly": 0,
+  "latencyMismatch": 0,
+  "total": 19.9,
   "components": {
     "emailFraud": {
       "score": 42,
-      "weight": 0.16,
-      "contribution": 6.72,
+      "weight": 0.14,
+      "contribution": 5.88,
       "reason": "Suspicious email pattern"
     },
     "ephemeralId": {
       "score": 70,
-      "weight": 0.17,
-      "contribution": 11.9,
+      "weight": 0.15,
+      "contribution": 10.5,
       "reason": "2 submissions (suspicious)"
     },
     "ipRateLimit": {
       "score": 50,
-      "weight": 0.08,
-      "contribution": 4.0,
+      "weight": 0.07,
+      "contribution": 3.5,
       "reason": "Multiple submissions from IP"
     }
   }
@@ -952,7 +955,7 @@ Ephemeral IDs have a few days lifespan. The 24h maximum timeout respects this ro
 ## Database Schema
 
 - Every hot-path table (`submissions`, `turnstile_validations`, `fraud_blacklist`, and `fraud_blocks`) includes an `erfid` column so any record can be correlated with the `X-Request-Id` header returned to clients. See [ERFID-TRACKING.md](./ERFID-TRACKING.md) for deep dive and analytics queries.
-- `risk_score_breakdown` JSON blobs are stored alongside submissions/validations, giving the analytics UI and API endpoints the exact component contribution (tokenReplay/emailFraud/etc.) without recomputing scores.
+- `risk_score_breakdown` JSON blobs are stored alongside submissions/validations/blacklist entries, giving the analytics UI and API endpoints the exact component contribution (tokenReplay/emailFraud/etc.) without recomputing scores.
 
 ### fraud_blacklist Table
 
@@ -966,10 +969,13 @@ CREATE TABLE fraud_blacklist (
   ephemeral_id TEXT,
   ip_address TEXT,
   ja4 TEXT,
+  email TEXT,
 
   -- Block metadata
   block_reason TEXT NOT NULL,
   detection_confidence TEXT CHECK(detection_confidence IN ('high','medium','low')),
+  risk_score REAL,
+  risk_score_breakdown TEXT, -- JSON
 
   -- Timing
   blocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -980,10 +986,12 @@ CREATE TABLE fraud_blacklist (
   last_seen_at DATETIME,
   detection_metadata TEXT,  -- JSON
   detection_type TEXT,       -- Layer-specific types
+  erfid TEXT,
 
   CHECK((ephemeral_id IS NOT NULL) OR
         (ip_address IS NOT NULL) OR
-        (ja4 IS NOT NULL))
+        (ja4 IS NOT NULL) OR
+        (email IS NOT NULL))
 );
 
 -- Performance indexes
@@ -992,6 +1000,9 @@ CREATE INDEX idx_blacklist_ip ON fraud_blacklist(ip_address, expires_at);
 CREATE INDEX idx_blacklist_ja4 ON fraud_blacklist(ja4, expires_at);
 CREATE INDEX idx_blacklist_expires ON fraud_blacklist(expires_at);
 ```
+
+- `risk_score` + `risk_score_breakdown` mirror the JSON stored on submissions/validations so Security Events can show the exact component contributions even when the block happens before Turnstile validation.
+- `detection_metadata` remains flexible JSON for layer-specific context (duplicate counts, JA4 cluster stats, fingerprint warnings, etc.).
 
 ---
 
