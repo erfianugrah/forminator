@@ -230,7 +230,7 @@ const DEFAULT_CONFIG = {
 		 * - 5th+ offense (24h): Maximum timeout respects ephemeral ID lifespan
 		 *
 		 * Why 24h maximum:
-		 * - Ephemeral IDs have ~7 day lifespan
+		 * - Ephemeral IDs last a few days
 		 * - 24h is long enough to deter attacks
 		 * - Not so long that legitimate users are permanently blocked
 		 * - Attackers need to wait full day between attempts (impractical)
@@ -242,7 +242,7 @@ const DEFAULT_CONFIG = {
 			43200, // 4th offense: 12 hours
 			86400, // 5th+ offense: 24 hours
 		],
-		/** Maximum timeout: 24 hours (respects ~7 day ephemeral ID lifespan) */
+		/** Maximum timeout: 24 hours (respects ephemeral ID lifespan of a few days) */
 		maximum: 86400,
 	},
 } as const;

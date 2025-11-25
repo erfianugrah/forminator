@@ -249,11 +249,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 **You'll learn:**
 - Why ephemeral IDs (not strict rate limiting)
 - What ephemeral IDs are (Enterprise Bot Management)
-- 7-day detection window rationale
+- Detection window rationale (ephemeral ID lasts a few days)
 - Pattern recognition algorithm (not real-time blocking)
 - Progressive timeout system (1h → 4h → 8h → 12h → 24h)
 - Risk scoring formula
-  - Ephemeral ID checks (preferred, 7-day window)
+  - Ephemeral ID checks (preferred, multi-day tracking)
   - IP-based fallback (1-hour window)
   - Blocking threshold: 70 risk score
 - Pattern examples and edge cases
