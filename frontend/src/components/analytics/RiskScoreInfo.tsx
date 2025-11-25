@@ -1,4 +1,15 @@
-import { AlertCircle, Shield, Mail, Fingerprint, Clock, Network, Info } from 'lucide-react';
+import {
+	AlertCircle,
+	Shield,
+	Mail,
+	Fingerprint,
+	Clock,
+	Network,
+	Info,
+	Layers,
+	Lock,
+	Smartphone,
+} from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/card';
 
 export function RiskScoreInfo() {
@@ -20,43 +31,64 @@ export function RiskScoreInfo() {
 					<div className="flex items-start gap-2">
 						<Mail className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
 						<div>
-							<p className="font-medium">Email Fraud (16%)</p>
+							<p className="font-medium">Email Fraud (14%)</p>
 							<p className="text-muted-foreground">ML pattern detection (Markov Chain, 83% accuracy)</p>
 						</div>
 					</div>
 					<div className="flex items-start gap-2">
 						<Fingerprint className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
 						<div>
-							<p className="font-medium">Device Tracking (17%)</p>
+							<p className="font-medium">Device Tracking (15%)</p>
 							<p className="text-muted-foreground">Ephemeral ID tracks same device (a few days)</p>
 						</div>
 					</div>
 					<div className="flex items-start gap-2">
 						<Clock className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
 						<div>
-							<p className="font-medium">Validation Frequency (12%)</p>
+							<p className="font-medium">Validation Frequency (10%)</p>
 							<p className="text-muted-foreground">Rapid-fire detection (3+ attempts in 1h)</p>
 						</div>
 					</div>
 					<div className="flex items-start gap-2">
 						<Network className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
 						<div>
-							<p className="font-medium">IP Diversity (8%)</p>
+							<p className="font-medium">IP Diversity (7%)</p>
 							<p className="text-muted-foreground">Proxy rotation (2+ IPs from same device)</p>
 						</div>
 					</div>
 					<div className="flex items-start gap-2">
 						<AlertCircle className="h-4 w-4 text-pink-500 mt-0.5 flex-shrink-0" />
 						<div>
-							<p className="font-medium">Session Hopping (7%)</p>
+							<p className="font-medium">Session Hopping (6%)</p>
 							<p className="text-muted-foreground">JA4 fingerprint detects incognito/browser switching</p>
 						</div>
 					</div>
 					<div className="flex items-start gap-2">
 						<Shield className="h-4 w-4 text-cyan-500 mt-0.5 flex-shrink-0" />
 						<div>
-							<p className="font-medium">IP Rate Limit (8%)</p>
+							<p className="font-medium">IP Rate Limit (7%)</p>
 							<p className="text-muted-foreground">Browser-switching detection (3 per hour from same IP)</p>
+						</div>
+					</div>
+					<div className="flex items-start gap-2">
+						<Layers className="h-4 w-4 text-rose-500 mt-0.5 flex-shrink-0" />
+						<div>
+							<p className="font-medium">Header Fingerprint (7%)</p>
+							<p className="text-muted-foreground">Shared header stacks across JA4/IP/email clusters</p>
+						</div>
+					</div>
+					<div className="flex items-start gap-2">
+						<Lock className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
+						<div>
+							<p className="font-medium">TLS Anomaly (4%)</p>
+							<p className="text-muted-foreground">JA4 presents unknown TLS ClientHello fingerprint</p>
+						</div>
+					</div>
+					<div className="flex items-start gap-2">
+						<Smartphone className="h-4 w-4 text-lime-500 mt-0.5 flex-shrink-0" />
+						<div>
+							<p className="font-medium">Latency Mismatch (2%)</p>
+							<p className="text-muted-foreground">Claimed mobile devices with impossible RTT/device type</p>
 						</div>
 					</div>
 				</div>
@@ -65,8 +97,8 @@ export function RiskScoreInfo() {
 					<div className="flex items-start gap-1.5 text-xs text-muted-foreground">
 						<Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
 						<p>
-							Successful submissions show 6 components (68% total). Token replay (32%) only appears in validation logs
-							as blocked attempts can't create submissions.
+							Token replay (28%) still triggers instantly via validation logs; submissions reflect the remaining nine
+							behavioral/fingerprint components (72% total).
 						</p>
 					</div>
 					<div className="flex items-center gap-4 text-xs flex-wrap">
