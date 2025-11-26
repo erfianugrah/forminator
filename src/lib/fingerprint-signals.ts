@@ -239,13 +239,15 @@ export async function collectFingerprintSignals(
 		// ---------------------------------------------------------------------
 		// Latency vs. claimed platform
 		// ---------------------------------------------------------------------
-		const rtt = metadata.clientTcpRtt;
+		const rawRtt = metadata.clientTcpRtt;
 		const platform = normalizeHint(metadata.clientHints?.platform);
 		const deviceType = metadata.deviceType;
 		const mobileClaim = isMobileClaim(metadata, config);
 		const datacenterAsns = config.fingerprint.datacenterAsns.map((asn) => Number(asn));
 		const suspectAsn = typeof metadata.asn === 'number' ? datacenterAsns.includes(metadata.asn) : false;
-		if (typeof rtt === 'number' && rtt >= 0) {
+		const hasMeasuredRtt = typeof rawRtt === 'number' && rawRtt > 0;
+		if (hasMeasuredRtt) {
+			const rtt = rawRtt!;
 			if (
 				mobileClaim &&
 				rtt <= config.fingerprint.latency.mobileRttThresholdMs &&
@@ -257,7 +259,13 @@ export async function collectFingerprintSignals(
 				);
 			}
 		}
-		details.latency = { rtt, platform, deviceType, claimedMobile: mobileClaim, suspectAsn };
+		details.latency = {
+			rtt: hasMeasuredRtt ? rawRtt : undefined,
+			platform,
+			deviceType,
+			claimedMobile: mobileClaim,
+			suspectAsn,
+		};
 
 		const result: FingerprintSignalsResult = selectTrigger({
 			headerFingerprintScore,
