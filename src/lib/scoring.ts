@@ -29,6 +29,25 @@ export interface RiskComponent {
 	reason: string; // Human-readable explanation
 }
 
+export interface FingerprintDetailSummary {
+	headerReuse?: {
+		total: number;
+		ipCount: number;
+		ja4Count: number;
+	};
+	tlsAnomaly?: {
+		ja4Count: number;
+		pairCount: number;
+	};
+	latency?: {
+		rtt?: number;
+		platform?: string;
+		deviceType?: string;
+		claimedMobile?: boolean;
+		suspectAsn?: boolean;
+	};
+}
+
 export interface RiskScoreBreakdown {
 	tokenReplay: number;
 	emailFraud: number;
@@ -42,7 +61,19 @@ export interface RiskScoreBreakdown {
 	latencyMismatch: number;
 	total: number;
 	components: Record<string, RiskComponent>;
+	fingerprintDetails?: FingerprintDetailSummary;
+	fingerprintWarnings?: string[];
 }
+
+const FORCE_BLOCK_TRIGGERS = new Set(['token_replay', 'turnstile_failed']);
+const DETERMINISTIC_TRIGGERS = new Set([
+	'ephemeral_id_fraud',
+	'validation_frequency',
+	'ja4_session_hopping',
+	'email_fraud',
+	'duplicate_email',
+	'repeat_offender',
+]);
 
 export function calculateNormalizedRiskScore(
 	checks: {
@@ -56,7 +87,8 @@ export function calculateNormalizedRiskScore(
 		headerFingerprintScore?: number; // 0-100
 		tlsAnomalyScore?: number; // 0-100
 		latencyMismatchScore?: number; // 0-100
-		blockTrigger?: 'token_replay' | 'email_fraud' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'ip_rate_limit' | 'header_fingerprint' | 'tls_anomaly' | 'latency_mismatch' | 'duplicate_email' | 'turnstile_failed';
+		recentRepeatOffender?: boolean;
+		blockTrigger?: 'token_replay' | 'email_fraud' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'ip_rate_limit' | 'header_fingerprint' | 'tls_anomaly' | 'latency_mismatch' | 'duplicate_email' | 'turnstile_failed' | 'repeat_offender';
 	},
 	config: FraudDetectionConfig
 ): RiskScoreBreakdown {
@@ -218,70 +250,38 @@ export function calculateNormalizedRiskScore(
 	// Calculate total (weighted sum, capped at 100)
 	let total = 0;
 
+	const isForceBlockTrigger = checks.blockTrigger && FORCE_BLOCK_TRIGGERS.has(checks.blockTrigger);
+	const isDeterministicTrigger =
+		checks.blockTrigger && DETERMINISTIC_TRIGGERS.has(checks.blockTrigger);
+
 	if (components.tokenReplay.score === 100) {
 		// Token replay is instant block
 		total = 100;
-	} else if (checks.blockTrigger) {
-		// Phase 1.6: When a specific check triggers a block, ensure score reflects severity
-		// Calculate base score from all components
+	} else {
 		const baseScore = Object.values(components).reduce((sum, c) => sum + c.contribution, 0);
 
-		// Ensure blocked attempts have minimum score of block threshold
-		// But boost the triggering component's contribution
-		const blockThreshold = config.risk.blockThreshold;
-		switch (checks.blockTrigger) {
-			case 'ja4_session_hopping':
-				// JA4 detected session hopping - critical
-				total = Math.max(baseScore, blockThreshold + 5);
-				break;
-			case 'ephemeral_id_fraud':
-				// Multiple submissions detected - high risk
-				total = Math.max(baseScore, blockThreshold);
-				break;
-			case 'ip_diversity':
-				// Proxy rotation detected - critical
-				total = Math.max(baseScore, blockThreshold + 10);
-				break;
-			case 'validation_frequency':
-				// Too many attempts - high risk
-				total = Math.max(baseScore, blockThreshold);
-				break;
-			case 'email_fraud':
-				// Fraudulent email pattern detected (Phase 4) - high risk
-				total = Math.max(baseScore, blockThreshold);
-				break;
-			case 'ip_rate_limit':
-				// IP rate limit exceeded - medium-high risk
-				total = Math.max(baseScore, blockThreshold);
-				break;
-		case 'header_fingerprint':
-			// Shared header fingerprint across multiple identities - high risk
-			total = Math.max(baseScore, blockThreshold + 5);
-			break;
-		case 'tls_anomaly':
-			// Spoofed TLS fingerprint - high risk
-			total = Math.max(baseScore, blockThreshold + 5);
-			break;
-		case 'latency_mismatch':
-			// Device claim inconsistent with RTT - medium risk
-			total = Math.max(baseScore, blockThreshold);
-			break;
-		case 'duplicate_email':
-				// Email already used - medium risk
-				total = Math.max(baseScore, blockThreshold - 10);
-				break;
-			case 'turnstile_failed':
-				// Turnstile validation failed - medium-high
-				total = Math.max(baseScore, blockThreshold - 5);
-				break;
-			default:
-				total = Math.max(baseScore, blockThreshold);
+		if (isForceBlockTrigger) {
+			// Only definitive triggers (token replay / Turnstile failure) may override totals
+			const blockThreshold = config.risk.blockThreshold;
+			switch (checks.blockTrigger) {
+				case 'turnstile_failed':
+					total = Math.max(baseScore, blockThreshold);
+					break;
+				default:
+					total = Math.max(baseScore, blockThreshold);
+			}
+			total = Math.min(100, Math.round(total * 10) / 10);
+		} else if (
+			isDeterministicTrigger &&
+			config.risk.mode !== 'additive' &&
+			qualifiesForDeterministicBlock(checks.blockTrigger!, checks, components, config)
+		) {
+			const blockThreshold = config.risk.blockThreshold;
+			total = Math.max(blockThreshold, baseScore);
+			total = Math.min(100, Math.round(total * 10) / 10);
+		} else {
+			total = Math.min(100, Math.round(baseScore * 10) / 10);
 		}
-		total = Math.min(100, Math.round(total * 10) / 10);
-	} else {
-		// Normal calculation for allowed submissions
-		total = Object.values(components).reduce((sum, c) => sum + c.contribution, 0);
-		total = Math.min(100, Math.round(total * 10) / 10); // Round to 1 decimal
 	}
 
 	return {
@@ -339,4 +339,48 @@ export function normalizeJA4Score(rawScore: number, config: FraudDetectionConfig
 
 	// Map blockThreshold-230 to blockThreshold-100 (diminishing returns)
 	return Math.round(blockThreshold + ((rawScore - blockThreshold) / (230 - blockThreshold)) * (100 - blockThreshold));
+}
+
+function qualifiesForDeterministicBlock(
+	trigger: string,
+	checks: {
+		ephemeralIdCount: number;
+		validationCount: number;
+		uniqueIPCount: number;
+		ja4RawScore: number;
+		ipRateLimitScore?: number;
+		emailRiskScore?: number;
+		recentRepeatOffender?: boolean;
+	},
+	components: Record<string, RiskComponent>,
+	config: FraudDetectionConfig
+): boolean {
+	switch (trigger) {
+		case 'ephemeral_id_fraud':
+			return (
+				(components.ephemeralId?.score ?? 0) >= config.risk.levels.medium.min &&
+				(components.validationFrequency?.score ?? 0) >= config.risk.levels.medium.min
+			);
+		case 'validation_frequency':
+			return (
+				(components.validationFrequency?.score ?? 0) >= config.risk.blockThreshold ||
+				(components.ephemeralId?.score ?? 0) >= config.risk.blockThreshold
+			);
+		case 'ja4_session_hopping':
+			return (
+				(checks.ja4RawScore ?? 0) >= 140 &&
+				(checks.ipRateLimitScore ?? 0) >= 25
+			);
+		case 'email_fraud':
+			return (
+				(components.emailFraud?.score ?? 0) >= config.risk.blockThreshold &&
+				(checks.uniqueIPCount ?? 1) > 1
+			);
+		case 'duplicate_email':
+			return true;
+		case 'repeat_offender':
+			return !!checks.recentRepeatOffender;
+		default:
+			return false;
+	}
 }

@@ -47,6 +47,7 @@ export default function SubmissionForm() {
 		retryAfter: number; // seconds
 		expiresAt: string; // ISO timestamp
 		timeRemaining: number; // seconds (for countdown)
+		message: string;
 	} | null>(null);
 
 	const turnstileRef = useRef<TurnstileWidgetHandle>(null);
@@ -253,6 +254,7 @@ export default function SubmissionForm() {
 						retryAfter,
 						expiresAt,
 						timeRemaining: retryAfter,
+						message: userFriendlyMessage,
 					});
 				} else if (response.status === 403) {
 					userFriendlyMessage = 'Your submission has been blocked for security reasons. If you believe this is an error, please contact support.';
@@ -637,7 +639,7 @@ export default function SubmissionForm() {
 						</Alert>
 					)}
 
-					{submitResult && submitResult.type === 'error' && (
+					{((submitResult && submitResult.type === 'error') || rateLimitInfo) && (
 						<Alert
 							variant="destructive"
 							className="animate-in fade-in slide-in-from-top-2"
@@ -646,7 +648,7 @@ export default function SubmissionForm() {
 								✗ Error
 							</AlertTitle>
 							<AlertDescription>
-								{submitResult.message}
+								{submitResult?.message || rateLimitInfo?.message || 'Submission failed. Please try again.'}
 								{rateLimitInfo && (
 									<div className="mt-3 pt-3 border-t border-destructive/20">
 										<div className="flex items-center gap-2">

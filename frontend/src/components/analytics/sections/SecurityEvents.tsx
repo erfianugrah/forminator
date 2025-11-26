@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../..
 import type { BlacklistEntry } from '../../../hooks/useBlacklist';
 import type { BlockedValidation } from '../../../hooks/useBlockedValidations';
 import { getRelativeTime, getTimeAgo, getTimeUrgency, getUrgencyClasses } from '../../../lib/time-utils';
+import { downloadJson } from '../../../lib/download';
 import { SingleSelect } from '../filters/SingleSelect';
 import { DateRangePicker } from '../filters/DateRangePicker';
 
@@ -74,6 +75,9 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 		start: subDays(new Date(), 7),
 		end: new Date(),
 	});
+	const [exporting, setExporting] = useState(false);
+	const [exportError, setExportError] = useState<string | null>(null);
+	const [exportingEventId, setExportingEventId] = useState<string | null>(null);
 
 	// Pagination state
 	const [pageIndex, setPageIndex] = useState(0);
@@ -316,6 +320,91 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 		dateRange.start.getTime() !== subDays(new Date(), 7).setHours(0, 0, 0, 0) ||
 		dateRange.end.getTime() !== new Date().setHours(23, 59, 59, 999);
 
+	const handleExport = async () => {
+		if (!apiKey) return;
+		setExporting(true);
+		setExportError(null);
+
+		try {
+			const params = new URLSearchParams();
+			params.append('startDate', dateRange.start.toISOString());
+			params.append('endDate', dateRange.end.toISOString());
+			if (statusFilter !== 'all') {
+				params.append('status', statusFilter);
+			}
+			if (riskLevelFilter !== 'all') {
+				params.append('riskLevel', riskLevelFilter);
+			}
+
+			const response = await fetch(`/api/analytics/exports/security-events?${params.toString()}`, {
+				headers: { 'X-API-KEY': apiKey },
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to export security events');
+			}
+
+			const payload = await response.json() as { fileName?: string; data?: any };
+			const fileName = payload.fileName || `security-events-${Date.now()}.json`;
+			const jsonData = JSON.stringify(payload.data ?? payload, null, 2);
+			const blob = new Blob([jsonData], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = fileName;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+		} catch (error) {
+			setExportError(error instanceof Error ? error.message : 'Unable to export security events');
+		} finally {
+			setExporting(false);
+		}
+	};
+
+	const handleExportEvent = async (event: SecurityEvent) => {
+		if (!apiKey) return;
+		setExportError(null);
+		setExportingEventId(event.id);
+
+		try {
+			const payload: Record<string, any> = {
+				exportedAt: new Date().toISOString(),
+				type: event.type,
+				summary: {
+					...event,
+					riskBreakdownParsed: event.riskBreakdown
+						? safeParseJson(event.riskBreakdown)
+						: null,
+				},
+			};
+
+			if (event.type === 'detection') {
+				const numericId = parseInt(event.id.split('-')[1], 10);
+				if (!isNaN(numericId)) {
+					const response = await fetch(`/api/analytics/validations/${numericId}`, {
+						headers: { 'X-API-KEY': apiKey },
+					});
+						if (response.ok) {
+							const data = await response.json() as { data?: unknown };
+							payload.detail = data.data ?? data;
+						}
+				}
+			} else if (event.blacklistEntry) {
+				payload.detail = event.blacklistEntry;
+			}
+
+			downloadJson(`security-event-${event.id}.json`, payload);
+		} catch (error) {
+			console.error('Error exporting security event:', error);
+			setExportError('Failed to export selected event');
+		} finally {
+			setExportingEventId(null);
+		}
+	};
+
 	const handleViewDetails = async (event: SecurityEvent) => {
 		if (event.type === 'detection') {
 			const numericId = parseInt(event.id.split('-')[1], 10);
@@ -358,14 +447,23 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 
 	return (
 		<Card>
-			<CardHeader>
-				<CardTitle>Security Events</CardTitle>
-				<CardDescription>
-					Recent threat detections and active enforcement. Shows {totalActiveBlocks} actively blocked{' '}
-					{totalActiveBlocks === 1 ? 'identity' : 'identities'} and {totalDetections} recent{' '}
-					{totalDetections === 1 ? 'detection' : 'detections'}.
-					Active blocks expire based on progressive timeouts (1h → 4h → 8h → 12h → 24h).
-				</CardDescription>
+			<CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<CardTitle>Security Events</CardTitle>
+					<CardDescription>
+						Recent threat detections and active enforcement. Shows {totalActiveBlocks} actively blocked{' '}
+						{totalActiveBlocks === 1 ? 'identity' : 'identities'} and {totalDetections} recent{' '}
+						{totalDetections === 1 ? 'detection' : 'detections'}.
+						Active blocks expire based on progressive timeouts (1h → 4h → 8h → 12h → 24h).
+					</CardDescription>
+				</div>
+				<button
+					onClick={handleExport}
+					disabled={exporting}
+					className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md border border-border bg-background hover:bg-accent disabled:opacity-60 disabled:cursor-not-allowed"
+				>
+					{exporting ? 'Exporting…' : 'Export JSON'}
+				</button>
 			</CardHeader>
 			<CardContent>
 				{/* Filters */}
@@ -420,6 +518,9 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 							</div>
 						)}
 					</div>
+					{exportError && (
+						<p className="text-xs text-destructive mt-2">{exportError}</p>
+					)}
 				</div>
 
 				{displayEvents.length === 0 ? (
@@ -462,14 +563,24 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 												{getDetectionTypeBadge(event.detectionType)}
 											</div>
 											{/* View Details Button - Top Right */}
-											<button
-												onClick={() => handleViewDetails(event)}
-												className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium flex-shrink-0"
-												title="View validation details"
-											>
-												<Eye size={14} />
-												<span>Details</span>
-											</button>
+											<div className="flex items-center gap-2">
+												<button
+													onClick={() => handleViewDetails(event)}
+													className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium flex-shrink-0"
+													title="View validation details"
+												>
+													<Eye size={14} />
+													<span>Details</span>
+												</button>
+												<button
+													onClick={() => handleExportEvent(event)}
+													disabled={exportingEventId === event.id}
+													className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-md text-xs font-medium hover:bg-accent disabled:opacity-60"
+													title="Export event JSON"
+												>
+													{exportingEventId === event.id ? 'Exporting…' : 'Export'}
+												</button>
+											</div>
 										</div>
 
 										{/* Main Info Grid */}
@@ -787,4 +898,15 @@ function getTriggerPillColor(trigger: string): string {
 
 	// Default color
 	return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+}
+
+function safeParseJson(raw?: string | null) {
+	if (!raw) {
+		return null;
+	}
+	try {
+		return JSON.parse(raw);
+	} catch (_err) {
+		return raw;
+	}
 }

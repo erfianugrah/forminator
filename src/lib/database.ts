@@ -14,6 +14,68 @@ function toSQLiteDateTime(date: Date): string {
 		.replace(/\.\d{3}Z$/, '');  // Remove milliseconds and Z
 }
 
+function normalizeISODate(input?: string | null): string | undefined {
+	if (!input) {
+		return undefined;
+	}
+	const date = new Date(input);
+	if (Number.isNaN(date.getTime())) {
+		return undefined;
+	}
+	return toSQLiteDateTime(date);
+}
+
+function buildDateClause(column: string, start?: string, end?: string) {
+	const clauses: string[] = [];
+	const bindings: Array<string> = [];
+
+	if (start) {
+		clauses.push(`${column} >= ?`);
+		bindings.push(start);
+	}
+	if (end) {
+		clauses.push(`${column} <= ?`);
+		bindings.push(end);
+	}
+
+	return {
+		clause: clauses.length > 0 ? ` AND ${clauses.join(' AND ')}` : '',
+		bindings,
+	};
+}
+
+export type RiskLevelFilter = 'low' | 'medium' | 'high' | 'critical';
+
+function buildRiskLevelClause(column: string, level?: RiskLevelFilter) {
+	if (!level) {
+		return { clause: '', bindings: [] as Array<number> };
+	}
+
+	let clause = '';
+	const bindings: number[] = [];
+
+	switch (level) {
+		case 'low':
+			clause = ` AND ${column} < ?`;
+			bindings.push(50);
+			break;
+		case 'medium':
+			clause = ` AND ${column} >= ? AND ${column} < ?`;
+			bindings.push(50, 70);
+			break;
+		case 'high':
+			clause = ` AND ${column} >= ? AND ${column} < ?`;
+			bindings.push(70, 90);
+			break;
+		case 'critical':
+			clause = ` AND ${column} >= ?`;
+			bindings.push(90);
+			break;
+	}
+
+	return { clause, bindings };
+}
+
 /**
  * Log Turnstile validation attempt to database
  */
@@ -1426,4 +1488,256 @@ export async function getValidationByErfid(db: D1Database, erfid: string) {
 		logger.error({ error, erfid }, 'Error fetching validation by erfid');
 		throw error;
 	}
+}
+
+export interface SecurityEventExportFilters {
+	startDate?: string;
+	endDate?: string;
+	status?: 'all' | 'active' | 'detection';
+	riskLevel?: RiskLevelFilter;
+	limit?: number;
+}
+
+export interface ValidationExportFilters {
+	startDate?: string;
+	endDate?: string;
+	limit?: number;
+}
+
+export async function exportSecurityEvents(db: D1Database, filters: SecurityEventExportFilters) {
+	const {
+		startDate,
+		endDate,
+		status = 'all',
+		riskLevel,
+		limit = 1000,
+	} = filters;
+
+	const normalizedLimit = Math.min(Math.max(limit, 1), 5000);
+	const start = normalizeISODate(startDate);
+	const end = normalizeISODate(endDate);
+
+	const includeActive = status === 'all' || status === 'active';
+	const includeDetections = status === 'all' || status === 'detection';
+
+	const [activeBlocks, detections] = await Promise.all([
+		includeActive ? exportActiveBlocks(db, { start, end, riskLevel, limit: normalizedLimit }) : Promise.resolve([]),
+		includeDetections ? exportDetectionEvents(db, { start, end, riskLevel, limit: normalizedLimit }) : Promise.resolve([]),
+	]);
+
+	return {
+		activeBlocks,
+		detections,
+	};
+}
+
+export async function exportValidations(db: D1Database, filters: ValidationExportFilters) {
+	const { startDate, endDate, limit = 1000 } = filters;
+	const normalizedLimit = Math.min(Math.max(limit, 1), 5000);
+	const start = normalizeISODate(startDate);
+	const end = normalizeISODate(endDate);
+	const { clause: dateClause, bindings: dateBindings } = buildDateClause('created_at', start, end);
+
+	const query = `
+		SELECT *,
+			REPLACE(created_at, ' ', 'T') || 'Z' AS iso_created_at
+		FROM turnstile_validations
+		WHERE 1 = 1
+		${dateClause}
+		ORDER BY created_at DESC
+		LIMIT ?
+	`;
+
+	const result = await db
+		.prepare(query)
+		.bind(...dateBindings, normalizedLimit)
+		.all();
+
+	return result.results;
+}
+
+async function exportActiveBlocks(
+	db: D1Database,
+	params: { start?: string; end?: string; riskLevel?: RiskLevelFilter; limit: number }
+) {
+	const { start, end, riskLevel, limit } = params;
+	const { clause: dateClause, bindings: dateBindings } = buildDateClause('fb.blocked_at', start, end);
+	const { clause: riskClause, bindings: riskBindings } = buildRiskLevelClause('risk_score_resolved', riskLevel);
+
+	const query = `
+		WITH annotated AS (
+			SELECT
+				fb.id,
+				fb.ephemeral_id,
+				COALESCE(fb.ip_address, tv.remote_ip) AS resolved_ip,
+				COALESCE(fb.ja4, tv.ja4) AS resolved_ja4,
+				tv.country,
+				tv.city,
+				fb.detection_type,
+				fb.detection_confidence,
+				fb.block_reason,
+				fb.risk_score,
+				fb.risk_score_breakdown,
+				tv.ja4_signals,
+				(SELECT COUNT(*)
+				 FROM fraud_blacklist
+				 WHERE (ephemeral_id = fb.ephemeral_id OR ip_address = fb.ip_address)
+				 AND blocked_at > datetime('now', '-24 hours')) as offense_count,
+				fb.blocked_at,
+				fb.expires_at,
+				fb.erfid,
+				fb.submission_count,
+				fb.last_seen_at,
+				fb.detection_metadata,
+				CASE fb.detection_confidence
+					WHEN 'high' THEN 100
+					WHEN 'medium' THEN 80
+					WHEN 'low' THEN 70
+					ELSE 50
+				END as fallback_risk_score
+			FROM fraud_blacklist fb
+			LEFT JOIN turnstile_validations tv ON tv.id = (
+				SELECT id FROM turnstile_validations
+				WHERE (fb.ephemeral_id IS NOT NULL AND ephemeral_id = fb.ephemeral_id)
+				   OR (fb.ip_address IS NOT NULL AND remote_ip = fb.ip_address)
+				ORDER BY created_at DESC
+				LIMIT 1
+			)
+			WHERE fb.expires_at > datetime('now')
+			${dateClause}
+		),
+		enriched AS (
+			SELECT
+				id,
+				ephemeral_id,
+				resolved_ip AS ip_address,
+				resolved_ja4 AS ja4,
+				country,
+				city,
+				detection_type,
+				detection_confidence,
+				block_reason,
+				risk_score,
+				COALESCE(risk_score, fallback_risk_score) AS risk_score_resolved,
+				risk_score_breakdown,
+				ja4_signals,
+				offense_count,
+				REPLACE(blocked_at, ' ', 'T') || 'Z' AS blocked_at_iso,
+				REPLACE(expires_at, ' ', 'T') || 'Z' AS expires_at_iso,
+				erfid,
+				submission_count,
+				REPLACE(last_seen_at, ' ', 'T') || 'Z' AS last_seen_at_iso,
+				detection_metadata
+			FROM annotated
+		)
+		SELECT
+			id,
+			ephemeral_id,
+			ip_address,
+			ja4,
+			country,
+			city,
+			detection_type,
+			detection_confidence,
+			block_reason,
+			risk_score_resolved AS risk_score,
+			risk_score_breakdown,
+			ja4_signals,
+			offense_count,
+			blocked_at_iso AS blocked_at,
+			expires_at_iso AS expires_at,
+			erfid,
+			submission_count,
+			last_seen_at_iso AS last_seen_at,
+			detection_metadata,
+			blocked_at_iso AS timestamp
+		FROM enriched
+		WHERE 1 = 1
+		${riskClause}
+		ORDER BY blocked_at_iso DESC
+		LIMIT ?
+	`;
+
+	const result = await db
+		.prepare(query)
+		.bind(...dateBindings, ...riskBindings, limit)
+		.all();
+
+	return result.results;
+}
+
+async function exportDetectionEvents(
+	db: D1Database,
+	params: { start?: string; end?: string; riskLevel?: RiskLevelFilter; limit: number }
+) {
+	const { start, end, riskLevel, limit } = params;
+
+	const validationDate = buildDateClause('created_at', start, end);
+	const validationRisk = buildRiskLevelClause('COALESCE(risk_score, 0)', riskLevel);
+	const fraudBlockDate = buildDateClause('created_at', start, end);
+	const fraudBlockRisk = buildRiskLevelClause('COALESCE(risk_score, 0)', riskLevel);
+
+	const query = `
+		SELECT *
+		FROM (
+			SELECT
+				id,
+				ephemeral_id,
+				remote_ip AS ip_address,
+				country,
+				city,
+				block_reason,
+				detection_type,
+				risk_score,
+				risk_score_breakdown,
+				bot_score,
+				user_agent,
+				ja4,
+				erfid,
+				REPLACE(created_at, ' ', 'T') || 'Z' AS timestamp,
+				'validation' as source,
+				created_at
+			FROM turnstile_validations
+			WHERE allowed = 0
+			${validationDate.clause}
+			${validationRisk.clause}
+
+			UNION ALL
+
+			SELECT
+				id,
+				NULL as ephemeral_id,
+				remote_ip AS ip_address,
+				country,
+				NULL as city,
+				block_reason,
+				detection_type,
+				risk_score,
+				NULL as risk_score_breakdown,
+				NULL as bot_score,
+				user_agent,
+				NULL as ja4,
+				erfid,
+				REPLACE(created_at, ' ', 'T') || 'Z' AS timestamp,
+				'fraud_block' as source,
+				created_at
+			FROM fraud_blocks
+			WHERE 1 = 1
+			${fraudBlockDate.clause}
+			${fraudBlockRisk.clause}
+		)
+		ORDER BY created_at DESC
+		LIMIT ?
+	`;
+
+	const bindings = [
+		...validationDate.bindings,
+		...validationRisk.bindings,
+		...fraudBlockDate.bindings,
+		...fraudBlockRisk.bindings,
+		limit,
+	];
+
+	const result = await db.prepare(query).bind(...bindings).all();
+	return result.results;
 }

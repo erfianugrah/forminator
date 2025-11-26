@@ -37,6 +37,15 @@ Controls overall risk scoring and blocking behavior.
   - `70`: Balanced (recommended default)
   - `80`: Strict (may have false positives)
 
+#### `risk.mode` (default: `defensive`)
+
+| Mode | Description |
+|------|-------------|
+| `defensive` | Deterministic triggers (token replay, duplicate email, Layer 2/3 thresholds, JA4 session hopping, repeat offenders) can force the normalized score up to `blockThreshold` once their paired condition is also met (e.g., high JA4 score **and** elevated IP velocity). Keeps the “multi-signal” promise while still blocking obvious abuse instantly. |
+| `additive` | All ten components remain purely additive. Even if a deterministic layer spikes, the request is only blocked when the weighted total ≥ `blockThreshold`. Use this for QA or load tests when you want to observe risk without hard blocks. |
+
+> **Tip:** Flip staging to `additive` while testing a new detector, then switch back to `defensive` before deploying so production re-enables the deterministic guardrails.
+
 #### `risk.levels` (default: `{low: {min: 0, max: 39}, medium: {min: 40, max: 69}, high: {min: 70, max: 100}}`)
 
 - **Type**: Object with min/max ranges

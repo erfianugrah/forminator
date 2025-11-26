@@ -12,6 +12,7 @@ import { subDays } from 'date-fns';
 import type { CountryData } from '../../../hooks/useAnalytics';
 import type { Submission } from '../../../hooks/useSubmissions';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
+import { downloadJson } from '../../../lib/download';
 
 interface RecentSubmissionsSectionProps {
 	submissions: Submission[];
@@ -41,6 +42,7 @@ interface RecentSubmissionsSectionProps {
 	onPaginationChange: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => void;
 	sorting: SortingState;
 	onSortingChange: (updater: SortingState | ((old: SortingState) => SortingState)) => void;
+	apiKey: string;
 }
 
 export function RecentSubmissionsSection({
@@ -65,16 +67,113 @@ export function RecentSubmissionsSection({
 	onPaginationChange,
 	sorting,
 	onSortingChange,
+	apiKey,
 }: RecentSubmissionsSectionProps) {
-	const columns = createSubmissionColumns(onLoadDetail);
+	const [exportingAll, setExportingAll] = useState(false);
+	const [exportingSubmissionId, setExportingSubmissionId] = useState<number | null>(null);
+	const [exportError, setExportError] = useState<string | null>(null);
+	const columns = createSubmissionColumns(onLoadDetail, handleExportSubmission, exportingSubmissionId);
+
+	async function handleExportSubmission(submissionId: number) {
+		if (!apiKey) return;
+		setExportError(null);
+		setExportingSubmissionId(submissionId);
+		try {
+			const response = await fetch(`/api/analytics/submissions/${submissionId}`, {
+				headers: { 'X-API-KEY': apiKey },
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to export submission');
+			}
+
+			const data = await response.json() as { data?: unknown };
+			downloadJson(`submission-${submissionId}.json`, {
+				exportedAt: new Date().toISOString(),
+				data: data.data ?? data,
+			});
+		} catch (error) {
+			console.error('Error exporting submission:', error);
+			setExportError('Unable to export submission JSON');
+		} finally {
+			setExportingSubmissionId(null);
+		}
+	}
+
+	async function handleExportAllSubmissions() {
+		if (!apiKey) return;
+		setExportError(null);
+		setExportingAll(true);
+
+		try {
+			const params = new URLSearchParams();
+			params.append('format', 'json');
+			if (sorting.length > 0) {
+				params.append('sortBy', sorting[0].id);
+				params.append('sortOrder', sorting[0].desc ? 'desc' : 'asc');
+			}
+			if (searchQuery.trim()) {
+				params.append('search', searchQuery.trim());
+			}
+			if (selectedCountries.length > 0) {
+				params.append('countries', selectedCountries.join(','));
+			}
+			if (botScoreRange[0] !== 0 || botScoreRange[1] !== 100) {
+				params.append('botScoreMin', botScoreRange[0].toString());
+				params.append('botScoreMax', botScoreRange[1].toString());
+			}
+			params.append('startDate', dateRange.start.toISOString());
+			params.append('endDate', dateRange.end.toISOString());
+			if (allowedStatus !== 'all') {
+				params.append('allowed', allowedStatus === 'allowed' ? 'true' : 'false');
+			}
+			if (fingerprintFlags.headerReuse) params.append('fingerprintHeader', 'true');
+			if (fingerprintFlags.tlsAnomaly) params.append('fingerprintTls', 'true');
+			if (fingerprintFlags.latencyMismatch) params.append('fingerprintLatency', 'true');
+
+			const response = await fetch(`/api/analytics/export?${params.toString()}`, {
+				headers: { 'X-API-KEY': apiKey },
+			});
+
+				if (!response.ok) {
+					const errorPayload = await response.json().catch(() => null) as { message?: string } | null;
+					throw new Error(errorPayload?.message || 'Failed to export submissions');
+				}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			const fileName = `submissions-export-${new Date().toISOString().split('T')[0]}.json`;
+			link.download = fileName;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('Error exporting submissions:', error);
+			setExportError('Unable to export submissions JSON');
+		} finally {
+			setExportingAll(false);
+		}
+	}
 
 	return (
 		<Card>
-			<CardHeader>
-				<CardTitle>Recent Submissions</CardTitle>
-				<CardDescription>
-					Search and filter form submissions (click row for full details)
-				</CardDescription>
+			<CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<CardTitle>Recent Submissions</CardTitle>
+					<CardDescription>
+						Search and filter form submissions (click row for full details)
+					</CardDescription>
+				</div>
+				<button
+					onClick={handleExportAllSubmissions}
+					disabled={exportingAll}
+					className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md border border-border bg-background hover:bg-accent disabled:opacity-60 disabled:cursor-not-allowed"
+				>
+					{exportingAll ? 'Exporting…' : 'Export JSON'}
+				</button>
 			</CardHeader>
 			<CardContent className="space-y-6">
 				{/* Risk Score Info */}
@@ -143,6 +242,9 @@ export function RecentSubmissionsSection({
 						</label>
 					</div>
 				</div>
+				{exportError && (
+					<p className="text-xs text-destructive -mt-2">{exportError}</p>
+				)}
 
 				{/* Data Table */}
 				{loading ? (

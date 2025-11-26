@@ -20,6 +20,8 @@ interface LatencyStats {
 	rtt?: number;
 	platform?: string;
 	deviceType?: string;
+	claimedMobile?: boolean;
+	suspectAsn?: boolean;
 }
 
 export interface FingerprintSignalsResult {
@@ -64,9 +66,7 @@ function isMobileClaim(metadata: RequestMetadata, config: FraudDetectionConfig):
 	);
 }
 
-function selectTrigger(
-	results: FingerprintSignalsResult
-): FingerprintSignalsResult {
+function selectTrigger(results: FingerprintSignalsResult): FingerprintSignalsResult {
 	const candidates: Array<{ score: number; trigger: FingerprintTrigger; detectionType: string }> = [];
 	if (results.headerFingerprintScore > 0) {
 		candidates.push({
@@ -80,13 +80,6 @@ function selectTrigger(
 			score: results.tlsAnomalyScore,
 			trigger: 'tls_anomaly',
 			detectionType: 'tls_fingerprint_anomaly',
-		});
-	}
-	if (results.latencyMismatchScore > 0) {
-		candidates.push({
-			score: results.latencyMismatchScore,
-			trigger: 'latency_mismatch',
-			detectionType: 'latency_mismatch',
 		});
 	}
 
@@ -121,17 +114,32 @@ export async function collectFingerprintSignals(
 			const { windowMinutes, minRequests, minDistinctIps, minDistinctJa4 } = config.fingerprint.headerReuse;
 			const stats = await db
 				.prepare(
-					`SELECT
+					`WITH fp_samples AS (
+						SELECT remote_ip, ja4
+						FROM submissions
+						WHERE request_headers IS NOT NULL
+							AND extended_metadata IS NOT NULL
+							AND json_extract(extended_metadata, '$.headersFingerprint') = ?
+							AND created_at > datetime('now', ?)
+						UNION ALL
+						SELECT remote_ip, ja4
+						FROM turnstile_validations
+						WHERE extended_metadata IS NOT NULL
+							AND json_extract(extended_metadata, '$.headersFingerprint') = ?
+							AND created_at > datetime('now', ?)
+					)
+					SELECT
 						COUNT(*) as total,
 						COUNT(DISTINCT remote_ip) as ip_count,
 						COUNT(DISTINCT ja4) as ja4_count
-					FROM submissions
-					WHERE request_headers IS NOT NULL
-						AND extended_metadata IS NOT NULL
-						AND json_extract(extended_metadata, '$.headersFingerprint') = ?
-						AND created_at > datetime('now', ?)`
+					FROM fp_samples`
 				)
-				.bind(metadata.headersFingerprint, `-${windowMinutes} minutes`)
+				.bind(
+					metadata.headersFingerprint,
+					`-${windowMinutes} minutes`,
+					metadata.headersFingerprint,
+					`-${windowMinutes} minutes`
+				)
 				.first<{ total: number | null; ip_count: number | null; ja4_count: number | null }>();
 
 			const total = stats?.total ?? 0;
@@ -160,38 +168,58 @@ export async function collectFingerprintSignals(
 		// ---------------------------------------------------------------------
 		const tlsFingerprintKey = metadata.tlsClientExtensionsSha1;
 		if (metadata.ja4 && tlsFingerprintKey) {
-			const { baselineHours, minJa4Observations } = config.fingerprint.tlsAnomaly;
-			const window = `-${baselineHours} hours`;
+				const { baselineHours, minJa4Observations } = config.fingerprint.tlsAnomaly;
+				const window = `-${baselineHours} hours`;
 
-			const baselineKnown = await isFingerprintBaselineKnown(db, 'tls', tlsFingerprintKey, metadata.ja4, metadata.asn);
+				const baselineKnown = await isFingerprintBaselineKnown(db, 'tls', tlsFingerprintKey, metadata.ja4, metadata.asn);
 
-			if (baselineKnown) {
-				details.tlsAnomaly = { ja4Count: -1, pairCount: 1 };
-			} else {
-				const ja4CountResult = await db
-					.prepare(
-						`SELECT COUNT(*) as count
-						FROM submissions
-						WHERE ja4 = ?
-							AND created_at > datetime('now', ?)`
-					)
-					.bind(metadata.ja4, window)
-					.first<{ count: number | null }>();
+				if (baselineKnown) {
+					details.tlsAnomaly = { ja4Count: -1, pairCount: 1 };
+				} else {
+					const ja4CountResult = await db
+						.prepare(
+							`WITH ja4_samples AS (
+								SELECT ja4
+								FROM submissions
+								WHERE ja4 = ?
+									AND created_at > datetime('now', ?)
+								UNION ALL
+								SELECT ja4
+								FROM turnstile_validations
+								WHERE ja4 = ?
+									AND created_at > datetime('now', ?)
+							)
+							SELECT COUNT(*) as count
+							FROM ja4_samples`
+						)
+						.bind(metadata.ja4, window, metadata.ja4, window)
+						.first<{ count: number | null }>();
 
 				const ja4Count = ja4CountResult?.count ?? 0;
 
-				if (ja4Count >= minJa4Observations) {
-					const pairResult = await db
-						.prepare(
-							`SELECT COUNT(*) as count
-							FROM submissions
-							WHERE ja4 = ?
-								AND extended_metadata IS NOT NULL
-								AND json_extract(extended_metadata, '$.tlsClientExtensionsSha1') = ?
-								AND created_at > datetime('now', ?)`
-						)
-						.bind(metadata.ja4, tlsFingerprintKey, window)
-						.first<{ count: number | null }>();
+					if (ja4Count >= minJa4Observations) {
+						const pairResult = await db
+							.prepare(
+								`WITH tls_pairs AS (
+									SELECT ja4
+									FROM submissions
+									WHERE ja4 = ?
+										AND extended_metadata IS NOT NULL
+										AND json_extract(extended_metadata, '$.tlsClientExtensionsSha1') = ?
+										AND created_at > datetime('now', ?)
+									UNION ALL
+									SELECT ja4
+									FROM turnstile_validations
+									WHERE ja4 = ?
+										AND extended_metadata IS NOT NULL
+										AND json_extract(extended_metadata, '$.tlsClientExtensionsSha1') = ?
+										AND created_at > datetime('now', ?)
+								)
+								SELECT COUNT(*) as count
+								FROM tls_pairs`
+							)
+							.bind(metadata.ja4, tlsFingerprintKey, window, metadata.ja4, tlsFingerprintKey, window)
+							.first<{ count: number | null }>();
 
 					const pairCount = pairResult?.count ?? 0;
 					details.tlsAnomaly = { ja4Count, pairCount };
@@ -214,10 +242,10 @@ export async function collectFingerprintSignals(
 		const rtt = metadata.clientTcpRtt;
 		const platform = normalizeHint(metadata.clientHints?.platform);
 		const deviceType = metadata.deviceType;
+		const mobileClaim = isMobileClaim(metadata, config);
+		const datacenterAsns = config.fingerprint.datacenterAsns.map((asn) => Number(asn));
+		const suspectAsn = typeof metadata.asn === 'number' ? datacenterAsns.includes(metadata.asn) : false;
 		if (typeof rtt === 'number' && rtt >= 0) {
-			const mobileClaim = isMobileClaim(metadata, config);
-			const datacenterAsns = config.fingerprint.datacenterAsns.map((asn) => Number(asn));
-			const suspectAsn = typeof metadata.asn === 'number' ? datacenterAsns.includes(metadata.asn) : false;
 			if (
 				mobileClaim &&
 				rtt <= config.fingerprint.latency.mobileRttThresholdMs &&
@@ -229,7 +257,7 @@ export async function collectFingerprintSignals(
 				);
 			}
 		}
-		details.latency = { rtt, platform, deviceType };
+		details.latency = { rtt, platform, deviceType, claimedMobile: mobileClaim, suspectAsn };
 
 		const result: FingerprintSignalsResult = selectTrigger({
 			headerFingerprintScore,

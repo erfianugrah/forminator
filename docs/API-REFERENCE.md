@@ -1469,6 +1469,10 @@ X-API-KEY: your_api_key_here
 | hasJa3 | boolean | No | Filter by JA3 presence | true, false |
 | hasJa4 | boolean | No | Filter by JA4 presence | true, false |
 | search | string | No | Search in email/name/address | any string |
+| allowed | string | No | Filter by decision | `true`, `false`, `all` (default `all`) |
+| fingerprintHeader | boolean | No | Only submissions flagged for header reuse | true, false |
+| fingerprintTls | boolean | No | Only submissions flagged for TLS anomaly | true, false |
+| fingerprintLatency | boolean | No | Only submissions flagged for latency mismatch | true, false |
 
 **Body:** None
 
@@ -1516,6 +1520,111 @@ id,first_name,last_name,email,phone,address,date_of_birth,country,bot_score,crea
   "success": false,
   "error": "Invalid format",
   "message": "Format must be either \"csv\" or \"json\""
+}
+```
+
+---
+
+### GET /api/analytics/exports/security-events
+
+Download the current active blacklist entries and the most recent blocked validations (post- and pre-Turnstile) as JSON. Respects the same X-API-KEY middleware as the rest of the analytics routes.
+
+**Headers:**
+```
+X-API-KEY: your_api_key_here
+```
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description | Valid Values |
+|-----------|------|----------|-------------|--------------|
+| startDate | string | No | Filter events created after this ISO timestamp | `YYYY-MM-DDTHH:mm:ss.sssZ` |
+| endDate | string | No | Filter events created before this ISO timestamp | `YYYY-MM-DDTHH:mm:ss.sssZ` |
+| status | string | No | Filter by row type | `all` (default), `active`, `detection` |
+| riskLevel | string | No | Filter by resolved risk score | `low`, `medium`, `high`, `critical` |
+| limit | number | No | Maximum rows per section (1-5000, default 1000) | `500` |
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "fileName": "security-events-1732646400000.json",
+  "generatedAt": "2025-11-26T09:45:00.000Z",
+  "filters": {
+    "startDate": "2025-11-26T09:00:00.000Z",
+    "endDate": "2025-11-26T10:00:00.000Z",
+    "status": "all",
+    "riskLevel": "high",
+    "limit": 500
+  },
+  "data": {
+    "activeBlocks": [
+      {
+        "id": 123,
+        "ephemeral_id": "b:....",
+        "block_reason": "Risk score 82 >= 70. Triggers: Email: simple, ...",
+        "risk_score": 82,
+        "detection_type": "ephemeral_id_tracking",
+        "expires_at": "2025-11-26T13:15:00Z"
+      }
+    ],
+    "detections": [
+      {
+        "id": 987,
+        "ip_address": "203.0.113.4",
+        "block_reason": "Risk score 75 >= 70. Triggers: JA4 ..., IP rate limit ...",
+        "risk_score": 75,
+        "source": "validation"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### GET /api/analytics/exports/validations
+
+Export the raw `turnstile_validations` rows (allowed and blocked) as JSON for deeper analysis or long-term archival.
+
+**Headers:**
+```
+X-API-KEY: your_api_key_here
+```
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description | Valid Values |
+|-----------|------|----------|-------------|--------------|
+| startDate | string | No | Start of the window (ISO-8601) | `YYYY-MM-DDTHH:mm:ss.sssZ` |
+| endDate | string | No | End of the window (ISO-8601) | `YYYY-MM-DDTHH:mm:ss.sssZ` |
+| limit | number | No | Row cap (1-5000, default 1000) | `2500` |
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "fileName": "validations-1732646400000.json",
+  "generatedAt": "2025-11-26T09:45:00.000Z",
+  "filters": {
+    "startDate": "2025-11-26T09:00:00.000Z",
+    "endDate": "2025-11-26T10:00:00.000Z",
+    "limit": 1000
+  },
+  "data": [
+    {
+      "id": 1,
+      "token_hash": "abc123...",
+      "success": false,
+      "allowed": false,
+      "block_reason": "Risk score 78 >= 70. Triggers: Email: dated, ...",
+      "risk_score": 78,
+      "detection_type": "email_fraud_detection",
+      "remote_ip": "198.51.100.10",
+      "ja4": "q1....",
+      "created_at": "2025-11-26 09:12:44"
+    }
+  ]
 }
 ```
 

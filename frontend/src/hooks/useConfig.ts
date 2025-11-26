@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
  */
 export interface FraudDetectionConfig {
 	risk: {
+		mode: 'additive' | 'defensive';
 		blockThreshold: number;
 		levels: {
 			low: { min: number; max: number };
@@ -76,6 +77,7 @@ export interface FraudDetectionConfig {
  */
 const DEFAULT_CONFIG: FraudDetectionConfig = {
 	risk: {
+		mode: 'defensive',
 		blockThreshold: 70,
 		levels: {
 			low: { min: 0, max: 39 },

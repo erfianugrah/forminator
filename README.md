@@ -188,6 +188,15 @@ Processing flow:
 10. Apply progressive timeouts + blacklist writes for blocked attempts, otherwise insert the submission with risk breakdown + raw payload metadata
 11. Log every validation (allowed or blocked) with `erfid`, detection type, and normalized component scores for analytics dashboards
 
+#### Risk modes & deterministic blockers
+
+The scorer now supports two modes, configured via `risk.mode`:
+
+- **`defensive` (default)** – deterministic triggers (token replay, duplicate email, Layer 2/3 thresholds, JA4 session hopping, repeat offenders) can override the additive total once their paired condition also fires (e.g., high JA4 score **and** elevated IP velocity). This keeps the “multi-signal” guarantee but still blocks obvious abuse immediately.
+- **`additive`** – every component remains purely additive. Even when Layer 2/3 spikes, the request is only blocked if the weighted total ≥ block threshold. Use this for QA or lab environments.
+
+Every block reason logged to `turnstile_validations`/`fraud_blacklist` includes the component explanations plus a note when a repeat offender short-circuit was applied.
+
 ### Analytics (Protected with X-API-KEY header)
 
 **GET /api/analytics/stats**
@@ -321,18 +330,23 @@ Service health check.
 
 **Layer 2: Ephemeral ID Fraud Detection**
 - Tracks same device across a few days without cookies
-- 2+ submissions in 24h window: Block immediately
-- Detects repeat registration attempts
+- Defensive mode: 2+ submissions in 24h block immediately; additive mode just boosts the risk score
+- Detects repeat registration attempts without requiring cookies
 
 **Layer 3: Validation Frequency Monitoring**
-- 3+ validation attempts in 1h: Block immediately
+- Defensive mode: 3+ validation attempts in 1h block immediately; additive mode treats them as high risk while still allowing
 - 2 validation attempts in 1h: High risk (allows one retry)
 - Catches rapid-fire attacks before D1 replication lag
+
+**Layer 3.5: Repeat Offender Memory**
+- Any detection type that blocked in the last 30 minutes for the same email/ephemeral/IP will immediately block again
+- Prevents attackers from oscillating between “allowed” and “blocked” states across attempts
 
 **Layer 4: JA4 Session Hopping Detection (3 sub-layers)**
 - **4a: IP Clustering (1h)**: Same subnet + same JA4 + 2+ ephemeral IDs
 - **4b: Rapid Global (5min)**: Same JA4 + 3+ ephemeral IDs globally
 - **4c: Extended Global (1h)**: Same JA4 + 5+ ephemeral IDs globally
+- Defensive mode only blocks when the JA4 spike is paired with abnormal velocity/IP rate; reusing the exact same ephemeral ID no longer counts as “+1”
 - Detects incognito mode/browser hopping attacks
 - TLS fingerprint-based device tracking
 
@@ -446,3 +460,14 @@ wrangler deploy
 ## License
 
 MIT
+### Using Forminator with your own frontend
+
+You can deploy the Worker as a backend-only service and point any form at the `/api/submissions` endpoint. Set `DISABLE_STATIC_ASSETS=true` (or remove the `assets` binding) to disable the bundled Astro UI, configure `ALLOWED_ORIGINS` with your domains, and follow the [backend-only guide](docs/backend-only.md) for deployment + integration details. The Worker continues to expose:
+
+- `POST /api/submissions` — Turnstile + fraud detection pipeline (returns `erfid`, 4xx errors with `retryAfter` metadata, etc.)
+- `GET /api/config` — The effective fraud config for client-side widgets.
+- `GET /api/analytics/*` — All analytics endpoints (require `X-API-KEY`).
+
+This repo’s Astro form remains as a demo, but standalone deployments only need the Worker + Turnstile keys.
+
+> Tip: grab the ready-made fetch helper in [`clients/forminator-client.ts`](clients/forminator-client.ts) so your own UI can submit and surface rate-limit errors without reimplementing the response parsing.

@@ -244,7 +244,8 @@ async function getOffenseCount(remoteIp: string, db: D1Database): Promise<number
 async function analyzeJA4Clustering(
 	remoteIp: string,
 	ja4: string,
-	db: D1Database
+	db: D1Database,
+	currentEphemeralId?: string | null
 ): Promise<ClusteringAnalysis | null> {
 	const oneHourAgo = toSQLiteDateTime(new Date(Date.now() - 60 * 60 * 1000));
 
@@ -285,8 +286,17 @@ async function analyzeJA4Clustering(
 		}
 
 		// Count unique ephemeral IDs from same network
-		const uniqueEphemeralIds = new Set(sameNetwork.map(r => r.ephemeral_id));
-		const ephemeralCount = uniqueEphemeralIds.size + 1; // +1 for current submission
+		const uniqueEphemeralIds = new Set(
+			sameNetwork
+				.map(r => r.ephemeral_id)
+				.filter((value): value is string => typeof value === 'string' && value.length > 0)
+		);
+		const currentEphemeral = currentEphemeralId || null;
+		const hasCurrentEphemeral = currentEphemeral ? uniqueEphemeralIds.has(currentEphemeral) : false;
+		const ephemeralCount = Math.max(
+			1,
+			uniqueEphemeralIds.size + (hasCurrentEphemeral ? 0 : 1)
+		);
 
 		// Calculate time span
 		const timestamps = sameNetwork.map(r => new Date(r.created_at.replace(' ', 'T') + 'Z').getTime());
@@ -322,7 +332,8 @@ async function analyzeJA4Clustering(
 async function analyzeJA4GlobalClustering(
 	ja4: string,
 	db: D1Database,
-	timeWindowMinutes: number
+	timeWindowMinutes: number,
+	currentEphemeralId?: string | null
 ): Promise<ClusteringAnalysis | null> {
 	const timeAgo = toSQLiteDateTime(
 		new Date(Date.now() - timeWindowMinutes * 60 * 1000)
@@ -356,8 +367,17 @@ async function analyzeJA4GlobalClustering(
 		}
 
 		// Count unique ephemeral IDs globally (across all IPs)
-		const uniqueEphemeralIds = new Set(results.results.map(r => r.ephemeral_id));
-		const ephemeralCount = uniqueEphemeralIds.size + 1; // +1 for current
+		const uniqueEphemeralIds = new Set(
+			results.results
+				.map(r => r.ephemeral_id)
+				.filter((value): value is string => typeof value === 'string' && value.length > 0)
+		);
+		const currentEphemeral = currentEphemeralId || null;
+		const hasCurrentEphemeral = currentEphemeral ? uniqueEphemeralIds.has(currentEphemeral) : false;
+		const ephemeralCount = Math.max(
+			1,
+			uniqueEphemeralIds.size + (hasCurrentEphemeral ? 0 : 1)
+		);
 
 		// Calculate time span
 		const timestamps = results.results.map(
@@ -662,7 +682,7 @@ export async function collectJA4Signals(
 
 	try {
 		// Layer 4a: JA4 + IP Clustering (same IP/subnet + same JA4)
-		const clusteringIP = await analyzeJA4Clustering(remoteIp, ja4, db);
+		const clusteringIP = await analyzeJA4Clustering(remoteIp, ja4, db, ephemeralId);
 
 		if (clusteringIP && clusteringIP.ephemeralCount >= config.detection.ja4Clustering.ipClusteringThreshold) {
 			const velocity = analyzeVelocity(clusteringIP, config);
@@ -699,7 +719,8 @@ export async function collectJA4Signals(
 		const clusteringRapid = await analyzeJA4GlobalClustering(
 			ja4,
 			db,
-			config.detection.ja4Clustering.rapidGlobalWindowMinutes
+			config.detection.ja4Clustering.rapidGlobalWindowMinutes,
+			ephemeralId
 		);
 
 		if (clusteringRapid && clusteringRapid.ephemeralCount >= config.detection.ja4Clustering.rapidGlobalThreshold) {
@@ -737,7 +758,8 @@ export async function collectJA4Signals(
 		const clusteringExtended = await analyzeJA4GlobalClustering(
 			ja4,
 			db,
-			config.detection.ja4Clustering.extendedGlobalWindowMinutes
+			config.detection.ja4Clustering.extendedGlobalWindowMinutes,
+			ephemeralId
 		);
 
 		if (clusteringExtended && clusteringExtended.ephemeralCount >= config.detection.ja4Clustering.extendedGlobalThreshold) {
@@ -847,7 +869,7 @@ export async function checkJA4FraudPatterns(
 
 	try {
 		// Layer 4a: JA4 + IP Clustering (same IP/subnet + same JA4)
-		const clusteringIP = await analyzeJA4Clustering(remoteIp, ja4, db);
+		const clusteringIP = await analyzeJA4Clustering(remoteIp, ja4, db, ephemeralId);
 
 		if (clusteringIP && clusteringIP.ephemeralCount >= config.detection.ja4Clustering.ipClusteringThreshold) {
 			logger.info({ remoteIp, ja4, ephemeralCount: clusteringIP.ephemeralCount }, 'Layer 4a: IP clustering detected');
@@ -895,7 +917,12 @@ export async function checkJA4FraudPatterns(
 		}
 
 		// Layer 4b: JA4 + Rapid Global Clustering (5 min, 3+ ephemeral IDs, NO IP filter)
-		const clusteringRapid = await analyzeJA4GlobalClustering(ja4, db, config.detection.ja4Clustering.rapidGlobalWindowMinutes);
+		const clusteringRapid = await analyzeJA4GlobalClustering(
+			ja4,
+			db,
+			config.detection.ja4Clustering.rapidGlobalWindowMinutes,
+			ephemeralId
+		);
 
 		if (clusteringRapid && clusteringRapid.ephemeralCount >= config.detection.ja4Clustering.rapidGlobalThreshold) {
 			logger.info({ remoteIp, ja4, ephemeralCount: clusteringRapid.ephemeralCount }, 'Layer 4b: Rapid global clustering detected');
@@ -943,7 +970,12 @@ export async function checkJA4FraudPatterns(
 		}
 
 		// Layer 4c: JA4 + Extended Global Clustering (1 hour, 5+ ephemeral IDs, NO IP filter)
-		const clusteringExtended = await analyzeJA4GlobalClustering(ja4, db, config.detection.ja4Clustering.extendedGlobalWindowMinutes);
+		const clusteringExtended = await analyzeJA4GlobalClustering(
+			ja4,
+			db,
+			config.detection.ja4Clustering.extendedGlobalWindowMinutes,
+			ephemeralId
+		);
 
 		if (clusteringExtended && clusteringExtended.ephemeralCount >= config.detection.ja4Clustering.extendedGlobalThreshold) {
 			logger.info({ remoteIp, ja4, ephemeralCount: clusteringExtended.ephemeralCount }, 'Layer 4c: Extended global clustering detected');

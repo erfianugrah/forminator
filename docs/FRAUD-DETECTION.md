@@ -377,6 +377,7 @@ Mitigation: Adds `ephemeral_id` to blacklist with progressive timeout.
 TLS fingerprinting to detect attacks bypassing ephemeral ID tracking by opening incognito/private windows or switching browsers.
 
 JA4 fingerprint tracks the TLS client (browser + OS) which doesn't change when cookies are cleared or incognito mode is used.
+Only **new** ephemeral IDs observed in the query window count toward the clustering thresholds—reusing the same Turnstile session no longer increments the total, so legitimate users resubmitting from the same tab won't be flagged as “two fingerprints.”
 
 **Implementation** (`src/lib/ja4-fraud-detection.ts`):
 
@@ -947,6 +948,13 @@ await addToBlacklist(db, {
   detectionType: 'ephemeral_id_fraud'
 });
 ```
+
+### Layer 3.5: Repeat Offender Memory
+
+Even if the additive score stays below `risk.blockThreshold`, Forminator now remembers when a specific detection type (email fraud, JA4 hopping, duplicate email, etc.) blocked a user in the last 30 minutes. Any subsequent submission that hits the same detection type with matching identifiers (email, `ephemeral_id`, or IP) immediately sets `blockTrigger = 'repeat_offender'` and bumps the final score above the threshold (unless `risk.mode` is set to `additive`).
+
+- **Implementation**: `hasRecentBlock()` in `src/routes/submissions.ts` queries `fraud_blacklist` for the last 30 minutes.
+- **Reasoning**: Attackers often alternate between “allowed” and “blocked” attempts to stay below 70. The memory layer short-circuits that loop without waiting for the cumulative score to climb again.
 
 Ephemeral IDs have a few days lifespan. The 24h maximum timeout respects this rotation period while making attacks impractical for attackers and minimizing impact on legitimate users.
 

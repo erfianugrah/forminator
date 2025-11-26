@@ -120,8 +120,20 @@ app.all('*', async (c) => {
 		}
 	}
 
-	// No route matched - serve static assets from Astro build
-	return c.env.ASSETS.fetch(c.req.raw);
+	// No route matched - serve static assets if enabled, otherwise 404
+	const assetsDisabled = c.env.DISABLE_STATIC_ASSETS === 'true';
+	if (!assetsDisabled && c.env.ASSETS) {
+		return c.env.ASSETS.fetch(c.req.raw);
+	}
+
+	return c.json(
+		{
+			error: 'Not Found',
+			message: 'Route not defined. Enable static assets or point your frontend at the documented API routes.',
+			docs: 'https://github.com/erfi-forminator/forminator/blob/main/docs/backend-only.md',
+		},
+		404
+	);
 });
 
 export default app;

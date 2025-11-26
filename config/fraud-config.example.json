@@ -1,5 +1,6 @@
 {
   "risk": {
+    "mode": "defensive",
     "blockThreshold": 70,
     "levels": {
       "low": {

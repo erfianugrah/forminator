@@ -381,6 +381,7 @@ export default function AnalyticsDashboard() {
 						onPaginationChange={setPagination}
 						sorting={sorting}
 						onSortingChange={setSorting}
+						apiKey={apiKey}
 					/>
 				</Suspense>
 

@@ -1,10 +1,12 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Submission } from '../../../hooks/useSubmissions';
 import { Badge } from '../../ui/badge';
-import { ArrowUpDown, Eye } from 'lucide-react';
+import { ArrowUpDown, Eye, Download } from 'lucide-react';
 
 export function createSubmissionColumns(
-	loadSubmissionDetail: (id: number) => void
+	loadSubmissionDetail: (id: number) => void,
+	exportSubmission: (id: number) => void,
+	exportingSubmissionId: number | null
 ): ColumnDef<Submission, any>[] {
 	return [
 		{
@@ -135,14 +137,25 @@ export function createSubmissionColumns(
 			id: 'actions',
 			header: 'Actions',
 			cell: ({ row }) => (
-				<button
-					onClick={() => loadSubmissionDetail(row.original.id)}
-					className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium"
-					title="View submission details"
-				>
-					<Eye size={14} />
-					<span>Details</span>
-				</button>
+				<div className="flex flex-wrap gap-2">
+					<button
+						onClick={() => loadSubmissionDetail(row.original.id)}
+						className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium"
+						title="View submission details"
+					>
+						<Eye size={14} />
+						<span>Details</span>
+					</button>
+					<button
+						onClick={() => exportSubmission(row.original.id)}
+						disabled={exportingSubmissionId === row.original.id}
+						className="flex items-center gap-1 px-3 py-1.5 border border-border rounded-md text-xs font-medium hover:bg-accent disabled:opacity-60"
+						title="Export submission JSON"
+					>
+						<Download size={14} />
+						<span>{exportingSubmissionId === row.original.id ? 'Exporting…' : 'Export'}</span>
+					</button>
+				</div>
 			),
 		},
 	];

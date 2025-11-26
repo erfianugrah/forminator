@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "cd frontend && npm run build && cd ..",
+    "build": "npm run build:frontend",
+    "build:frontend": "cd frontend && npm run build",
     "typecheck": "tsc --noEmit && cd frontend && npm run typecheck && cd ..",
     "deploy": "npm run typecheck && npm run build && wrangler deploy",
+    "deploy:worker": "npm run typecheck && wrangler deploy --var DISABLE_STATIC_ASSETS=true",
     "tail": "wrangler tail",
     "cf-typegen": "wrangler types",
     "test": "playwright test",

@@ -21,6 +21,8 @@ import {
 	getActiveBlacklistEntries,
 	getBlacklistStats,
 	getRecentBlockedValidations,
+	exportSecurityEvents,
+	exportValidations,
 } from '../lib/database';
 import type { SubmissionsFilters } from '../lib/database';
 import logger from '../lib/logger';
@@ -127,6 +129,15 @@ app.get('/submissions', async (c) => {
 		const hasJa4Str = c.req.query('hasJa4');
 		const hasJa4 = hasJa4Str !== undefined ? hasJa4Str === 'true' : undefined;
 		const search = c.req.query('search');
+		const allowedParam = c.req.query('allowed');
+		const allowed =
+			allowedParam === 'true'
+				? true
+				: allowedParam === 'false'
+					? false
+					: allowedParam === 'all'
+						? 'all'
+						: undefined;
 		const fingerprintHeader = c.req.query('fingerprintHeader') === 'true';
 		const fingerprintTls = c.req.query('fingerprintTls') === 'true';
 		const fingerprintLatency = c.req.query('fingerprintLatency') === 'true';
@@ -168,6 +179,7 @@ app.get('/submissions', async (c) => {
 			hasJa3,
 			hasJa4,
 			search,
+			allowed,
 			fingerprintFlags:
 				fingerprintHeader || fingerprintTls || fingerprintLatency
 					? {
@@ -192,6 +204,7 @@ app.get('/submissions', async (c) => {
 		if (hasJa3 !== undefined) appliedFilters.hasJa3 = hasJa3;
 		if (hasJa4 !== undefined) appliedFilters.hasJa4 = hasJa4;
 		if (search) appliedFilters.search = search;
+		if (allowed !== undefined && allowed !== 'all') appliedFilters.allowed = allowed;
 		if (fingerprintHeader || fingerprintTls || fingerprintLatency) {
 			appliedFilters.fingerprintFlags = {
 				headerReuse: fingerprintHeader,
@@ -632,6 +645,19 @@ app.get('/export', async (c) => {
 			);
 		}
 
+		const allowedParam = c.req.query('allowed');
+		const allowed =
+			allowedParam === 'true'
+				? true
+				: allowedParam === 'false'
+					? false
+					: allowedParam === 'all'
+						? 'all'
+						: undefined;
+		const fingerprintHeader = c.req.query('fingerprintHeader') === 'true';
+		const fingerprintTls = c.req.query('fingerprintTls') === 'true';
+		const fingerprintLatency = c.req.query('fingerprintLatency') === 'true';
+
 		// Build filters object (no limit/offset - export all matching records)
 		const filters: SubmissionsFilters = {
 			sortBy,
@@ -645,6 +671,15 @@ app.get('/export', async (c) => {
 			hasJa3,
 			hasJa4,
 			search,
+			allowed,
+			fingerprintFlags:
+				fingerprintHeader || fingerprintTls || fingerprintLatency
+					? {
+							headerReuse: fingerprintHeader,
+							tlsAnomaly: fingerprintTls,
+							latencyMismatch: fingerprintLatency,
+					  }
+					: undefined,
 		};
 
 		// Fetch all submissions matching filters
@@ -909,6 +944,86 @@ app.get('/blocked-validations', async (c) => {
 				success: false,
 				error: 'Internal server error',
 				message: 'Failed to fetch blocked validations',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/exports/security-events - Export recent detections and active blocks
+app.get('/exports/security-events', async (c) => {
+	try {
+		const db = c.env.DB;
+		const startDate = c.req.query('startDate') ?? undefined;
+		const endDate = c.req.query('endDate') ?? undefined;
+		const statusParam = c.req.query('status');
+		const status = statusParam === 'active' || statusParam === 'detection' ? statusParam : 'all';
+		const riskLevelParam = c.req.query('riskLevel');
+		const allowedRiskLevels = { low: true, medium: true, high: true, critical: true } as const;
+		const riskLevel = riskLevelParam && allowedRiskLevels[riskLevelParam as keyof typeof allowedRiskLevels]
+			? (riskLevelParam as keyof typeof allowedRiskLevels)
+			: undefined;
+		const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : 1000;
+
+		const data = await exportSecurityEvents(db, {
+			startDate,
+			endDate,
+			status,
+			riskLevel,
+			limit,
+		});
+
+		const payload = {
+			success: true,
+			fileName: `security-events-${Date.now()}.json`,
+			generatedAt: new Date().toISOString(),
+			filters: { startDate, endDate, status, riskLevel, limit },
+			data,
+		};
+
+		c.header('Content-Disposition', `attachment; filename="${payload.fileName}"`);
+		return c.json(payload);
+	} catch (error) {
+		logger.error({ error }, 'Error exporting security events');
+		return c.json(
+			{
+				success: false,
+				error: 'Internal server error',
+				message: 'Failed to export security events',
+			},
+			500
+		);
+	}
+});
+
+// GET /api/analytics/exports/validations - Export turnstile validations/logs
+app.get('/exports/validations', async (c) => {
+	try {
+		const db = c.env.DB;
+		const startDate = c.req.query('startDate') ?? undefined;
+		const endDate = c.req.query('endDate') ?? undefined;
+		const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : 1000;
+
+		const data = await exportValidations(db, { startDate, endDate, limit });
+
+		const payload = {
+			success: true,
+			fileName: `validations-${Date.now()}.json`,
+			generatedAt: new Date().toISOString(),
+			filters: { startDate, endDate, limit },
+			data,
+		};
+
+		c.header('Content-Disposition', `attachment; filename="${payload.fileName}"`);
+		return c.json(payload);
+	} catch (error) {
+		logger.error({ error }, 'Error exporting validations');
+
+		return c.json(
+			{
+				success: false,
+				error: 'Internal server error',
+				message: 'Failed to export validations',
 			},
 			500
 		);

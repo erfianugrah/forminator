@@ -17,6 +17,7 @@ const DEFAULT_CONFIG = {
 	 * Risk Score Configuration
 	 */
 		risk: {
+		mode: 'defensive' as 'defensive' | 'additive',
 		/** Block threshold - submissions with risk >= this value are blocked */
 		blockThreshold: 70,
 

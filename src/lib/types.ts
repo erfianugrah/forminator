@@ -337,7 +337,7 @@ export interface Env {
 
 	// Bindings
 	DB: D1Database;
-	ASSETS: Fetcher;
+	ASSETS?: Fetcher;
 
 	// Service bindings (Worker-to-Worker RPC)
 	FRAUD_DETECTOR: {
@@ -367,6 +367,7 @@ export interface Env {
 	// Variables
 	ENVIRONMENT?: string;
 	ALLOWED_ORIGINS?: string; // Comma-separated list
+	DISABLE_STATIC_ASSETS?: string; // 'true' to run backend-only
 	TURNSTILE_SITE_KEY?: string;
 	ALLOW_TESTING_BYPASS?: string; // Enable testing bypass (set to 'true' in dev/staging only)
 	ROUTES?: RouteConfig | string; // Dynamic route configuration (JSON string or object)

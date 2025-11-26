@@ -1,7 +1,7 @@
 import { Card, CardHeader, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
-import { Calculator, Info } from 'lucide-react';
+import { AlertTriangle, Calculator, Fingerprint as FingerprintIcon, Info } from 'lucide-react';
 import type { FraudDetectionConfig } from '../../hooks/useConfig';
 
 interface RiskComponent {
@@ -9,6 +9,25 @@ interface RiskComponent {
 	weight: number;
 	contribution: number;
 	reason: string;
+}
+
+interface FingerprintDetails {
+	headerReuse?: {
+		total?: number;
+		ipCount?: number;
+		ja4Count?: number;
+	};
+	tlsAnomaly?: {
+		ja4Count?: number;
+		pairCount?: number;
+	};
+	latency?: {
+		rtt?: number;
+		platform?: string;
+		deviceType?: string;
+		claimedMobile?: boolean;
+		suspectAsn?: boolean;
+	};
 }
 
 interface RiskBreakdown {
@@ -25,6 +44,8 @@ interface RiskBreakdown {
 		tlsAnomaly?: RiskComponent;
 		latencyMismatch?: RiskComponent;
 	};
+	fingerprintDetails?: FingerprintDetails;
+	fingerprintWarnings?: string[];
 }
 
 interface FraudAssessmentProps {
@@ -101,6 +122,8 @@ export function FraudAssessment({ breakdown, config }: FraudAssessmentProps) {
 					/>
 				) : null
 			)}
+
+					{renderFingerprintInsights(breakdown, config)}
 
 					{/* Total calculation */}
 					<div className="border-t-2 border-gray-300 dark:border-gray-700 pt-3 mt-3">
@@ -192,4 +215,144 @@ function formatComponentName(key: string, component: RiskComponent): string {
 	const label = names[key] || key;
 	const weightPercent = (component.weight * 100).toFixed(0);
 	return `${label} (${weightPercent}%)`;
+}
+
+function renderFingerprintInsights(breakdown: RiskBreakdown, config?: FraudDetectionConfig) {
+	const details = breakdown.fingerprintDetails;
+	const warnings = breakdown.fingerprintWarnings || [];
+	const hasDetails = details && Object.values(details).some(Boolean);
+
+	if (!hasDetails && warnings.length === 0) {
+		return null;
+	}
+
+	const headerTriggered = (breakdown.components.headerFingerprint?.score ?? 0) > 0;
+	const tlsTriggered = (breakdown.components.tlsAnomaly?.score ?? 0) > 0;
+	const latencyTriggered = (breakdown.components.latencyMismatch?.score ?? 0) > 0;
+
+	const headerConfig = config?.fingerprint.headerReuse;
+	const tlsConfig = config?.fingerprint.tlsAnomaly;
+	const latencyConfig = config?.fingerprint.latency;
+
+	return (
+		<div className="space-y-3 border-t border-border/70 pt-3 mt-4">
+			<div className="flex items-center gap-2 text-sm font-semibold">
+				<FingerprintIcon className="h-4 w-4 text-primary" />
+				<span>Fingerprint Insights</span>
+			</div>
+
+			{warnings.length > 0 && (
+				<div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
+					<AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+					<ul className="space-y-1 list-disc pl-4">
+						{warnings.map((warning, idx) => (
+							<li key={`fp-warning-${idx}`}>{warning}</li>
+						))}
+					</ul>
+				</div>
+			)}
+
+			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+				{details?.headerReuse && (
+					<div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs space-y-2">
+						<div className="flex items-center justify-between text-sm font-semibold text-foreground">
+							<span>Header Fingerprint Reuse</span>
+							<Badge variant={headerTriggered ? 'destructive' : 'secondary'}>
+								{headerTriggered ? 'Triggered' : 'Learning'}
+							</Badge>
+						</div>
+						<div className="grid grid-cols-3 gap-2 text-muted-foreground">
+							<div>
+								<p className="text-base font-semibold text-foreground">{details.headerReuse.total ?? 0}</p>
+								<p>Requests ({headerConfig?.windowMinutes ?? 60}m)</p>
+							</div>
+							<div>
+								<p className="text-base font-semibold text-foreground">{details.headerReuse.ipCount ?? 0}</p>
+								<p>Unique IPs</p>
+							</div>
+							<div>
+								<p className="text-base font-semibold text-foreground">{details.headerReuse.ja4Count ?? 0}</p>
+								<p>Unique JA4</p>
+							</div>
+						</div>
+						{headerConfig && (
+							<p className="text-[11px] text-muted-foreground">
+								Threshold: ≥{headerConfig.minRequests} requests across ≥{headerConfig.minDistinctIps} IPs and ≥{headerConfig.minDistinctJa4} JA4 fingerprints.
+							</p>
+						)}
+					</div>
+				)}
+
+				{details?.tlsAnomaly && (
+					<div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs space-y-2">
+						<div className="flex items-center justify-between text-sm font-semibold text-foreground">
+							<span>TLS Fingerprint Baseline</span>
+							<Badge variant={tlsTriggered ? 'destructive' : 'secondary'}>
+								{tlsTriggered ? 'Mismatch' : 'Baseline'}
+							</Badge>
+						</div>
+						<div className="grid grid-cols-2 gap-2 text-muted-foreground">
+							<div>
+								<p className="text-base font-semibold text-foreground">
+									{details.tlsAnomaly.ja4Count !== undefined && details.tlsAnomaly.ja4Count >= 0
+										? details.tlsAnomaly.ja4Count
+										: 'Cached'}
+								</p>
+								<p>{details.tlsAnomaly.ja4Count === -1 ? 'Baseline stored' : 'JA4 samples (24h)'}</p>
+							</div>
+							<div>
+								<p className="text-base font-semibold text-foreground">
+									{details.tlsAnomaly.pairCount ?? '—'}
+								</p>
+								<p>Matching TLS pairs</p>
+							</div>
+						</div>
+						{tlsConfig && (
+							<p className="text-[11px] text-muted-foreground">
+								Requires ≥{tlsConfig.minJa4Observations} JA4 observations in the last {tlsConfig.baselineHours}h before anomaly checks enforce.
+							</p>
+						)}
+					</div>
+				)}
+
+				{details?.latency && (
+					<div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs space-y-2 md:col-span-2">
+						<div className="flex items-center justify-between text-sm font-semibold text-foreground">
+							<span>Latency vs. Device Claim</span>
+							<Badge variant={latencyTriggered ? 'destructive' : 'secondary'}>
+								{latencyTriggered ? 'Mismatch' : 'Consistent'}
+							</Badge>
+						</div>
+						<div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-muted-foreground">
+							<div>
+								<p className="text-base font-semibold text-foreground">
+									{typeof details.latency.rtt === 'number' ? `${details.latency.rtt}ms` : 'N/A'}
+								</p>
+								<p>Client RTT</p>
+							</div>
+							<div>
+								<p className="text-base font-semibold text-foreground">{details.latency.platform || 'Unknown'}</p>
+								<p>Reported Platform</p>
+							</div>
+							<div>
+								<p className="text-base font-semibold text-foreground">{details.latency.deviceType || 'Unknown'}</p>
+								<p>Device Type</p>
+							</div>
+							<div>
+								<p className="text-base font-semibold text-foreground">
+									{details.latency.claimedMobile ? 'Yes' : 'No'}
+								</p>
+								<p>Claims Mobile</p>
+							</div>
+						</div>
+						{latencyConfig && (
+							<p className="text-[11px] text-muted-foreground">
+								Mobile claims must exceed {latencyConfig.mobileRttThresholdMs}ms RTT unless device type reports mobile hardware. Datacenter ASN flagged: {details.latency.suspectAsn ? 'Yes' : 'No'}.
+							</p>
+						)}
+					</div>
+				)}
+			</div>
+		</div>
+	);
 }
