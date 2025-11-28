@@ -10,6 +10,7 @@ export default defineConfig({
   integrations: [react()],
 
   vite: {
+    // @ts-ignore - Vite plugin type mismatch between Astro and @tailwindcss/vite
     plugins: [tailwindcss()]
   },
 
