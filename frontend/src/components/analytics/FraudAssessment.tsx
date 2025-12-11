@@ -115,16 +115,7 @@ export function FraudAssessment({ breakdown, config }: FraudAssessmentProps) {
 
 					<h4 className="font-semibold text-sm">Component Breakdown:</h4>
 
-					{/* Show ALL components in order, including zeros */}
-			{getOrderedComponents(components).map(([key, component]) =>
-				component ? (
-					<ComponentCard
-						key={key}
-						id={key}
-						component={component}
-					/>
-				) : null
-			)}
+					{renderComponentList(components)}
 
 					{renderFingerprintInsights(breakdown, config)}
 
@@ -200,6 +191,29 @@ function getOrderedComponents(components: RiskBreakdown['components']): [string,
 	];
 
 	return order.map(key => [key, components[key as keyof typeof components]] as [string, RiskComponent | undefined]);
+}
+
+function renderComponentList(components: RiskBreakdown['components']) {
+	const ordered = getOrderedComponents(components);
+	const triggered = ordered.filter(([, comp]) => comp && comp.score > 0);
+
+	if (triggered.length === 0) {
+		return (
+			<div className="text-xs text-muted-foreground bg-muted/20 rounded-md p-3">
+				No risk components were triggered for this request. (All scores are 0.)
+			</div>
+		);
+	}
+
+	return triggered.map(([key, component]) =>
+		component ? (
+			<ComponentCard
+				key={key}
+				id={key}
+				component={component}
+			/>
+		) : null
+	);
 }
 
 function formatComponentName(key: string, component: RiskComponent): string {
