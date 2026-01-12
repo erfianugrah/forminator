@@ -87,6 +87,35 @@ const DEFAULT_CONFIG = {
 
 		/** Cache ratio threshold: 0.5 (50% cacheable) */
 		cacheRatioThreshold: 0.5,
+
+		/**
+		 * JA4 raw score thresholds for reason text classification
+		 *
+		 * Used to provide human-readable explanations in risk breakdown
+		 */
+		scoreThresholds: {
+			/** Raw score at which we definitively say "browser hopping detected" */
+			browserHopping: 140,
+			/** Raw score at which we say "suspicious clustering" (but not definitive) */
+			suspiciousClustering: 80,
+		},
+
+		/**
+		 * Risk score increments for JA4 composite scoring
+		 *
+		 * These values are added to the composite risk score when specific
+		 * signals are detected. Max possible raw score = 230 (80+60+50+40)
+		 */
+		riskScoreIncrements: {
+			/** Signal 1: JA4 clustering (same JA4 + 2+ ephemeral IDs) */
+			clustering: 80,
+			/** Signal 2: Rapid velocity (<10min between submissions) */
+			velocity: 60,
+			/** Signal 3a: Global anomaly (globally distributed JA4 clustering locally) */
+			globalAnomaly: 50,
+			/** Signal 3b: Bot pattern (high request volume + local clustering) */
+			botPattern: 40,
+		},
 	},
 
 	/**

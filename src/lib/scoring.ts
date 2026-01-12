@@ -170,15 +170,16 @@ export function calculateNormalizedRiskScore(
 	// JA4 Session Hopping
 	const ja4Score = normalizeJA4Score(checks.ja4RawScore, config);
 	const ja4Weight = config.risk.weights.ja4SessionHopping;
+	const ja4Thresholds = config.ja4.scoreThresholds;
 	components.ja4SessionHopping = {
 		score: ja4Score,
 		weight: ja4Weight,
 		contribution: ja4Score * ja4Weight,
 		rawScore: checks.ja4RawScore,
 		reason:
-			checks.ja4RawScore >= 140
+			checks.ja4RawScore >= ja4Thresholds.browserHopping
 				? 'Browser hopping detected'
-				: checks.ja4RawScore >= 80
+				: checks.ja4RawScore >= ja4Thresholds.suspiciousClustering
 					? 'Suspicious JA4 clustering'
 					: 'Normal browser behavior',
 	};

@@ -532,32 +532,34 @@ function compareGlobalSignals(clustering: ClusteringAnalysis, config: FraudDetec
 function calculateCompositeRiskScore(
 	clustering: ClusteringAnalysis,
 	velocity: VelocityAnalysis,
-	signals: SignalAnalysis
+	signals: SignalAnalysis,
+	config: FraudDetectionConfig
 ): number {
 	let score = 0;
+	const increments = config.ja4.riskScoreIncrements;
 
 	// Signal 1: JA4 clustering (primary signal)
 	// Same JA4 with 2+ different ephemeral IDs = session multiplication
 	if (clustering.ephemeralCount >= 2) {
-		score += 80;
+		score += increments.clustering;
 	}
 
 	// Signal 2: Rapid velocity
 	// Multiple submissions in <60 minutes = rapid-fire testing
 	if (velocity.isRapid && clustering.ephemeralCount >= 2) {
-		score += 60;
+		score += increments.velocity;
 	}
 
 	// Signal 3a: Global anomaly (high IP distribution + local clustering)
 	// Globally distributed JA4 shouldn't cluster at one IP
 	if (signals.highGlobalDistribution && clustering.ephemeralCount >= 2) {
-		score += 50;
+		score += increments.globalAnomaly;
 	}
 
 	// Signal 3b: Bot pattern (high request volume + local clustering)
 	// High-volume JA4 with local clustering suggests bot/scraper
 	if (signals.highRequestVolume && clustering.ephemeralCount >= 2) {
-		score += 40;
+		score += increments.botPattern;
 	}
 
 	return score;
@@ -638,7 +640,7 @@ async function blockForJA4Fraud(
 	// Calculate risk score
 	const velocity = analyzeVelocity(clustering, config);
 	const signals = compareGlobalSignals(clustering, config);
-	const rawScore = calculateCompositeRiskScore(clustering, velocity, signals);
+	const rawScore = calculateCompositeRiskScore(clustering, velocity, signals, config);
 	const warnings = generateWarnings(clustering, velocity, signals);
 	const normalizedScore = calculateNormalizedRiskScore(
 		{
@@ -768,7 +770,7 @@ export async function collectJA4Signals(
 		if (clusteringIP && clusteringIP.ephemeralCount >= config.detection.ja4Clustering.ipClusteringThreshold) {
 			const velocity = analyzeVelocity(clusteringIP, config);
 			const signals = compareGlobalSignals(clusteringIP, config);
-			const rawScore = calculateCompositeRiskScore(clusteringIP, velocity, signals);
+			const rawScore = calculateCompositeRiskScore(clusteringIP, velocity, signals, config);
 			const warnings = generateWarnings(clusteringIP, velocity, signals);
 
 			logger.info(
@@ -807,7 +809,7 @@ export async function collectJA4Signals(
 		if (clusteringRapid && clusteringRapid.ephemeralCount >= config.detection.ja4Clustering.rapidGlobalThreshold) {
 			const velocity = analyzeVelocity(clusteringRapid, config);
 			const signals = compareGlobalSignals(clusteringRapid, config);
-			const rawScore = calculateCompositeRiskScore(clusteringRapid, velocity, signals);
+			const rawScore = calculateCompositeRiskScore(clusteringRapid, velocity, signals, config);
 			const warnings = generateWarnings(clusteringRapid, velocity, signals);
 
 			logger.info(
@@ -846,7 +848,7 @@ export async function collectJA4Signals(
 		if (clusteringExtended && clusteringExtended.ephemeralCount >= config.detection.ja4Clustering.extendedGlobalThreshold) {
 			const velocity = analyzeVelocity(clusteringExtended, config);
 			const signals = compareGlobalSignals(clusteringExtended, config);
-			const rawScore = calculateCompositeRiskScore(clusteringExtended, velocity, signals);
+			const rawScore = calculateCompositeRiskScore(clusteringExtended, velocity, signals, config);
 			const warnings = generateWarnings(clusteringExtended, velocity, signals);
 
 			logger.info(
