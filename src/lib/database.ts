@@ -1239,7 +1239,7 @@ export async function detectFraudPatterns(db: D1Database): Promise<any> {
 		`;
 
 		// Pattern 2: High-Risk Ephemeral IDs (3+ submissions in 1 hour)
-		// These match the threshold in checkEphemeralIdFraud (line 178)
+		// These match the threshold in collectEphemeralIdSignals (config.detection.ephemeralIdSubmissionThreshold)
 		const highRiskEphemeralQuery = `
 			SELECT
 				ephemeral_id,
@@ -1259,7 +1259,7 @@ export async function detectFraudPatterns(db: D1Database): Promise<any> {
 		`;
 
 		// Pattern 3: Proxy Rotation (same ephemeral ID from 3+ different IPs)
-		// Detects rotating proxies/botnets - matches checkEphemeralIdFraud (line 202)
+		// Detects rotating proxies/botnets - matches collectEphemeralIdSignals (config.detection.ipDiversityThreshold)
 		const proxyRotationQuery = `
 			SELECT
 				ephemeral_id,
@@ -1279,7 +1279,7 @@ export async function detectFraudPatterns(db: D1Database): Promise<any> {
 		`;
 
 		// Pattern 4: High-Frequency Validators (10+ validation attempts in 1 hour)
-		// Detects bots rapidly generating tokens - matches checkEphemeralIdFraud (line 221)
+		// Detects bots rapidly generating tokens - matches collectEphemeralIdSignals (config.detection.validationFrequencyBlockThreshold)
 		const highFrequencyQuery = `
 			SELECT
 				ephemeral_id,
