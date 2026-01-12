@@ -163,15 +163,19 @@ Fast-path blocking before expensive Turnstile API calls.
 
 ```sql
 SELECT * FROM fraud_blacklist
-WHERE (ephemeral_id = ? OR ip_address = ? OR ja4 = ?)
+WHERE (ephemeral_id = ? OR ip_address = ? OR ja4 = ? OR email = ?)
   AND expires_at > datetime('now')
 ORDER BY blocked_at DESC
 LIMIT 1
 ```
 
+**Two-Phase Check** (ephemeral_id only available after Turnstile validation):
+1. **Pre-validation**: Check email, IP, JA4 (ephemeral_id=null)
+2. **Post-validation**: Check ephemeral_id after Turnstile returns it
+
 **Decision Flow**:
 - Found → Block immediately (429 Too Many Requests) + update `last_seen_at`
-- Not Found → Continue to Turnstile validation
+- Not Found → Continue to next check
 
 Most repeat offender requests blocked without Turnstile API call.
 
@@ -352,9 +356,14 @@ Threshold: 3+ attempts → Block, 2 attempts → Warning (catches rapid-fire att
 #### Layer 2c: IP Diversity
 
 ```sql
-SELECT COUNT(DISTINCT remote_ip) FROM submissions
-WHERE ephemeral_id = ?
-  AND created_at > datetime('now', '-24 hours')
+-- Queries BOTH tables to catch proxy rotation attacks that may not result in submissions
+SELECT COUNT(DISTINCT remote_ip) FROM (
+  SELECT remote_ip FROM submissions
+  WHERE ephemeral_id = ? AND created_at > datetime('now', '-24 hours')
+  UNION
+  SELECT remote_ip FROM turnstile_validations
+  WHERE ephemeral_id = ? AND created_at > datetime('now', '-24 hours')
+)
 ```
 
 Threshold: 2+ unique IPs → Block (same device from multiple IPs indicates proxy rotation)
