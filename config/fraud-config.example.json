@@ -35,7 +35,17 @@
     "heuristicRatioThreshold": 0.8,
     "browserRatioThreshold": 0.2,
     "h2h3RatioThreshold": 0.9,
-    "cacheRatioThreshold": 0.5
+    "cacheRatioThreshold": 0.5,
+    "scoreThresholds": {
+      "browserHopping": 140,
+      "suspiciousClustering": 80
+    },
+    "riskScoreIncrements": {
+      "clustering": 80,
+      "velocity": 60,
+      "globalAnomaly": 50,
+      "botPattern": 40
+    }
   },
   "detection": {
     "ephemeralIdSubmissionThreshold": 2,
@@ -49,7 +59,9 @@
       "rapidGlobalThreshold": 3,
       "rapidGlobalWindowMinutes": 5,
       "extendedGlobalThreshold": 5,
-      "extendedGlobalWindowMinutes": 60
+      "extendedGlobalWindowMinutes": 60,
+      "velocityThresholdMinutes": 10,
+      "useRiskScoreThreshold": true
     }
   },
   "fingerprint": {

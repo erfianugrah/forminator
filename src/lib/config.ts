@@ -379,6 +379,14 @@ function mergeConfig(
 		merged.ja4 = {
 			...defaults.ja4,
 			...custom.ja4,
+			scoreThresholds: {
+				...defaults.ja4.scoreThresholds,
+				...custom.ja4.scoreThresholds,
+			},
+			riskScoreIncrements: {
+				...defaults.ja4.riskScoreIncrements,
+				...custom.ja4.riskScoreIncrements,
+			},
 		};
 	}
 
