@@ -1,18 +1,7 @@
 import type { RequestMetadata, TurnstileValidationResult, FormSubmission } from './types';
 import type { RiskScoreBreakdown } from './scoring';
 import logger from './logger';
-
-/**
- * Convert JavaScript Date to SQLite-compatible datetime string
- * SQLite stores DATETIME as "YYYY-MM-DD HH:MM:SS" (space separator)
- * JavaScript Date.toISOString() returns "YYYY-MM-DDTHH:MM:SS.sssZ" (T separator)
- * Direct comparison fails because space < T in ASCII, causing all time-based queries to fail
- */
-function toSQLiteDateTime(date: Date): string {
-	return date.toISOString()
-		.replace('T', ' ')      // Replace T with space
-		.replace(/\.\d{3}Z$/, '');  // Remove milliseconds and Z
-}
+import { toSQLiteDateTime } from './utils/datetime';
 
 function normalizeISODate(input?: string | null): string | undefined {
 	if (!input) {
