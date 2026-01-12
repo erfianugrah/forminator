@@ -135,6 +135,92 @@ export interface JA4ClusteringResult {
 // ============================================================================
 
 /**
+ * Expand a compressed IPv6 address to full 8-group format
+ * Handles :: compression and normalizes each segment to lowercase without leading zeros
+ *
+ * Examples:
+ * - "2001:db8::1" → "2001:db8:0:0:0:0:0:1"
+ * - "::1" → "0:0:0:0:0:0:0:1"
+ * - "2001:db8::" → "2001:db8:0:0:0:0:0:0"
+ * - "2001:0db8:85a3:0000:0000:8a2e:0370:7334" → "2001:db8:85a3:0:0:8a2e:370:7334"
+ *
+ * @param ipv6 IPv6 address (may be compressed)
+ * @returns Expanded IPv6 address with 8 groups, or null if invalid
+ */
+function expandIPv6(ipv6: string): string | null {
+	// Remove zone identifier if present (e.g., %eth0)
+	const zoneIndex = ipv6.indexOf('%');
+	const cleanIp = zoneIndex !== -1 ? ipv6.substring(0, zoneIndex) : ipv6;
+
+	// Check for :: compression
+	const doubleColonIndex = cleanIp.indexOf('::');
+
+	let groups: string[];
+
+	if (doubleColonIndex !== -1) {
+		// Split by :: to get left and right parts
+		const left = cleanIp.substring(0, doubleColonIndex);
+		const right = cleanIp.substring(doubleColonIndex + 2);
+
+		const leftGroups = left ? left.split(':') : [];
+		const rightGroups = right ? right.split(':') : [];
+
+		// Calculate how many zero groups to insert
+		const missingGroups = 8 - leftGroups.length - rightGroups.length;
+
+		if (missingGroups < 0) {
+			return null; // Invalid: too many groups
+		}
+
+		// Build full 8-group array
+		groups = [
+			...leftGroups,
+			...Array(missingGroups).fill('0'),
+			...rightGroups,
+		];
+	} else {
+		groups = cleanIp.split(':');
+	}
+
+	// Validate we have exactly 8 groups
+	if (groups.length !== 8) {
+		return null;
+	}
+
+	// Normalize each group: remove leading zeros, lowercase
+	const normalized = groups.map((g) => {
+		const parsed = parseInt(g, 16);
+		if (isNaN(parsed)) {
+			return null;
+		}
+		return parsed.toString(16); // Removes leading zeros and ensures lowercase
+	});
+
+	if (normalized.includes(null)) {
+		return null;
+	}
+
+	return normalized.join(':');
+}
+
+/**
+ * Extract /64 subnet prefix from an IPv6 address
+ * The /64 prefix is the first 64 bits (4 groups of 16 bits each)
+ *
+ * @param ipv6 IPv6 address (may be compressed)
+ * @returns /64 subnet prefix, or null if invalid
+ */
+function extractIPv6Subnet(ipv6: string): string | null {
+	const expanded = expandIPv6(ipv6);
+	if (!expanded) {
+		return null;
+	}
+
+	// First 4 groups = first 64 bits = /64 subnet
+	return expanded.split(':').slice(0, 4).join(':');
+}
+
+/**
  * Check if two IPs are in the same network
  * - IPv4: Exact match
  * - IPv6: /64 subnet match (tolerates privacy extensions per RFC 8981)
@@ -153,9 +239,14 @@ function isSameNetwork(ip1: string, ip2: string): boolean {
 	// RFC 8981: Operating systems rotate interface identifier (last 64 bits) for privacy
 	// Network prefix stays the same (first 64 bits = 4 groups of 16 bits)
 	if (ip1.indexOf(':') !== -1 && ip2.indexOf(':') !== -1) {
-		// Extract first 64 bits (4 groups)
-		const subnet1 = ip1.split(':').slice(0, 4).join(':');
-		const subnet2 = ip2.split(':').slice(0, 4).join(':');
+		const subnet1 = extractIPv6Subnet(ip1);
+		const subnet2 = extractIPv6Subnet(ip2);
+
+		// If either is invalid, fall back to string comparison
+		if (!subnet1 || !subnet2) {
+			return ip1 === ip2;
+		}
+
 		return subnet1 === subnet2;
 	}
 
