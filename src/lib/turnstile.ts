@@ -269,14 +269,19 @@ export async function collectEphemeralIdSignals(
 		}
 
 		// Signal 3: IP diversity (24h window)
+		// Query both submissions AND turnstile_validations to catch proxy rotation
+		// attacks that may not result in successful submissions
 		const uniqueIps = await db
 			.prepare(
-				`SELECT COUNT(DISTINCT remote_ip) as count
-				 FROM submissions
-				 WHERE ephemeral_id = ?
-				 AND created_at > ?`
+				`SELECT COUNT(DISTINCT remote_ip) as count FROM (
+					SELECT remote_ip FROM submissions
+					WHERE ephemeral_id = ? AND created_at > ?
+					UNION
+					SELECT remote_ip FROM turnstile_validations
+					WHERE ephemeral_id = ? AND created_at > ?
+				)`
 			)
-			.bind(ephemeralId, oneDayAgo)
+			.bind(ephemeralId, oneDayAgo, ephemeralId, oneDayAgo)
 			.first<{ count: number }>();
 
 		const ipCount = uniqueIps?.count || 0;
@@ -401,14 +406,18 @@ export async function checkEphemeralIdFraud(
 		}
 
 		// LAYER 3: Check IP diversity (same ephemeral ID from multiple IPs = proxy rotation/botnet)
+		// Query both submissions AND turnstile_validations to catch proxy rotation
 		const uniqueIps = await db
 			.prepare(
-				`SELECT COUNT(DISTINCT remote_ip) as count
-				 FROM submissions
-				 WHERE ephemeral_id = ?
-				 AND created_at > ?`
+				`SELECT COUNT(DISTINCT remote_ip) as count FROM (
+					SELECT remote_ip FROM submissions
+					WHERE ephemeral_id = ? AND created_at > ?
+					UNION
+					SELECT remote_ip FROM turnstile_validations
+					WHERE ephemeral_id = ? AND created_at > ?
+				)`
 			)
-			.bind(ephemeralId, oneDayAgo)
+			.bind(ephemeralId, oneDayAgo, ephemeralId, oneDayAgo)
 			.first<{ count: number }>();
 
 		const ipCount = uniqueIps?.count || 0;
