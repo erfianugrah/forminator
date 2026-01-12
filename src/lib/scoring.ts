@@ -260,15 +260,23 @@ export function calculateNormalizedRiskScore(
 	} else {
 		const baseScore = Object.values(components).reduce((sum, c) => sum + c.contribution, 0);
 
+		// When token replay is not applicable (score=0), re-normalize weights
+		// so other components can achieve 100% instead of max 72%
+		// This ensures the block threshold (70) is meaningful
+		const tokenReplayWeight = config.risk.weights.tokenReplay;
+		const isTokenReplayApplicable = components.tokenReplay.score > 0;
+		const normalizationFactor = isTokenReplayApplicable ? 1.0 : 1.0 / (1.0 - tokenReplayWeight);
+		const normalizedScore = baseScore * normalizationFactor;
+
 		if (isForceBlockTrigger) {
 			// Only definitive triggers (token replay / Turnstile failure) may override totals
 			const blockThreshold = config.risk.blockThreshold;
 			switch (checks.blockTrigger) {
 				case 'turnstile_failed':
-					total = Math.max(baseScore, blockThreshold);
+					total = Math.max(normalizedScore, blockThreshold);
 					break;
 				default:
-					total = Math.max(baseScore, blockThreshold);
+					total = Math.max(normalizedScore, blockThreshold);
 			}
 			total = Math.min(100, Math.round(total * 10) / 10);
 		} else if (
@@ -277,10 +285,10 @@ export function calculateNormalizedRiskScore(
 			qualifiesForDeterministicBlock(checks.blockTrigger!, checks, components, config)
 		) {
 			const blockThreshold = config.risk.blockThreshold;
-			total = Math.max(blockThreshold, baseScore);
+			total = Math.max(blockThreshold, normalizedScore);
 			total = Math.min(100, Math.round(total * 10) / 10);
 		} else {
-			total = Math.min(100, Math.round(baseScore * 10) / 10);
+			total = Math.min(100, Math.round(normalizedScore * 10) / 10);
 		}
 	}
 
