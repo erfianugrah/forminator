@@ -291,6 +291,39 @@ app.post('/', async (c) => {
 			);
 		}
 
+		// 1.4: Post-validation ephemeral_id blacklist check
+		// NOTE: Ephemeral ID is only available AFTER Turnstile validation,
+		// so we must check the blacklist again here for ephemeral_id-based blocks
+		if (validation.ephemeralId) {
+			const ephemeralBlacklistCheck = await checkPreValidationBlock(
+				validation.ephemeralId,
+				metadata.remoteIp,
+				metadata.ja4 ?? null,
+				null, // email already checked in pre-validation
+				db
+			);
+
+			if (ephemeralBlacklistCheck.blocked) {
+				logger.warn(
+					{
+						ephemeralId: validation.ephemeralId,
+						reason: ephemeralBlacklistCheck.reason,
+						confidence: ephemeralBlacklistCheck.confidence,
+						retryAfter: ephemeralBlacklistCheck.retryAfter,
+					},
+					'Ephemeral ID blacklist block triggered (post-validation)'
+				);
+
+				const waitTime = formatWaitTime(ephemeralBlacklistCheck.retryAfter || 3600);
+				throw new RateLimitError(
+					ephemeralBlacklistCheck.reason || 'Blacklisted',
+					ephemeralBlacklistCheck.retryAfter || 3600,
+					ephemeralBlacklistCheck.expiresAt || new Date(Date.now() + 3600000).toISOString(),
+					`You have made too many submission attempts. Please wait ${waitTime} before trying again`
+				);
+			}
+		}
+
 		// ========== PHASE 2: COLLECT SIGNALS ==========
 
 		// 2.1: Email fraud signal
