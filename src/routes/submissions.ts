@@ -30,16 +30,7 @@ import {
 	formatZodErrors,
 } from '../lib/errors';
 import { generateErfid, type ErfidConfig } from '../lib/erfid';
-
-/**
- * Convert JavaScript Date to SQLite-compatible datetime string
- */
-function toSQLiteDateTime(date: Date): string {
-	return date
-		.toISOString()
-		.replace('T', ' ')
-		.replace(/\.\d{3}Z$/, '');
-}
+import { toSQLiteDateTime } from '../lib/utils/datetime';
 
 /**
  * Get offense count for any identifier (email, ephemeral_id, ip_address)

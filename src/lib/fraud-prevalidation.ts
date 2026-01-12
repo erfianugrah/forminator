@@ -1,21 +1,10 @@
 import type { RiskScoreBreakdown } from './scoring';
+import { toSQLiteDateTime } from './utils/datetime';
 
 /**
  * Pre-validation fraud detection layer
  * Blocks known fraudulent ephemeral IDs and IPs before expensive Turnstile API calls
  */
-
-/**
- * Convert JavaScript Date to SQLite-compatible datetime string
- * SQLite stores DATETIME as "YYYY-MM-DD HH:MM:SS" (space separator)
- * JavaScript Date.toISOString() returns "YYYY-MM-DDTHH:MM:SS.sssZ" (T separator)
- * Direct comparison fails because space < T in ASCII, causing all time-based queries to fail
- */
-function toSQLiteDateTime(date: Date): string {
-	return date.toISOString()
-		.replace('T', ' ')      // Replace T with space
-		.replace(/\.\d{3}Z$/, '');  // Remove milliseconds and Z
-}
 
 interface PreValidationResult {
 	blocked: boolean;

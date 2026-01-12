@@ -21,6 +21,7 @@ import { addToBlacklist } from './fraud-prevalidation';
 import { calculateProgressiveTimeout } from './turnstile';
 import type { FraudDetectionConfig } from './config';
 import { normalizeJA4Score, calculateNormalizedRiskScore } from './scoring';
+import { toSQLiteDateTime } from './utils/datetime';
 
 // ============================================================================
 // Type Definitions
@@ -132,17 +133,6 @@ export interface JA4ClusteringResult {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Convert JavaScript Date to SQLite-compatible datetime string
- * SQLite stores DATETIME as "YYYY-MM-DD HH:MM:SS" (space separator)
- */
-function toSQLiteDateTime(date: Date): string {
-	return date
-		.toISOString()
-		.replace('T', ' ')
-		.replace(/\.\d{3}Z$/, '');
-}
 
 /**
  * Check if two IPs are in the same network

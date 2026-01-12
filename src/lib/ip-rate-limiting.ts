@@ -24,16 +24,7 @@
 
 import logger from './logger';
 import type { FraudDetectionConfig } from './config';
-
-/**
- * Convert JavaScript Date to SQLite-compatible datetime string
- */
-function toSQLiteDateTime(date: Date): string {
-	return date
-		.toISOString()
-		.replace('T', ' ')
-		.replace(/\.\d{3}Z$/, '');
-}
+import { toSQLiteDateTime } from './utils/datetime';
 
 export interface IPRateLimitSignals {
 	/** Number of submissions from this IP in the time window */
