@@ -17,7 +17,7 @@ This plan tracks fixes to align implementation with documentation.
 
 ### 1. Pre-validation Blacklist Cannot Check Ephemeral ID
 
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 
 **Location**: `src/routes/submissions.ts:178-184`
 
@@ -52,7 +52,7 @@ The ephemeral_id blacklist check never fires on repeat visits.
 
 ### 2. IP Diversity Check Uses Wrong Data Source
 
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 
 **Location**: `src/lib/turnstile.ts:271-287`
 
@@ -79,7 +79,7 @@ that don't result in submissions won't be caught.
 
 ### 3. Risk Score Weights Don't Achieve 100% Without Token Replay
 
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 
 **Location**: `src/lib/scoring.ts`
 
@@ -104,7 +104,7 @@ that don't result in submissions won't be caught.
 
 ### 4. Duplicate `toSQLiteDateTime()` Functions
 
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 
 **Problem**: Same helper defined 5 times across files.
 
@@ -125,7 +125,7 @@ that don't result in submissions won't be caught.
 
 ### 5. Deprecated Functions Still Present
 
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 
 **Problem**: `checkEphemeralIdFraud()` and `checkJA4FraudPatterns()` marked deprecated but not removed.
 
@@ -137,7 +137,7 @@ that don't result in submissions won't be caught.
 
 ### 6. IPv6 Subnet Matching Doesn't Handle Compression
 
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 
 **Location**: `src/lib/ja4-fraud-detection.ts:165-169`
 
@@ -158,7 +158,7 @@ Doesn't expand compressed IPv6 (`2001:db8::1` vs `2001:db8:0:0:0:0:0:1`).
 
 ### 7. Hardcoded Values Despite Config System
 
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 
 **Locations**:
 - `src/lib/scoring.ts:313` - Ephemeral ID score values
@@ -173,13 +173,13 @@ Doesn't expand compressed IPv6 (`2001:db8::1` vs `2001:db8:0:0:0:0:0:1`).
 
 | Issue | Priority | Status | Commit |
 |-------|----------|--------|--------|
-| #1 Pre-validation ephemeral_id | Critical | [ ] | - |
-| #2 IP diversity data source | Critical | [ ] | - |
-| #3 Weight normalization | Critical | [ ] | - |
-| #4 Duplicate datetime helper | Medium | [ ] | - |
-| #5 Remove deprecated functions | Medium | [ ] | - |
-| #6 IPv6 normalization | Medium | [ ] | - |
-| #7 Hardcoded values | Minor | [ ] | - |
+| #1 Pre-validation ephemeral_id | Critical | [x] | Post-validation ephemeral_id blacklist check |
+| #2 IP diversity data source | Critical | [x] | IP diversity query now includes turnstile_validations |
+| #3 Weight normalization | Critical | [x] | Dynamic weight normalization in scoring.ts |
+| #4 Duplicate datetime helper | Medium | [x] | Extracted to src/lib/utils/datetime.ts |
+| #5 Remove deprecated functions | Medium | [x] | Removed ~470 lines of dead code |
+| #6 IPv6 normalization | Medium | [x] | Proper IPv6 expansion and /64 subnet extraction |
+| #7 Hardcoded values | Minor | [x] | Moved JA4 thresholds to config system |
 
 ---
 
