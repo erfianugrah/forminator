@@ -443,7 +443,7 @@ app.post('/', async (c) => {
 					metadata.remoteIp,
 					metadata.ja4 ?? null
 				);
-				const expiresIn = calculateProgressiveTimeout(offenseCount);
+				const expiresIn = calculateProgressiveTimeout(offenseCount, config);
 				const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
 				const duplicateBlockBreakdown = calculateNormalizedRiskScore(
@@ -631,7 +631,7 @@ app.post('/', async (c) => {
 				metadata.remoteIp,
 				metadata.ja4 ?? null
 			);
-			const expiresIn = calculateProgressiveTimeout(offenseCount);
+			const expiresIn = calculateProgressiveTimeout(offenseCount, config);
 			const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
 			// Collect all warnings

@@ -150,21 +150,25 @@ export async function checkTokenReuse(
 
 /**
  * Calculate progressive timeout based on previous offenses
- * Progressive escalation: 1h → 4h → 8h → 12h → 24h
+ * Progressive escalation uses config.timeouts.schedule (default: 1h → 4h → 8h → 12h → 24h)
+ *
+ * @param offenseCount - Number of previous offenses (1-based)
+ * @param config - Fraud detection configuration containing timeout schedule
+ * @returns Timeout duration in seconds
  */
-export function calculateProgressiveTimeout(offenseCount: number): number {
-	// Progressive time windows in seconds
-	const timeWindows = [
-		3600,    // 1st offense: 1 hour
-		14400,   // 2nd offense: 4 hours
-		28800,   // 3rd offense: 8 hours
-		43200,   // 4th offense: 12 hours
-		86400,   // 5th+ offense: 24 hours
-	];
+export function calculateProgressiveTimeout(
+	offenseCount: number,
+	config: FraudDetectionConfig
+): number {
+	const timeWindows = config.timeouts.schedule;
+	const maximum = config.timeouts.maximum;
 
-	// Cap at maximum timeout (24h)
+	// Cap at maximum timeout
 	const index = Math.min(offenseCount - 1, timeWindows.length - 1);
-	return timeWindows[Math.max(0, index)];
+	const timeout = timeWindows[Math.max(0, index)];
+
+	// Ensure we never exceed the configured maximum
+	return Math.min(timeout, maximum);
 }
 
 /**

@@ -634,7 +634,7 @@ async function blockForJA4Fraud(
 ): Promise<FraudCheckResult> {
 	// Calculate progressive timeout (max 24h for ephemeral IDs)
 	const offenseCount = await getOffenseCount(remoteIp, db);
-	const expiresIn = calculateProgressiveTimeout(offenseCount);
+	const expiresIn = calculateProgressiveTimeout(offenseCount, config);
 	const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
 	// Calculate risk score
