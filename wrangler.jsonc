@@ -16,7 +16,7 @@
 		{
 			"binding": "DB",
 			"database_name": "DB",
-			"database_id": "f36739a7-badb-456f-bbab-da0732722cae",
+			"database_id": "cc13ec07-ddb3-4081-b2e4-98a6f638042e",
 			"remote": true,
 			"migrations_dir": "migrations"
 		}
