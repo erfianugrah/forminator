@@ -1245,6 +1245,7 @@ function getDateFormatString(interval: string): string | null {
 export async function detectFraudPatterns(db: D1Database): Promise<any> {
 	try {
 		// Pattern 1: Blacklisted Ephemeral IDs (currently blocked)
+		// Includes all fields needed for BlacklistDetailDialog + FraudAssessment
 		const blacklistedQuery = `
 			SELECT
 				id,
@@ -1256,16 +1257,12 @@ export async function detectFraudPatterns(db: D1Database): Promise<any> {
 				detection_confidence as confidence,
 				risk_score,
 				risk_score_breakdown,
-				ja4_signals,
 				submission_count,
-				offense_count,
 				blocked_at as created_at,
 				expires_at,
 				erfid,
 				last_seen_at,
-				detection_metadata,
-				country,
-				city
+				detection_metadata
 			FROM fraud_blacklist
 			WHERE expires_at > datetime('now')
 				AND ephemeral_id IS NOT NULL
