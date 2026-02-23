@@ -222,3 +222,8 @@ CREATE INDEX IF NOT EXISTS idx_blacklist_detection_type ON fraud_blacklist(detec
 CREATE INDEX IF NOT EXISTS idx_submissions_erfid ON submissions(erfid);
 CREATE INDEX IF NOT EXISTS idx_validations_erfid ON turnstile_validations(erfid);
 CREATE INDEX IF NOT EXISTS idx_blacklist_erfid ON fraud_blacklist(erfid) WHERE erfid IS NOT NULL;
+-- Performance indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_submissions_remote_ip_created ON submissions(remote_ip, created_at);
+CREATE INDEX IF NOT EXISTS idx_validations_submission_id ON turnstile_validations(submission_id);
+CREATE INDEX IF NOT EXISTS idx_blacklist_blocked_at ON fraud_blacklist(blocked_at);
+CREATE INDEX IF NOT EXISTS idx_validations_remote_ip_created ON turnstile_validations(remote_ip, created_at);

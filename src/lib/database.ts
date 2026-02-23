@@ -420,6 +420,8 @@ export interface SubmissionsFilters {
 		tlsAnomaly?: boolean;
 		latencyMismatch?: boolean;
 	};
+	/** When true, raises the max limit from 100 to 5000 (for data export endpoints) */
+	export?: boolean;
 }
 
 /**
@@ -431,7 +433,8 @@ export async function getSubmissions(
 ) {
 	try {
 		// Defaults and validation
-		const limit = Math.min(filters.limit || 50, 100);
+		const maxLimit = filters.export ? 5000 : 100;
+		const limit = Math.min(filters.limit || 50, maxLimit);
 		const offset = Math.max(filters.offset || 0, 0);
 		const sortBy = filters.sortBy || 'created_at';
 		const sortOrder = filters.sortOrder || 'desc';

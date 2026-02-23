@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export interface BlockedValidation {
 	id: number;
@@ -27,8 +27,9 @@ export function useBlockedValidations(apiKey: string, limit = 100): UseBlockedVa
 	const [validations, setValidations] = useState<BlockedValidation[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const abortControllerRef = useRef<AbortController | null>(null);
 
-	const loadData = async () => {
+	const loadData = async (signal?: AbortSignal) => {
 		if (!apiKey) return;
 
 		setLoading(true);
@@ -37,7 +38,7 @@ export function useBlockedValidations(apiKey: string, limit = 100): UseBlockedVa
 		const headers: HeadersInit = { 'X-API-KEY': apiKey };
 
 		try {
-			const res = await fetch(`/api/analytics/blocked-validations?limit=${limit}`, { headers });
+			const res = await fetch(`/api/analytics/blocked-validations?limit=${limit}`, { headers, signal });
 
 			if (!res.ok) {
 				throw new Error('Failed to fetch blocked validations');
@@ -46,6 +47,7 @@ export function useBlockedValidations(apiKey: string, limit = 100): UseBlockedVa
 			const data = await res.json();
 			setValidations((data as any).data || []);
 		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error('Error loading blocked validations:', err);
 			setError('Failed to load blocked validations');
 			setValidations([]);
@@ -55,13 +57,17 @@ export function useBlockedValidations(apiKey: string, limit = 100): UseBlockedVa
 	};
 
 	useEffect(() => {
-		loadData();
+		abortControllerRef.current?.abort();
+		const controller = new AbortController();
+		abortControllerRef.current = controller;
+		loadData(controller.signal);
+		return () => controller.abort();
 	}, [apiKey, limit]);
 
 	return {
 		validations,
 		loading,
 		error,
-		refresh: loadData,
+		refresh: () => loadData(),
 	};
 }

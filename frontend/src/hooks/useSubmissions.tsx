@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
 
 export interface Submission {
@@ -60,8 +60,9 @@ export function useSubmissions(
 	const [totalCount, setTotalCount] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const abortControllerRef = useRef<AbortController | null>(null);
 
-	const loadData = async () => {
+	const loadData = async (signal?: AbortSignal) => {
 		if (!apiKey) return;
 
 		setLoading(true);
@@ -120,7 +121,7 @@ export function useSubmissions(
 				params.append('fingerprintLatency', 'true');
 			}
 
-			const res = await fetch(`/api/analytics/submissions?${params.toString()}`, { headers });
+			const res = await fetch(`/api/analytics/submissions?${params.toString()}`, { headers, signal });
 
 			if (!res.ok) {
 				throw new Error('Failed to fetch submissions');
@@ -146,6 +147,7 @@ export function useSubmissions(
 			setSubmissions(normalized);
 			setTotalCount((data as any).pagination?.total || 0);
 		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error('Error loading submissions:', err);
 			const errorMessage = err instanceof Error
 				? err.message
@@ -157,7 +159,11 @@ export function useSubmissions(
 	};
 
 	useEffect(() => {
-		loadData();
+		abortControllerRef.current?.abort();
+		const controller = new AbortController();
+		abortControllerRef.current = controller;
+		loadData(controller.signal);
+		return () => controller.abort();
 	}, [
 		apiKey,
 		filters.searchQuery,
@@ -178,6 +184,6 @@ export function useSubmissions(
 		totalCount,
 		loading,
 		error,
-		refresh: loadData,
+		refresh: () => loadData(),
 	};
 }

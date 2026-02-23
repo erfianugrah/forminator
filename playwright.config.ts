@@ -40,7 +40,6 @@ export default defineConfig({
 					args: [
 						'--disable-blink-features=AutomationControlled',
 						'--disable-dev-shm-usage',
-						'--disable-web-security',
 						'--disable-features=IsolateOrigins,site-per-process',
 						'--no-sandbox',
 						'--disable-setuid-sandbox',

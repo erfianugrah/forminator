@@ -670,8 +670,10 @@ app.get('/export', async (c) => {
 		const fingerprintTls = c.req.query('fingerprintTls') === 'true';
 		const fingerprintLatency = c.req.query('fingerprintLatency') === 'true';
 
-		// Build filters object (no limit/offset - export all matching records)
+		// Build filters object — export mode raises max limit from 100 to 5000
 		const filters: SubmissionsFilters = {
+			limit: 5000,
+			export: true,
 			sortBy,
 			sortOrder,
 			countries,

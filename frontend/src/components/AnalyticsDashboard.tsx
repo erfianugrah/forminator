@@ -62,6 +62,14 @@ export default function AnalyticsDashboard() {
 	const [validationModalLoading, setValidationModalLoading] = useState(false);
 	const [selectedBlacklistEntry, setSelectedBlacklistEntry] = useState<BlacklistEntry | null>(null);
 
+	// Transient operation error (auto-clears after 5s)
+	const [operationError, setOperationError] = useState<string | null>(null);
+	useEffect(() => {
+		if (!operationError) return;
+		const timer = setTimeout(() => setOperationError(null), 5000);
+		return () => clearTimeout(timer);
+	}, [operationError]);
+
 	// Filter states
 	const [searchQuery, setSearchQuery] = useState('');
 	const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
@@ -150,7 +158,7 @@ export default function AnalyticsDashboard() {
 			setSelectedSubmission((data as any).data);
 		} catch (err) {
 			console.error('Error loading submission details:', err);
-			alert('Failed to load submission details');
+			setOperationError('Failed to load submission details');
 		} finally {
 			setSubmissionModalLoading(false);
 		}
@@ -176,7 +184,7 @@ export default function AnalyticsDashboard() {
 			setSelectedValidation((data as any).data);
 		} catch (err) {
 			console.error('Error loading validation details:', err);
-			alert('Failed to load validation details');
+			setOperationError('Failed to load validation details');
 		} finally {
 			setValidationModalLoading(false);
 		}
@@ -237,7 +245,7 @@ export default function AnalyticsDashboard() {
 			document.body.removeChild(a);
 		} catch (err) {
 			console.error('Error exporting data:', err);
-			alert('Failed to export data');
+			setOperationError('Failed to export data');
 		}
 	};
 
@@ -353,6 +361,12 @@ export default function AnalyticsDashboard() {
 					onClearFilters={handleClearFilters}
 					isLoading={analyticsData.loading || submissionsData.loading}
 				/>
+
+				{operationError && (
+					<Alert variant="destructive">
+						<AlertDescription>{operationError}</AlertDescription>
+					</Alert>
+				)}
 
 				<OverviewStats stats={analyticsData.stats} />
 

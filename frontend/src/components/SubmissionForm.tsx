@@ -55,15 +55,6 @@ export default function SubmissionForm() {
 	const hasSubmittedRef = useRef(false);
 	const pendingFormDataRef = useRef<FormData | null>(null);
 
-	// Debug logging on mount
-	useEffect(() => {
-		console.log('SubmissionForm mounted', {
-			timestamp: Date.now(),
-			hasSubmitResult: !!submitResult,
-			flowStep
-		});
-	}, []);
-
 	// Detect user's country on mount
 	useEffect(() => {
 		const detectCountry = async () => {
@@ -87,7 +78,6 @@ export default function SubmissionForm() {
 		const handlePageShow = (event: PageTransitionEvent) => {
 			if (event.persisted) {
 				// Page was restored from bfcache, reset state
-				console.log('Page restored from bfcache, resetting form state');
 				setSubmitResult(null);
 				setRateLimitInfo(null);
 				setTurnstileToken(null);
@@ -232,18 +222,10 @@ export default function SubmissionForm() {
 						console.error('Invalid expiresAt from server:', { expiresAt, retryAfter, result });
 						// Use calculated expiry as fallback
 						expiresAt = new Date(Date.now() + retryAfter * 1000).toISOString();
-						console.log('Using calculated expiresAt as fallback:', expiresAt);
 					}
 
 					// Use server message if available, otherwise use default
 					userFriendlyMessage = result.message || 'You have made too many submission attempts. Please wait before trying again.';
-
-					console.log('Setting rate limit info:', {
-						retryAfter,
-						expiresAt,
-						timeRemaining: retryAfter,
-						serverResponse: { retryAfter: result.retryAfter, expiresAt: result.expiresAt }
-					});
 
 					// Set rate limit info for countdown timer
 					setRateLimitInfo({
@@ -307,20 +289,12 @@ export default function SubmissionForm() {
 	};
 
 	const onSubmit = async (data: FormData) => {
-		console.log('onSubmit called', {
-			hasToken: !!turnstileToken,
-			hasPendingData: !!pendingFormDataRef.current,
-			hasSubmitted: hasSubmittedRef.current,
-			timestamp: Date.now()
-		});
-
 		setSubmitResult(null);
 		setFlowError(undefined);
 		setFlowStep('validating');
 
 		// Check if we already have a token
 		if (turnstileToken) {
-			console.log('Using existing Turnstile token');
 			// Already have token, submit directly
 			await submitWithToken(data, turnstileToken);
 			return;
@@ -338,22 +312,14 @@ export default function SubmissionForm() {
 			return;
 		}
 
-		console.log('Storing form data and executing Turnstile widget');
 		pendingFormDataRef.current = data;
 		setFlowStep('turnstile-challenge');
 		turnstileRef.current.execute();
 	};
 
 	const handleTurnstileValidated = (token: string) => {
-		console.log('handleTurnstileValidated called', {
-			hasSubmitted: hasSubmittedRef.current,
-			hasPendingFormData: !!pendingFormDataRef.current,
-			timestamp: Date.now()
-		});
-
 		// Prevent duplicate submissions
 		if (hasSubmittedRef.current) {
-			console.warn('Duplicate submission prevented - hasSubmittedRef already true');
 			return;
 		}
 
@@ -382,11 +348,8 @@ export default function SubmissionForm() {
 		submitTimeoutRef.current = setTimeout(() => {
 			const formData = pendingFormDataRef.current;
 			if (formData) {
-				console.log('Auto-submitting form with Turnstile token');
 				pendingFormDataRef.current = null; // Clear after use
 				submitWithToken(formData, token); // Call submit with token directly
-			} else {
-				console.warn('No form data available in timeout callback');
 			}
 		}, 100);
 	};
@@ -403,17 +366,14 @@ export default function SubmissionForm() {
 	};
 
 	const handleBeforeInteractive = () => {
-		console.log('Before interactive mode');
 		setFlowStep('turnstile-interactive');
 	};
 
 	const handleAfterInteractive = () => {
-		console.log('After interactive mode');
 		setFlowStep('turnstile-challenge');
 	};
 
 	const handleExpired = () => {
-		console.log('Token expired');
 		setFlowStep('error');
 		setFlowError(undefined); // Don't show in flow, only in Alert
 		setSubmitResult({
@@ -425,7 +385,6 @@ export default function SubmissionForm() {
 	};
 
 	const handleTimeout = () => {
-		console.log('Challenge timeout');
 		setFlowStep('error');
 		setFlowError(undefined); // Don't show in flow, only in Alert
 		setSubmitResult({
@@ -437,7 +396,6 @@ export default function SubmissionForm() {
 	};
 
 	const handleUnsupported = () => {
-		console.log('Browser unsupported');
 		setFlowStep('error');
 		setFlowError(undefined); // Don't show in flow, only in Alert
 		setSubmitResult({

@@ -90,11 +90,14 @@ export const formSubmissionSchema = z.object({
 
 export type FormSubmissionInput = z.infer<typeof formSubmissionSchema>;
 
-// HTML sanitization - remove all HTML tags
+// HTML sanitization - strip dangerous content while preserving safe text
 export function sanitizeString(input: string): string {
 	return input
-		.replace(/<[^>]*>/g, '') // Remove HTML tags
-		.replace(/[<>]/g, '') // Remove < and >
+		.replace(/<[^>]*>?/g, '') // Remove HTML tags (including partial/unclosed tags)
+		.replace(/&#?\w+;/g, '') // Remove HTML entities (&#34; &amp; &#x27; etc.)
+		.replace(/javascript\s*:/gi, '') // Remove javascript: URI scheme
+		.replace(/data\s*:/gi, '') // Remove data: URI scheme
+		.replace(/on\w+\s*=/gi, '') // Remove inline event handlers (onclick=, onerror=, etc.)
 		.trim();
 }
 

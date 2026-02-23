@@ -106,7 +106,6 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 					'response-field': false, // Manual token handling
 					action,
 					callback: (token) => {
-						console.log('Turnstile validation successful', { timestamp: Date.now() });
 						onValidated(token);
 					},
 					'error-callback': (err) => {
@@ -125,11 +124,9 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 						onTimeout?.();
 					},
 					'before-interactive-callback': () => {
-						console.log('Turnstile entering interactive mode');
 						onBeforeInteractive?.();
 					},
 					'after-interactive-callback': () => {
-						console.log('Turnstile leaving interactive mode');
 						onAfterInteractive?.();
 					},
 					'unsupported-callback': () => {
@@ -143,7 +140,6 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 
 				widgetIdRef.current = widgetId;
 				setIsLoading(false);
-				console.log('Turnstile widget rendered:', widgetId, { timestamp: Date.now() });
 			} catch (err) {
 				console.error('Error rendering Turnstile:', err);
 				setError('Failed to load verification widget');
@@ -157,7 +153,6 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 		return () => {
 			if (widgetIdRef.current && window.turnstile) {
 				try {
-					console.log('Cleaning up Turnstile widget:', widgetIdRef.current);
 					window.turnstile.remove(widgetIdRef.current);
 					widgetIdRef.current = null;
 				} catch (err) {
@@ -171,7 +166,6 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 	// Expose methods to parent component via ref
 	useImperativeHandle(ref, () => ({
 		execute: () => {
-			console.log('Execute called, widgetId:', widgetIdRef.current);
 			if (widgetIdRef.current && window.turnstile) {
 				setIsExecuted(true);
 				window.turnstile.execute(widgetIdRef.current);
@@ -180,7 +174,6 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 			}
 		},
 		reset: () => {
-			console.log('Reset called, widgetId:', widgetIdRef.current);
 			if (widgetIdRef.current && window.turnstile) {
 				window.turnstile.reset(widgetIdRef.current);
 				setIsExecuted(false);

@@ -411,7 +411,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 			if (!isNaN(numericId)) {
 				onLoadDetail(numericId);
 			} else {
-				alert('Unable to load validation details for this detection');
+				setExportError('Unable to load validation details for this detection');
 			}
 			return;
 		}
@@ -441,7 +441,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 		if (onLoadBlacklistDetail && event.blacklistEntry) {
 			onLoadBlacklistDetail(event.blacklistEntry);
 		} else {
-			alert('No validation or blacklist details available for this block');
+			setExportError('No validation or blacklist details available for this block');
 		}
 	};
 
@@ -743,9 +743,9 @@ function inferDetectionType(blockReason: string): 'email_fraud_detection' | 'eph
 
 	// Ephemeral ID tracking (Layer 2) - covers submission count, validation frequency, IP diversity
 	if (reason.includes('ephemeral') || reason.includes('automated') || reason.includes('multiple submissions') ||
-	    reason.includes('validation') || reason.includes('frequency') ||
-	    reason.includes('ip') && reason.includes('diversity') || reason.includes('multiple ip') ||
-	    reason.includes('duplicate') && reason.includes('attempt')) {
+	    (reason.includes('validation') && reason.includes('frequency')) ||
+	    (reason.includes('ip') && reason.includes('diversity')) || reason.includes('multiple ip') ||
+	    (reason.includes('duplicate') && reason.includes('attempt'))) {
 		return 'ephemeral_id_tracking';
 	}
 
