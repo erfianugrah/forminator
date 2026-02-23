@@ -8,6 +8,7 @@ interface RiskComponent {
 	score: number;
 	weight: number;
 	contribution: number;
+	rawScore?: number;
 	reason: string;
 }
 
@@ -166,20 +167,95 @@ const TRIGGER_LABELS: Record<string, string> = {
 	latency_mismatch: 'Latency Mismatch',
 };
 
-function renderDecisionTrail(breakdown: RiskBreakdown, blockThreshold: number) {
-	const d = breakdown.decision;
-	if (!d) {
-		// Legacy breakdown without decision trail
-		return (
-			<div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
-				<Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-				<p>
-					Each component contributes: <span className="font-mono">Score × Weight = Contribution</span>. Final score = Sum of
-					contributions (max 100). Block threshold: {blockThreshold}/100.
-				</p>
-			</div>
+/**
+ * Reconstruct a decision trail from legacy data that doesn't have a `decision` field.
+ * Uses component weights and raw scores to infer weight redistribution and deterministic blocks.
+ */
+function computeLegacyDecision(breakdown: RiskBreakdown, blockThreshold: number): ScoringDecision {
+	const { components, total } = breakdown;
+	const comps = Object.entries(components);
+
+	// Step 1: Base weighted sum
+	const baseScore = comps.reduce((sum, [, c]) => sum + (c?.contribution ?? 0), 0);
+
+	// Step 2: Detect inactive weights
+	const tokenReplayInactive = (components.tokenReplay?.score ?? 0) === 0;
+	const ephemeralAtBaseline = components.ephemeralId?.rawScore === undefined || (components.ephemeralId?.rawScore ?? 0) <= 1;
+	const validationAtBaseline =
+		components.validationFrequency?.rawScore === undefined || (components.validationFrequency?.rawScore ?? 0) <= 1;
+	const ipDiversityAtBaseline = components.ipDiversity?.rawScore === undefined || (components.ipDiversity?.rawScore ?? 0) <= 1;
+
+	let inactiveWeight = 0;
+	const inactiveReasons: string[] = [];
+
+	if (tokenReplayInactive) {
+		inactiveWeight += components.tokenReplay?.weight ?? 0.28;
+		inactiveReasons.push(`tokenReplay (${((components.tokenReplay?.weight ?? 0.28) * 100).toFixed(0)}%)`);
+	}
+	if (ephemeralAtBaseline && validationAtBaseline && ipDiversityAtBaseline) {
+		const ew = components.ephemeralId?.weight ?? 0.15;
+		const vw = components.validationFrequency?.weight ?? 0.1;
+		const iw = components.ipDiversity?.weight ?? 0.07;
+		inactiveWeight += ew + vw + iw;
+		inactiveReasons.push(
+			`ephemeralId+validationFrequency+ipDiversity (${((ew + vw + iw) * 100).toFixed(0)}%) — all at baseline`,
 		);
 	}
+
+	const normalizationFactor = inactiveWeight < 1.0 ? 1.0 / (1.0 - inactiveWeight) : 1.0;
+	const normalizedScore = baseScore * normalizationFactor;
+
+	const decision: ScoringDecision = {
+		baseScore: Math.round(baseScore * 100) / 100,
+		normalizedScore: Math.round(normalizedScore * 100) / 100,
+		adjustedScore: Math.round(normalizedScore * 100) / 100, // No corroboration data in legacy
+		finalScore: total,
+	};
+
+	if (inactiveWeight > 0) {
+		decision.weightRedistribution = {
+			inactiveWeight: Math.round(inactiveWeight * 100) / 100,
+			normalizationFactor: Math.round(normalizationFactor * 1000) / 1000,
+			reason: inactiveReasons.join('; '),
+		};
+	}
+
+	// Detect if a deterministic/force block was applied (total >= blockThreshold but adjusted score < total)
+	if (total >= blockThreshold && normalizedScore < total) {
+		// Check for force-block triggers (token replay)
+		if ((components.tokenReplay?.score ?? 0) === 100) {
+			decision.forceBlock = { trigger: 'token_replay' };
+		} else {
+			// Infer deterministic block — we can't know the exact trigger from legacy data,
+			// but we can detect that the score was floored
+			const highestNonTokenComponent = comps
+				.filter(([key]) => key !== 'tokenReplay')
+				.sort(([, a], [, b]) => (b?.score ?? 0) - (a?.score ?? 0))[0];
+			if (highestNonTokenComponent) {
+				const triggerKey = highestNonTokenComponent[0];
+				// Map camelCase component key to snake_case trigger name
+				const triggerMap: Record<string, string> = {
+					emailFraud: 'email_fraud',
+					ephemeralId: 'ephemeral_id_fraud',
+					validationFrequency: 'validation_frequency',
+					ja4SessionHopping: 'ja4_session_hopping',
+					ipRateLimit: 'ip_rate_limit',
+					ipDiversity: 'ip_diversity',
+				};
+				decision.deterministicBlock = {
+					trigger: triggerMap[triggerKey] || triggerKey,
+					qualified: true,
+					mode: 'defensive',
+				};
+			}
+		}
+	}
+
+	return decision;
+}
+
+function renderDecisionTrail(breakdown: RiskBreakdown, blockThreshold: number) {
+	const d = breakdown.decision || computeLegacyDecision(breakdown, blockThreshold);
 
 	const steps: Array<{ icon: typeof ArrowRight; label: string; value: string; detail?: string; highlight?: boolean }> = [];
 
@@ -369,6 +445,7 @@ function getOrderedComponents(components: RiskBreakdown['components']): [string,
 function renderComponentList(components: RiskBreakdown['components']) {
 	const ordered = getOrderedComponents(components);
 	const triggered = ordered.filter(([, comp]) => comp && comp.score > 0);
+	const inactive = ordered.filter(([, comp]) => comp && comp.score === 0);
 
 	if (triggered.length === 0) {
 		return (
@@ -378,7 +455,17 @@ function renderComponentList(components: RiskBreakdown['components']) {
 		);
 	}
 
-	return triggered.map(([key, component]) => (component ? <ComponentCard key={key} id={key} component={component} /> : null));
+	return (
+		<>
+			{triggered.map(([key, component]) => (component ? <ComponentCard key={key} id={key} component={component} /> : null))}
+			{inactive.length > 0 && (
+				<div className="text-xs text-muted-foreground bg-muted/20 rounded-md p-2.5 flex items-center gap-1.5">
+					<span className="opacity-60">Not triggered ({inactive.length}):</span>
+					<span>{inactive.map(([key]) => formatComponentNameShort(key)).join(', ')}</span>
+				</div>
+			)}
+		</>
+	);
 }
 
 function formatComponentName(key: string, component: RiskComponent): string {
