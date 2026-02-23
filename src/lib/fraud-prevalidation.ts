@@ -1,5 +1,6 @@
 import type { RiskScoreBreakdown } from './scoring';
 import { toSQLiteDateTime } from './utils/datetime';
+import logger from './logger';
 
 /**
  * Pre-validation fraud detection layer
@@ -51,6 +52,9 @@ interface AddToBlacklistParams {
  * Check if email, ephemeral ID, IP, or JA4 is blacklisted before validation
  * Check order: email → ephemeral_id → ja4 → ip_address (most specific to least specific)
  * This is the Layer 0 pre-validation blocking from fraud detection system
+ *
+ * Only blocks on 'high' or 'medium' confidence entries. Low-confidence entries
+ * (e.g., duplicate email tracking) are used as signals only — not hard blocks.
  */
 export async function checkPreValidationBlock(
 	ephemeralId: string | null,
@@ -70,6 +74,7 @@ export async function checkPreValidationBlock(
 			SELECT * FROM fraud_blacklist
 			WHERE email = ?
 			AND expires_at > ?
+			AND detection_confidence IN ('high', 'medium')
 			ORDER BY expires_at DESC
 			LIMIT 1
 		`
@@ -113,6 +118,7 @@ export async function checkPreValidationBlock(
 			SELECT * FROM fraud_blacklist
 			WHERE ephemeral_id = ?
 			AND expires_at > ?
+			AND detection_confidence IN ('high', 'medium')
 			ORDER BY expires_at DESC
 			LIMIT 1
 		`
@@ -156,6 +162,7 @@ export async function checkPreValidationBlock(
 			SELECT * FROM fraud_blacklist
 			WHERE ja4 = ?
 			AND expires_at > ?
+			AND detection_confidence IN ('high', 'medium')
 			ORDER BY expires_at DESC
 			LIMIT 1
 		`
@@ -198,6 +205,7 @@ export async function checkPreValidationBlock(
 		SELECT * FROM fraud_blacklist
 		WHERE ip_address = ?
 		AND expires_at > ?
+		AND detection_confidence IN ('high', 'medium')
 		ORDER BY expires_at DESC
 		LIMIT 1
 	`
@@ -315,7 +323,18 @@ export async function addToBlacklist(
 
 		return true;
 	} catch (error) {
-		console.error('Failed to add to blacklist:', error);
+		// Fail-open: blacklist write failure should not prevent the block response,
+		// but the attacker won't be blacklisted for future requests — log at error level.
+		logger.error(
+			{
+				error: error instanceof Error ? error.message : String(error),
+				ephemeralId,
+				ipAddress,
+				email,
+				blockReason,
+			},
+			'CRITICAL: Failed to add to blacklist — attacker can retry immediately'
+		);
 		return false;
 	}
 }
@@ -349,7 +368,7 @@ export async function cleanupExpiredBlacklist(db: D1Database): Promise<number> {
 
 		return result.meta?.changes || 0;
 	} catch (error) {
-		console.error('Failed to cleanup blacklist:', error);
+		logger.error({ error }, 'Failed to cleanup blacklist');
 		return 0;
 	}
 }
@@ -403,7 +422,7 @@ export async function getBlacklistStats(db: D1Database): Promise<{
 			}
 		);
 	} catch (error) {
-		console.error('Failed to get blacklist stats:', error);
+		logger.error({ error }, 'Failed to get blacklist stats');
 		return {
 			total: 0,
 			by_ephemeral_id: 0,

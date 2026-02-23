@@ -40,8 +40,16 @@ app.use('*', async (c, next) => {
 		return next();
 	}
 
-	// Check if API key matches
-	if (!apiKey || apiKey !== expectedKey) {
+	// Check if API key matches (timing-safe comparison to prevent timing attacks)
+	// Workers runtime exposes timingSafeEqual on crypto.subtle (non-standard extension)
+	const encoder = new TextEncoder();
+	const apiKeyBytes = encoder.encode(apiKey || '');
+	const expectedKeyBytes = encoder.encode(expectedKey);
+	const keysMatch = apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
+		(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean })
+			.timingSafeEqual(apiKeyBytes, expectedKeyBytes);
+
+	if (!apiKey || !keysMatch) {
 		logger.warn(
 			{
 				hasKey: !!apiKey,

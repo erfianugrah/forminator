@@ -14,9 +14,10 @@ const config = new Hono<{ Bindings: Env }>();
 /**
  * GET /api/config
  *
- * Returns fraud detection system configuration
- * Merges default values with custom FRAUD_CONFIG from environment
- * Public endpoint (no authentication required)
+ * Returns public-facing fraud detection configuration.
+ * Only exposes risk level ranges needed by the frontend for UI display.
+ * Internal thresholds, weights, and detection params are NOT exposed
+ * to prevent attackers from crafting evasion strategies.
  */
 config.get('/', (c) => {
 	try {
@@ -24,9 +25,13 @@ config.get('/', (c) => {
 
 		return c.json({
 			success: true,
-			data: configuration,
+			data: {
+				risk: {
+					levels: configuration.risk.levels,
+					mode: configuration.risk.mode,
+				},
+			},
 			version: '2.0.0',
-			customized: !!c.env.FRAUD_CONFIG, // Indicates if custom config is active
 		});
 	} catch (error) {
 		console.error('Config retrieval error:', error);

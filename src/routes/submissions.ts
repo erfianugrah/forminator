@@ -132,11 +132,21 @@ app.post('/', async (c) => {
 		const expectedKey = c.env['X-API-KEY'];
 		const allowBypass = c.env.ALLOW_TESTING_BYPASS === 'true';
 		const isProduction = c.env.ENVIRONMENT === 'production';
-		const skipTurnstile = Boolean(allowBypass && !isProduction && apiKey && apiKey === expectedKey);
+		// Timing-safe comparison to prevent timing attacks on API key
+		let apiKeyValid = false;
+		if (apiKey && expectedKey) {
+			const encoder = new TextEncoder();
+			const apiKeyBytes = encoder.encode(apiKey);
+			const expectedKeyBytes = encoder.encode(expectedKey);
+			apiKeyValid = apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
+				(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean })
+					.timingSafeEqual(apiKeyBytes, expectedKeyBytes);
+		}
+		const skipTurnstile = Boolean(allowBypass && !isProduction && apiKeyValid);
 
 		if (skipTurnstile) {
 			logger.info({ event: 'testing_bypass_activated' }, 'Testing bypass activated');
-		} else if (allowBypass && isProduction && apiKey && apiKey === expectedKey) {
+		} else if (allowBypass && isProduction && apiKeyValid) {
 			logger.warn({ event: 'testing_bypass_blocked_prod' }, 'Testing bypass denied in production environment');
 		}
 

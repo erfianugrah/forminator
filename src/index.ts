@@ -108,16 +108,11 @@ app.all('*', async (c) => {
 				return configRoute.fetch(normalizedRequest, c.env, c.executionCtx);
 
 			case 'health':
-				const cfg = getConfig(c.env);
+				// Only expose minimal info publicly — internal details require authentication
 				return c.json({
 					status: 'ok',
 					timestamp: new Date().toISOString(),
 					version: '1.0.0',
-					routes: routes,  // Show configured routes for debugging
-					risk: {
-						mode: cfg.risk.mode,
-						blockThreshold: cfg.risk.blockThreshold,
-					},
 				});
 
 			case 'admin':

@@ -509,10 +509,11 @@ export async function getSubmissions(
 			bindings.push(filters.allowed ? 1 : 0);
 		}
 
-		// Search across multiple fields
+		// Search across multiple fields (escape LIKE wildcards to prevent wildcard injection)
 		if (filters.search && filters.search.trim()) {
-			const searchTerm = `%${filters.search.trim()}%`;
-			whereClauses.push('(s.email LIKE ? OR s.first_name LIKE ? OR s.last_name LIKE ? OR s.remote_ip LIKE ?)');
+			const escapedSearch = filters.search.trim().replace(/[%_\\]/g, '\\$&');
+			const searchTerm = `%${escapedSearch}%`;
+			whereClauses.push("(s.email LIKE ? ESCAPE '\\' OR s.first_name LIKE ? ESCAPE '\\' OR s.last_name LIKE ? ESCAPE '\\' OR s.remote_ip LIKE ? ESCAPE '\\')");
 			bindings.push(searchTerm, searchTerm, searchTerm, searchTerm);
 		}
 
