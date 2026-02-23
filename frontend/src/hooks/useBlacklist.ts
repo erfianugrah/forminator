@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { DetectionType } from './useBlockedValidations';
 
 export interface BlacklistEntry {
 	id: number;
@@ -7,7 +8,7 @@ export interface BlacklistEntry {
 	ja4: string | null;
 	country: string | null;
 	city: string | null;
-	detection_type?: string | null;
+	detection_type?: DetectionType | null;
 	detection_confidence?: 'high' | 'medium' | 'low' | null;
 	block_reason: string;
 	risk_score: number;
@@ -33,8 +34,9 @@ export function useBlacklist(apiKey: string): UseBlacklistReturn {
 	const [entries, setEntries] = useState<BlacklistEntry[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const abortControllerRef = useRef<AbortController | null>(null);
 
-	const loadData = async () => {
+	const loadData = async (signal?: AbortSignal) => {
 		if (!apiKey) return;
 
 		setLoading(true);
@@ -43,7 +45,7 @@ export function useBlacklist(apiKey: string): UseBlacklistReturn {
 		const headers: HeadersInit = { 'X-API-KEY': apiKey };
 
 		try {
-			const res = await fetch('/api/analytics/blacklist', { headers });
+			const res = await fetch('/api/analytics/blacklist', { headers, signal });
 
 			if (!res.ok) {
 				throw new Error('Failed to fetch blacklist entries');
@@ -52,6 +54,7 @@ export function useBlacklist(apiKey: string): UseBlacklistReturn {
 			const data = await res.json();
 			setEntries((data as any).data || []);
 		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error('Error loading blacklist entries:', err);
 			setError('Failed to load blacklist entries');
 			setEntries([]);
@@ -61,13 +64,17 @@ export function useBlacklist(apiKey: string): UseBlacklistReturn {
 	};
 
 	useEffect(() => {
-		loadData();
+		abortControllerRef.current?.abort();
+		const controller = new AbortController();
+		abortControllerRef.current = controller;
+		loadData(controller.signal);
+		return () => controller.abort();
 	}, [apiKey]);
 
 	return {
 		entries,
 		loading,
 		error,
-		refresh: loadData,
+		refresh: () => loadData(),
 	};
 }

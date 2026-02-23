@@ -35,7 +35,7 @@ export class ForminatorRequestError extends Error {
 	constructor(
 		message: string,
 		public status: number,
-		public body?: any
+		public body?: any,
 	) {
 		super(message);
 		this.name = 'ForminatorRequestError';
@@ -61,12 +61,7 @@ export interface SubmitOptions {
 	fetchImpl?: typeof fetch;
 }
 
-export async function submitToForminator({
-	endpoint,
-	payload,
-	headers,
-	fetchImpl,
-}: SubmitOptions): Promise<ForminatorSubmissionResponse> {
+export async function submitToForminator({ endpoint, payload, headers, fetchImpl }: SubmitOptions): Promise<ForminatorSubmissionResponse> {
 	const fetcher = fetchImpl ?? fetch;
 	const response = await fetcher(endpoint, {
 		method: 'POST',
@@ -80,11 +75,7 @@ export async function submitToForminator({
 	const body: any = await response.json().catch(() => ({}));
 
 	if (!response.ok) {
-		throw new ForminatorRequestError(
-			body?.message || `Forminator request failed (HTTP ${response.status})`,
-			response.status,
-			body
-		);
+		throw new ForminatorRequestError(body?.message || `Forminator request failed (HTTP ${response.status})`, response.status, body);
 	}
 
 	return body as ForminatorSubmissionResponse;

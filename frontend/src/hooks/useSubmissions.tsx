@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
+import type { DetectionType } from './useBlockedValidations';
 
 export interface Submission {
 	id: number;
@@ -18,7 +19,7 @@ export interface Submission {
 	ephemeral_id?: string | null;
 	risk_score?: number | null;
 	risk_score_breakdown?: string | null;
-	detection_type?: string | null;
+	detection_type?: DetectionType | null;
 	fingerprint_header_score?: number;
 	fingerprint_tls_score?: number;
 	fingerprint_latency_score?: number;
@@ -54,14 +55,15 @@ export function useSubmissions(
 	apiKey: string,
 	filters: UseSubmissionsFilters,
 	pagination: PaginationState,
-	sorting: SortingState
+	sorting: SortingState,
 ): UseSubmissionsReturn {
 	const [submissions, setSubmissions] = useState<Submission[]>([]);
 	const [totalCount, setTotalCount] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const abortControllerRef = useRef<AbortController | null>(null);
 
-	const loadData = async () => {
+	const loadData = async (signal?: AbortSignal) => {
 		if (!apiKey) return;
 
 		setLoading(true);
@@ -120,7 +122,7 @@ export function useSubmissions(
 				params.append('fingerprintLatency', 'true');
 			}
 
-			const res = await fetch(`/api/analytics/submissions?${params.toString()}`, { headers });
+			const res = await fetch(`/api/analytics/submissions?${params.toString()}`, { headers, signal });
 
 			if (!res.ok) {
 				throw new Error('Failed to fetch submissions');
@@ -146,10 +148,9 @@ export function useSubmissions(
 			setSubmissions(normalized);
 			setTotalCount((data as any).pagination?.total || 0);
 		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error('Error loading submissions:', err);
-			const errorMessage = err instanceof Error
-				? err.message
-				: 'Failed to load submissions. Please check your API key and try again.';
+			const errorMessage = err instanceof Error ? err.message : 'Failed to load submissions. Please check your API key and try again.';
 			setError(errorMessage);
 		} finally {
 			setLoading(false);
@@ -157,7 +158,11 @@ export function useSubmissions(
 	};
 
 	useEffect(() => {
-		loadData();
+		abortControllerRef.current?.abort();
+		const controller = new AbortController();
+		abortControllerRef.current = controller;
+		loadData(controller.signal);
+		return () => controller.abort();
 	}, [
 		apiKey,
 		filters.searchQuery,
@@ -166,7 +171,9 @@ export function useSubmissions(
 		filters.dateRange.start.toISOString(),
 		filters.dateRange.end.toISOString(),
 		filters.allowedStatus,
-		filters.fingerprintFlags ? `${filters.fingerprintFlags.headerReuse}-${filters.fingerprintFlags.tlsAnomaly}-${filters.fingerprintFlags.latencyMismatch}` : 'no-fp-filters',
+		filters.fingerprintFlags
+			? `${filters.fingerprintFlags.headerReuse}-${filters.fingerprintFlags.tlsAnomaly}-${filters.fingerprintFlags.latencyMismatch}`
+			: 'no-fp-filters',
 		pagination.pageIndex,
 		pagination.pageSize,
 		sorting.length > 0 ? sorting[0].id : '',
@@ -178,6 +185,6 @@ export function useSubmissions(
 		totalCount,
 		loading,
 		error,
-		refresh: loadData,
+		refresh: () => loadData(),
 	};
 }

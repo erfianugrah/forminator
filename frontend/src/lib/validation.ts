@@ -10,26 +10,33 @@ const baseAddressSchema = z.object({
 	country: z.string().optional(),
 });
 
-export const addressSchema = z.union([
-	baseAddressSchema.refine((val) => {
-		// Check if any address fields have content
-		const hasAddressContent = val.street || val.street2 || val.city || val.state || val.postalCode;
+export const addressSchema = z
+	.union([
+		baseAddressSchema
+			.refine(
+				(val) => {
+					// Check if any address fields have content
+					const hasAddressContent = val.street || val.street2 || val.city || val.state || val.postalCode;
 
-		// If address fields have content, country must be provided
-		if (hasAddressContent && (!val.country || val.country.length < 2)) {
-			return false;
-		}
+					// If address fields have content, country must be provided
+					if (hasAddressContent && (!val.country || val.country.length < 2)) {
+						return false;
+					}
 
-		return true;
-	}, {
-		message: 'Country is required when providing an address'
-	}).transform((val) => {
-		// Return undefined if all fields are empty
-		const hasContent = val.street || val.street2 || val.city || val.state || val.postalCode || val.country;
-		return hasContent ? val : undefined;
-	}),
-	z.undefined(),
-]).optional();
+					return true;
+				},
+				{
+					message: 'Country is required when providing an address',
+				},
+			)
+			.transform((val) => {
+				// Return undefined if all fields are empty
+				const hasContent = val.street || val.street2 || val.city || val.state || val.postalCode || val.country;
+				return hasContent ? val : undefined;
+			}),
+		z.undefined(),
+	])
+	.optional();
 
 export type AddressData = z.infer<typeof addressSchema>;
 
@@ -45,11 +52,7 @@ export const formSchema = z.object({
 		.min(1, 'Last name is required')
 		.max(50, 'Last name must be less than 50 characters')
 		.regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
-	email: z
-		.string()
-		.min(1, 'Email is required')
-		.email('Invalid email address')
-		.max(100, 'Email must be less than 100 characters'),
+	email: z.string().min(1, 'Email is required').email('Invalid email address').max(100, 'Email must be less than 100 characters'),
 	phone: z
 		.string()
 		.optional()
@@ -72,10 +75,7 @@ export const formSchema = z.object({
 			const today = new Date();
 			const age = today.getFullYear() - birthDate.getFullYear();
 			const monthDiff = today.getMonth() - birthDate.getMonth();
-			const actualAge =
-				monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())
-					? age - 1
-					: age;
+			const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) ? age - 1 : age;
 			return actualAge >= 18 && actualAge <= 120;
 		}, 'You must be at least 18 years old'),
 });

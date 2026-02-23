@@ -79,13 +79,7 @@ export function RadarChart({
 							fontSize: 10,
 						}}
 					/>
-					<Radar
-						name="Metrics"
-						dataKey={dataKey}
-						stroke={color}
-						fill={color}
-						fillOpacity={fillOpacity}
-					/>
+					<Radar name="Metrics" dataKey={dataKey} stroke={color} fill={color} fillOpacity={fillOpacity} />
 					<Tooltip content={<CustomTooltip />} />
 					{showLegend && <Legend />}
 				</RechartsRadarChart>

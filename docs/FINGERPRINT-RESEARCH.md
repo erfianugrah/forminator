@@ -156,13 +156,13 @@ Add a new optional object to submission payloads:
 
 ```json
 {
-  "fingerprint": {
-    "timezoneOffset": -420,
-    "screen": { "width": 1440, "height": 900, "depth": 24 },
-    "canvasHash": "03d1b4f3",
-    "webglVendor": "Google Inc.",
-    "fontsHash": "cfd92a1b"
-  }
+	"fingerprint": {
+		"timezoneOffset": -420,
+		"screen": { "width": 1440, "height": 900, "depth": 24 },
+		"canvasHash": "03d1b4f3",
+		"webglVendor": "Google Inc.",
+		"fontsHash": "cfd92a1b"
+	}
 }
 ```
 
@@ -172,12 +172,12 @@ Validation (`src/lib/validation.ts`) should accept and sanitize this block; pers
 
 Three fingerprint-driven components are now live in `calculateNormalizedRiskScore()` and backed by `config.risk.weights`:
 
-| Component | Source | Weight | Status |
-|-----------|--------|--------|--------|
-| `headerFingerprint` | High `headersFingerprint` reuse across JA4/IP/email clusters | 0.07 | ✅ Active |
-| `tlsAnomaly` | JA4 + TLS extension hash not in baseline / only seen on proxy ASNs | 0.04 | ✅ Active |
-| `latencyMismatch` | `clientTcpRtt` inconsistent with platform/geo claims | 0.02 | ✅ Active |
-| `frontendMismatch` | Client-side fingerprint conflicts with UA/deviceType | _TBD_ | 🚧 Planned (reserved for future client-side capture) |
+| Component           | Source                                                             | Weight | Status                                               |
+| ------------------- | ------------------------------------------------------------------ | ------ | ---------------------------------------------------- |
+| `headerFingerprint` | High `headersFingerprint` reuse across JA4/IP/email clusters       | 0.07   | ✅ Active                                            |
+| `tlsAnomaly`        | JA4 + TLS extension hash not in baseline / only seen on proxy ASNs | 0.04   | ✅ Active                                            |
+| `latencyMismatch`   | `clientTcpRtt` inconsistent with platform/geo claims               | 0.02   | ✅ Active                                            |
+| `frontendMismatch`  | Client-side fingerprint conflicts with UA/deviceType               | _TBD_  | 🚧 Planned (reserved for future client-side capture) |
 
 Any additional fingerprint signal must borrow weight from existing components so that the totals stay at 1.0. When a new signal is promoted, expose it through `config.risk.weights`, log a dedicated detection identifier (e.g., `tls_fingerprint_anomaly`), and update the analytics UI + docs so end users know what pushed the score over the block threshold.
 
@@ -194,11 +194,11 @@ Following this playbook turns the raw Cloudflare telemetry you now store into ac
 
 To validate the workflow end-to-end, a small synthetic dataset (6 submissions) was loaded into a local SQLite copy of the schema and the queries above were executed. Key takeaways:
 
-| Signal | Query excerpt | Finding |
-|--------|---------------|---------|
-| **TLS anomalies** | `WITH baseline AS (...) SELECT ...` | Three submissions (`cara+1@attack.net`, `cara+2@attack.net`, `evan@botfarm.io`) reused the same JA4 values as legitimate traffic but presented novel `tlsClientExtensionsSha1` hashes (`spoof_sha_v1`, `spoof_sha_v2`, `spoof_sha_android`). All three originated from data-center ASNs (LeaseWeb, M247, OVH), confirming that TLS extension hashes expose spoofed/borrowed JA4s. |
-| **Header fingerprint reuse** | `SELECT headersFingerprint, COUNT(*) ...` | Hash `fp_botnet` appeared on three submissions spanning two different JA4s and three IPs, immediately clustering the automation toolkit regardless of JA4/IP rotation. |
-| **Latency vs. device claim** | `SELECT ... WHERE clientTcpRtt <= 4 AND platform LIKE '%Android%'` | `evan@botfarm.io` declared `platform="Android"` with `deviceType=desktop` and `clientTcpRtt=2 ms` via AMS POP—an impossible mobile RTT—offering a deterministic rule for “fake mobile UA on desktop hardware”. |
+| Signal                       | Query excerpt                                                      | Finding                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **TLS anomalies**            | `WITH baseline AS (...) SELECT ...`                                | Three submissions (`cara+1@attack.net`, `cara+2@attack.net`, `evan@botfarm.io`) reused the same JA4 values as legitimate traffic but presented novel `tlsClientExtensionsSha1` hashes (`spoof_sha_v1`, `spoof_sha_v2`, `spoof_sha_android`). All three originated from data-center ASNs (LeaseWeb, M247, OVH), confirming that TLS extension hashes expose spoofed/borrowed JA4s. |
+| **Header fingerprint reuse** | `SELECT headersFingerprint, COUNT(*) ...`                          | Hash `fp_botnet` appeared on three submissions spanning two different JA4s and three IPs, immediately clustering the automation toolkit regardless of JA4/IP rotation.                                                                                                                                                                                                            |
+| **Latency vs. device claim** | `SELECT ... WHERE clientTcpRtt <= 4 AND platform LIKE '%Android%'` | `evan@botfarm.io` declared `platform="Android"` with `deviceType=desktop` and `clientTcpRtt=2 ms` via AMS POP—an impossible mobile RTT—offering a deterministic rule for “fake mobile UA on desktop hardware”.                                                                                                                                                                    |
 
 These toy results demonstrate how each query surfaces distinct fraud clusters even when JA4 and ephemeral IDs change. Replace the synthetic dataset with production exports to operationalize the same checks.
 

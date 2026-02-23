@@ -148,6 +148,7 @@ fraud_blacklist:  Fast mitigation cache     →  Performance optimization
 **When Both Are Used**:
 
 Most fraud detection layers (ephemeral ID, JA4 session hopping) add to **both tables**:
+
 1. Write to `fraud_blacklist` → Future attempts blocked quickly
 2. Write to `fraud_blocks` OR `turnstile_validations` → Forensic record
 
@@ -170,10 +171,12 @@ LIMIT 1
 ```
 
 **Two-Phase Check** (ephemeral_id only available after Turnstile validation):
+
 1. **Pre-validation**: Check email, IP, JA4 (ephemeral_id=null)
 2. **Post-validation**: Check ephemeral_id after Turnstile returns it
 
 **Decision Flow**:
+
 - Found → Block immediately (429 Too Many Requests) + update `last_seen_at`
 - Not Found → Continue to next check
 
@@ -203,11 +206,13 @@ Replayed tokens cannot create submissions, so this only appears in validation lo
 IP-based behavioral signal detecting browser-switching attacks.
 
 **Philosophy**: Behavioral signal, not hard block
+
 - Contributes 7% to total risk score
 - Combined with other signals for holistic decision
 - Prevents false positives from shared IPs (offices, universities)
 
 **Use Case**: Attacker switches browsers to get new fingerprints:
+
 - Attempt 1: Firefox → ephemeral_id=A, ja4=Firefox
 - Attempt 2: Chrome → ephemeral_id=B, ja4=Chrome (different fingerprints)
 - Attempt 3: Safari → ephemeral_id=C, ja4=Safari (bypasses Layers 2 & 4)
@@ -217,37 +222,40 @@ IP-based behavioral signal detecting browser-switching attacks.
 
 ```typescript
 export async function collectIPRateLimitSignals(
-  remoteIp: string,
-  db: D1Database,
-  config: FraudDetectionConfig
+	remoteIp: string,
+	db: D1Database,
+	config: FraudDetectionConfig,
 ): Promise<IPRateLimitSignals> {
-  // Count submissions from this IP (ANY ephemeral_id, ANY JA4)
-  const result = await db
-    .prepare(`
+	// Count submissions from this IP (ANY ephemeral_id, ANY JA4)
+	const result = await db
+		.prepare(
+			`
       SELECT COUNT(*) as count
       FROM submissions
       WHERE remote_ip = ?
       AND created_at > datetime('now', '-1 hour')
-    `)
-    .bind(remoteIp)
-    .first<{ count: number }>();
+    `,
+		)
+		.bind(remoteIp)
+		.first<{ count: number }>();
 
-  const submissionCount = result?.count || 0;
-  const effectiveCount = submissionCount + 1;
+	const submissionCount = result?.count || 0;
+	const effectiveCount = submissionCount + 1;
 
-  // Non-linear risk scoring: 1→0%, 2→25%, 3→50%, 4→75%, 5+→100%
-  let riskScore: number;
-  if (effectiveCount === 1) riskScore = 0;
-  else if (effectiveCount === 2) riskScore = 25;
-  else if (effectiveCount === 3) riskScore = 50;
-  else if (effectiveCount === 4) riskScore = 75;
-  else riskScore = 100;
+	// Non-linear risk scoring: 1→0%, 2→25%, 3→50%, 4→75%, 5+→100%
+	let riskScore: number;
+	if (effectiveCount === 1) riskScore = 0;
+	else if (effectiveCount === 2) riskScore = 25;
+	else if (effectiveCount === 3) riskScore = 50;
+	else if (effectiveCount === 4) riskScore = 75;
+	else riskScore = 100;
 
-  return { submissionCount: effectiveCount, riskScore, warnings };
+	return { submissionCount: effectiveCount, riskScore, warnings };
 }
 ```
 
 **Configuration**:
+
 ```typescript
 detection: {
   ipRateLimitThreshold: 3,    // For risk curve
@@ -263,6 +271,7 @@ risk: {
 **Why Behavioral Signal > Hard Block**:
 
 Scenario 1 (Office - Legitimate):
+
 ```
 IP: 3 submissions (50% × 7% = 3.5%)
 Email: 3 different domains (0%)
@@ -270,6 +279,7 @@ Total: 4% → ✅ ALLOWED
 ```
 
 Scenario 2 (Attack - Fraud Patterns):
+
 ```
 IP: 3 submissions (50% × 7% = 3.5%)
 Email: Sequential (80% × 14% = 11.2%)
@@ -291,19 +301,21 @@ ML-based email pattern analysis using external service.
 
 ```typescript
 const result = await env.FRAUD_DETECTOR.validate({
-  email,
-  consumer: 'FORMINATOR',
-  flow: 'REGISTRATION'
+	email,
+	consumer: 'FORMINATOR',
+	flow: 'REGISTRATION',
 });
 ```
 
 **Detection Capabilities**:
+
 - Markov Chain pattern analysis (sequential: user1, user2, user3)
 - Out-of-Distribution (OOD) detection for unusual formats
 - Disposable domain detection (71K+ domains)
 - TLD risk profiling (143 TLDs analyzed)
 
 **Decision Flow**:
+
 - `block` → Reject immediately (before Turnstile validation)
 - `warn` → Continue but contribute to risk score (15% weight)
 - `allow` → Continue with risk_score=0 for email component
@@ -312,6 +324,7 @@ const result = await env.FRAUD_DETECTOR.validate({
 **Mitigation** (`src/routes/submissions.ts:165-183`):
 
 When email fraud is detected (`decision='block'`):
+
 1. **Logs to `fraud_blocks` table** - Forensic logging for analytics
 2. **Adds to `fraud_blacklist` table** - IP-based blacklist for repeat prevention
    - Timeout: 1 hour (first offense)
@@ -327,6 +340,7 @@ When email fraud is detected (`decision='block'`):
 Behavioral analysis detecting repeat submissions from same device.
 
 **Time Windows**:
+
 - Submissions: 24h (registration forms typically submit once)
 - Validations: 1h (catches rapid-fire before D1 replication)
 - IP diversity: 24h (proxy rotation detection)
@@ -401,6 +415,7 @@ WHERE ja4 = ? AND remote_ip IN (same /64 subnet)
 **Threshold**: 2+ ephemeral IDs from same IP/subnet + same JA4
 
 **Detection**: Multi-signal risk scoring:
+
 - Analyzes three detection layers (4a: IP clustering, 4b: rapid global, 4c: extended global)
 - Calculates composite score from 4 signals:
   - Clustering (+80 points)
@@ -411,10 +426,12 @@ WHERE ja4 = ? AND remote_ip IN (same /64 subnet)
 - Combined with other signals (email, ephemeral ID, etc.) for blocking decision
 
 **Examples**:
+
 - **Family/Office**: 2 users, Chrome, 30 min apart → Score ~57 → **ALLOW**
 - **Attack**: 2 users, Chrome, 2 min apart → Score ~87 → **BLOCK**
 
 **Feature Flag**: `useRiskScoreThreshold` (default: true)
+
 - `true`: Use multi-signal risk scoring (reduces false positives)
 - `false`: Block immediately when count threshold reached (old behavior)
 
@@ -449,6 +466,7 @@ WHERE ja4 = ?
 Detects: Slower distributed attacks across networks
 
 **Risk Scoring**:
+
 - JA4 clustering signal: +80 points (primary)
 - Rapid velocity (<10min): +60 points (configurable: `velocityThresholdMinutes`)
 - Global anomaly (high distribution): +50 points
@@ -457,6 +475,7 @@ Detects: Slower distributed attacks across networks
 - Holistic block threshold: ≥70 (configurable: `risk.blockThreshold`)
 
 **Mitigation**: Adds three identifiers to blacklist:
+
 - `ephemeral_id` (24h max)
 - `ja4` (24h max)
 - `ip_address` (progressive timeout)
@@ -469,18 +488,18 @@ Cloudflare provides **global intelligence** about each JA4 fingerprint through `
 
 **Available Signals** (10 signals from `src/lib/ja4-fraud-detection.ts:32-53`):
 
-| Signal | Type | Description | Fraud Indicator |
-|--------|------|-------------|----------------|
-| `ips_quantile_1h` | Quantile (0-1) | Rank by unique IP count globally | >0.95 = high IP diversity (proxy/bot network) |
-| `ips_rank_1h` | Rank | Absolute rank by unique IPs | Lower number = more IPs |
-| `reqs_quantile_1h` | Quantile (0-1) | Rank by request volume globally | >0.99 = very high volume (bot network) |
-| `reqs_rank_1h` | Rank | Absolute rank by request volume | Lower number = more requests |
-| `heuristic_ratio_1h` | Ratio (0-1) | Flagged by CF heuristics | >0.8 = bot-like behavior |
-| `browser_ratio_1h` | Ratio (0-1) | Browser-like requests | <0.2 = likely automation |
-| `h2h3_ratio_1h` | Ratio (0-1) | HTTP/2 or HTTP/3 requests | >0.9 = modern browser |
-| `cache_ratio_1h` | Ratio (0-1) | Cacheable responses | Higher = more static content |
-| `uas_rank_1h` | Rank | User agent diversity | Lower = more diverse UAs |
-| `paths_rank_1h` | Rank | Path diversity | Lower = more diverse paths |
+| Signal               | Type           | Description                      | Fraud Indicator                               |
+| -------------------- | -------------- | -------------------------------- | --------------------------------------------- |
+| `ips_quantile_1h`    | Quantile (0-1) | Rank by unique IP count globally | >0.95 = high IP diversity (proxy/bot network) |
+| `ips_rank_1h`        | Rank           | Absolute rank by unique IPs      | Lower number = more IPs                       |
+| `reqs_quantile_1h`   | Quantile (0-1) | Rank by request volume globally  | >0.99 = very high volume (bot network)        |
+| `reqs_rank_1h`       | Rank           | Absolute rank by request volume  | Lower number = more requests                  |
+| `heuristic_ratio_1h` | Ratio (0-1)    | Flagged by CF heuristics         | >0.8 = bot-like behavior                      |
+| `browser_ratio_1h`   | Ratio (0-1)    | Browser-like requests            | <0.2 = likely automation                      |
+| `h2h3_ratio_1h`      | Ratio (0-1)    | HTTP/2 or HTTP/3 requests        | >0.9 = modern browser                         |
+| `cache_ratio_1h`     | Ratio (0-1)    | Cacheable responses              | Higher = more static content                  |
+| `uas_rank_1h`        | Rank           | User agent diversity             | Lower = more diverse UAs                      |
+| `paths_rank_1h`      | Rank           | Path diversity                   | Lower = more diverse paths                    |
 
 **Active Detection Signals** (used in fraud scoring):
 
@@ -526,23 +545,17 @@ const ja4Signals = parseJA4Signals(row.ja4_signals);
 
 // Global anomaly detection
 const signalAnalysis: SignalAnalysis = {
-  highGlobalDistribution:
-    ja4Signals.ips_quantile_1h !== null &&
-    ja4Signals.ips_quantile_1h > config.ja4.ipsQuantileThreshold,
-  highRequestVolume:
-    ja4Signals.reqs_quantile_1h !== null &&
-    ja4Signals.reqs_quantile_1h > config.ja4.reqsQuantileThreshold,
-  ipsQuantile: ja4Signals.ips_quantile_1h ?? null,
-  reqsQuantile: ja4Signals.reqs_quantile_1h ?? null,
+	highGlobalDistribution: ja4Signals.ips_quantile_1h !== null && ja4Signals.ips_quantile_1h > config.ja4.ipsQuantileThreshold,
+	highRequestVolume: ja4Signals.reqs_quantile_1h !== null && ja4Signals.reqs_quantile_1h > config.ja4.reqsQuantileThreshold,
+	ipsQuantile: ja4Signals.ips_quantile_1h ?? null,
+	reqsQuantile: ja4Signals.reqs_quantile_1h ?? null,
 };
 
 // Risk scoring
-if (signalAnalysis.highGlobalDistribution &&
-    signalAnalysis.highRequestVolume) {
-  riskScore += 50; // Both signals = bot network
-} else if (signalAnalysis.highGlobalDistribution ||
-           signalAnalysis.highRequestVolume) {
-  riskScore += 40; // One signal = suspicious
+if (signalAnalysis.highGlobalDistribution && signalAnalysis.highRequestVolume) {
+	riskScore += 50; // Both signals = bot network
+} else if (signalAnalysis.highGlobalDistribution || signalAnalysis.highRequestVolume) {
+	riskScore += 40; // One signal = suspicious
 }
 ```
 
@@ -578,6 +591,7 @@ All safe combinations (header fingerprints, JA4+TLS hashes) are cached in the ne
 **Frontend Display** (`frontend/src/components/analytics/JA4SignalsDetail.tsx`):
 
 The analytics dashboard displays all 10 signals with:
+
 - **Active Detection Signals**: Highlighted with thresholds and risk indicators
 - **Behavioral Signals**: Monitored for visibility but not used for blocking
 - **Color coding**: Red (risky), yellow (warning), green (normal)
@@ -587,14 +601,14 @@ The analytics dashboard displays all 10 signals with:
 
 ```json
 {
-  "ja4": {
-    "ipsQuantileThreshold": 0.95,
-    "reqsQuantileThreshold": 0.99,
-    "heuristicRatioThreshold": 0.8,
-    "browserRatioThreshold": 0.2,
-    "h2h3RatioThreshold": 0.9,
-    "cacheRatioThreshold": 0.5
-  }
+	"ja4": {
+		"ipsQuantileThreshold": 0.95,
+		"reqsQuantileThreshold": 0.99,
+		"heuristicRatioThreshold": 0.8,
+		"browserRatioThreshold": 0.2,
+		"h2h3RatioThreshold": 0.9,
+		"cacheRatioThreshold": 0.5
+	}
 }
 ```
 
@@ -612,6 +626,7 @@ The analytics dashboard displays all 10 signals with:
 **Finding**: JA4 should **remain stable** across normal and private modes.
 
 **Evidence**:
+
 - Firefox enables `security.ssl.disable_session_identifiers = true` in private mode
 - This changes **JA3** fingerprint (includes session ID)
 - JA4 **excludes session ID** from fingerprinting (per specification)
@@ -620,6 +635,7 @@ The analytics dashboard displays all 10 signals with:
 **Verification Status**: Theoretical (based on JA4 spec) - empirical testing recommended
 
 **System Impact**:
+
 - **If JA4 stable** (expected): Layer 4 catches Firefox incognito hopping
 - **If JA4 changes** (unlikely): Layer 0.5 (IP rate limit) catches it
 - **Verdict**: System is robust either way
@@ -627,6 +643,7 @@ The analytics dashboard displays all 10 signals with:
 **Market Share**: Firefox ~10% (~500M users) - not an edge case, but covered by dual-layer approach.
 
 **References**:
+
 - [JA4 Technical Specification](https://github.com/FoxIO-LLC/ja4/blob/main/technical_details/JA4.md)
 - [Firefox Session ID Issue (arkenfox)](https://github.com/arkenfox/user.js/issues/1838)
 
@@ -822,8 +839,8 @@ Total:                72%  (the token-replay 28% only appears in validation logs
 All ten components are summed (`score * weight`) to a **base score** and then adjusted by the trigger that fired:
 
 - **Force-block triggers**: `token_replay`, `turnstile_failed` → score forced to **100** (or at least `blockThreshold`) regardless of weights.
-- **Deterministic triggers** (only when `risk.mode === "defensive"`): `email_fraud`, `ephemeral_id_fraud`, `validation_frequency`, `ja4_session_hopping`, `duplicate_email`, `repeat_offender`.  
-  - These raise the final score to at least `blockThreshold` **if** `qualifiesForDeterministicBlock()` confirms the paired condition (see `src/lib/scoring.ts`).  
+- **Deterministic triggers** (only when `risk.mode === "defensive"`): `email_fraud`, `ephemeral_id_fraud`, `validation_frequency`, `ja4_session_hopping`, `duplicate_email`, `repeat_offender`.
+  - These raise the final score to at least `blockThreshold` **if** `qualifiesForDeterministicBlock()` confirms the paired condition (see `src/lib/scoring.ts`).
   - In **additive** mode the deterministic floor is disabled; only the weighted sum is used.
 - **Behavior-only signal**: `ip_rate_limit` **never** acts as a block trigger; it only contributes to the weighted score to avoid false positives on shared IPs.
 - **Fingerprint triggers**: `header_fingerprint`, `tls_anomaly`, `latency_mismatch` become the `blockTrigger` when their scores are non-zero so the primary cause is recorded, but they do **not** override the threshold on their own—blocking still requires the weighted total to reach `blockThreshold` (or another deterministic trigger).
@@ -836,37 +853,37 @@ All risk scores include component breakdown stored as JSON:
 
 ```json
 {
-  "tokenReplay": 0,
-  "emailFraud": 42,
-  "ephemeralId": 70,
-  "validationFrequency": 40,
-  "ipDiversity": 0,
-  "ja4SessionHopping": 0,
-  "ipRateLimit": 50,
-  "headerFingerprint": 0,
-  "tlsAnomaly": 0,
-  "latencyMismatch": 0,
-  "total": 19.9,
-  "components": {
-    "emailFraud": {
-      "score": 42,
-      "weight": 0.14,
-      "contribution": 5.88,
-      "reason": "Suspicious email pattern"
-    },
-    "ephemeralId": {
-      "score": 70,
-      "weight": 0.15,
-      "contribution": 10.5,
-      "reason": "2 submissions (suspicious)"
-    },
-    "ipRateLimit": {
-      "score": 50,
-      "weight": 0.07,
-      "contribution": 3.5,
-      "reason": "Multiple submissions from IP"
-    }
-  }
+	"tokenReplay": 0,
+	"emailFraud": 42,
+	"ephemeralId": 70,
+	"validationFrequency": 40,
+	"ipDiversity": 0,
+	"ja4SessionHopping": 0,
+	"ipRateLimit": 50,
+	"headerFingerprint": 0,
+	"tlsAnomaly": 0,
+	"latencyMismatch": 0,
+	"total": 19.9,
+	"components": {
+		"emailFraud": {
+			"score": 42,
+			"weight": 0.14,
+			"contribution": 5.88,
+			"reason": "Suspicious email pattern"
+		},
+		"ephemeralId": {
+			"score": 70,
+			"weight": 0.15,
+			"contribution": 10.5,
+			"reason": "2 submissions (suspicious)"
+		},
+		"ipRateLimit": {
+			"score": 50,
+			"weight": 0.07,
+			"contribution": 3.5,
+			"reason": "Multiple submissions from IP"
+		}
+	}
 }
 ```
 
@@ -874,18 +891,18 @@ All risk scores include component breakdown stored as JSON:
 
 ### Component Reference (what each component measures)
 
-| Component | Signal source | Window / threshold | Normalization | Block role |
-|-----------|---------------|--------------------|---------------|------------|
-| Token Replay | Turnstile token hash reuse | Instant | 0 or 100 | Force-block (always 100) |
-| Email Fraud | Markov-Mail RPC risk (0–1) | Per email | ×100 | Deterministic in defensive mode; can block alone |
-| Ephemeral ID | Submissions per `ephemeral_id` | 24h, threshold 2 | 1→10, 2→70, ≥3→100 | Deterministic when paired |
-| Validation Frequency | Turnstile attempts per `ephemeral_id` | 1h, warn=2, block=3 | 1→0, 2→40, ≥3→100 | Deterministic when paired |
-| IP Diversity | Unique IPs per `ephemeral_id` | 24h, threshold 2 | 1→0, 2→50, ≥3→100 | Weighted-only (helps score, doesn’t force block) |
-| JA4 Session Hopping | JA4 clustering + velocity | 5m / 1h windows | 0–230 → normalized | Deterministic when paired |
-| IP Rate Limit | Submissions per IP | 1h curve: 1→0 … 5+→100 | Direct curve | Behavioral only (never blocks alone) |
-| Header Fingerprint | Shared header stack across IPs/JA4s | 60m; min 3 reqs/2 IPs/2 JA4 | 0 or 100 | Attribution trigger; needs total ≥ threshold |
-| TLS Anomaly | JA4 + TLS extension hash baseline | 24h; ≥5 JA4 samples | 0 or 100 | Attribution trigger; needs total ≥ threshold |
-| Latency Mismatch | RTT vs claimed mobile/device/ASN | Immediate; <6 ms on mobile/ASN list | 0 or 80 | Attribution trigger; needs total ≥ threshold |
+| Component            | Signal source                         | Window / threshold                  | Normalization      | Block role                                       |
+| -------------------- | ------------------------------------- | ----------------------------------- | ------------------ | ------------------------------------------------ |
+| Token Replay         | Turnstile token hash reuse            | Instant                             | 0 or 100           | Force-block (always 100)                         |
+| Email Fraud          | Markov-Mail RPC risk (0–1)            | Per email                           | ×100               | Deterministic in defensive mode; can block alone |
+| Ephemeral ID         | Submissions per `ephemeral_id`        | 24h, threshold 2                    | 1→10, 2→70, ≥3→100 | Deterministic when paired                        |
+| Validation Frequency | Turnstile attempts per `ephemeral_id` | 1h, warn=2, block=3                 | 1→0, 2→40, ≥3→100  | Deterministic when paired                        |
+| IP Diversity         | Unique IPs per `ephemeral_id`         | 24h, threshold 2                    | 1→0, 2→50, ≥3→100  | Weighted-only (helps score, doesn’t force block) |
+| JA4 Session Hopping  | JA4 clustering + velocity             | 5m / 1h windows                     | 0–230 → normalized | Deterministic when paired                        |
+| IP Rate Limit        | Submissions per IP                    | 1h curve: 1→0 … 5+→100              | Direct curve       | Behavioral only (never blocks alone)             |
+| Header Fingerprint   | Shared header stack across IPs/JA4s   | 60m; min 3 reqs/2 IPs/2 JA4         | 0 or 100           | Attribution trigger; needs total ≥ threshold     |
+| TLS Anomaly          | JA4 + TLS extension hash baseline     | 24h; ≥5 JA4 samples                 | 0 or 100           | Attribution trigger; needs total ≥ threshold     |
+| Latency Mismatch     | RTT vs claimed mobile/device/ASN      | Immediate; <6 ms on mobile/ASN list | 0 or 80            | Attribution trigger; needs total ≥ threshold     |
 
 ---
 
@@ -917,9 +934,9 @@ WHERE (ephemeral_id = ? OR ip_address = ?)
 
 ```typescript
 function calculateProgressiveTimeout(offenseCount: number): number {
-  const timeWindows = [3600, 14400, 28800, 43200, 86400];
-  const index = Math.min(offenseCount - 1, timeWindows.length - 1);
-  return timeWindows[Math.max(0, index)];
+	const timeWindows = [3600, 14400, 28800, 43200, 86400];
+	const index = Math.min(offenseCount - 1, timeWindows.length - 1);
+	return timeWindows[Math.max(0, index)];
 }
 ```
 
@@ -927,13 +944,13 @@ function calculateProgressiveTimeout(offenseCount: number): number {
 
 ```typescript
 await addToBlacklist(db, {
-  ephemeralId,
-  ja4,
-  ipAddress,
-  blockReason: 'Detection reason',
-  confidence: 'high',
-  expiresIn: timeoutSeconds,
-  detectionType: 'ephemeral_id_fraud'
+	ephemeralId,
+	ja4,
+	ipAddress,
+	blockReason: 'Detection reason',
+	confidence: 'high',
+	expiresIn: timeoutSeconds,
+	detectionType: 'ephemeral_id_fraud',
 });
 ```
 

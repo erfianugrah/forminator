@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { subDays } from 'date-fns';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import type { BlacklistEntry } from '../../../hooks/useBlacklist';
-import type { BlockedValidation } from '../../../hooks/useBlockedValidations';
+import type { BlockedValidation, DetectionType } from '../../../hooks/useBlockedValidations';
 import { getRelativeTime, getTimeAgo, getTimeUrgency, getUrgencyClasses } from '../../../lib/time-utils';
 import { downloadJson } from '../../../lib/download';
 import { SingleSelect } from '../filters/SingleSelect';
@@ -40,21 +40,7 @@ type SecurityEvent = {
 	blockReason: string;
 	riskScore: number;
 	riskBreakdown?: string | null;
-	detectionType:
-		| 'email_fraud_detection'
-		| 'ephemeral_id_tracking'
-		| 'ja4_fingerprinting'
-		| 'token_replay_protection'
-		| 'turnstile_validation'
-		| 'pre_validation_blacklist'
-		| 'duplicate_email'
-		| 'holistic_risk'
-		| 'header_fingerprint_reuse'
-		| 'tls_fingerprint_anomaly'
-		| 'latency_mismatch'
-		| 'fingerprint_anomaly'
-		| 'other'
-		| null;
+	detectionType: DetectionType | null;
 	country?: string | null;
 	city?: string | null;
 	ja4?: string | null;
@@ -108,9 +94,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 
 	// Convert recent detections to unified format, but exclude detections that have active blocks
 	// Deduplicate by checking if ephemeral_id or ip_address matches an active block
-	const activeIdentifiers = new Set(
-		activeBlocks.map(block => block.ephemeral_id || block.ip_address).filter(Boolean)
-	);
+	const activeIdentifiers = new Set(activeBlocks.map((block) => block.ephemeral_id || block.ip_address).filter(Boolean));
 
 	const detectionEvents: SecurityEvent[] = recentDetections
 		.filter((validation) => {
@@ -138,7 +122,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 
 	// Merge and sort by timestamp (most recent first)
 	const allEvents = [...activeBlockEvents, ...detectionEvents].sort(
-		(a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+		(a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
 	);
 
 	// Apply filters
@@ -293,9 +277,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 						Expires {relativeTime}
 					</span>
 					{event.offenseCount && event.offenseCount > 1 && (
-						<span className="text-xs text-muted-foreground">
-							(Offense #{event.offenseCount})
-						</span>
+						<span className="text-xs text-muted-foreground">(Offense #{event.offenseCount})</span>
 					)}
 				</div>
 			);
@@ -344,7 +326,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 				throw new Error('Failed to export security events');
 			}
 
-			const payload = await response.json() as { fileName?: string; data?: any };
+			const payload = (await response.json()) as { fileName?: string; data?: any };
 			const fileName = payload.fileName || `security-events-${Date.now()}.json`;
 			const jsonData = JSON.stringify(payload.data ?? payload, null, 2);
 			const blob = new Blob([jsonData], { type: 'application/json' });
@@ -375,9 +357,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 				type: event.type,
 				summary: {
 					...event,
-					riskBreakdownParsed: event.riskBreakdown
-						? safeParseJson(event.riskBreakdown)
-						: null,
+					riskBreakdownParsed: event.riskBreakdown ? safeParseJson(event.riskBreakdown) : null,
 				},
 			};
 
@@ -387,10 +367,10 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 					const response = await fetch(`/api/analytics/validations/${numericId}`, {
 						headers: { 'X-API-KEY': apiKey },
 					});
-						if (response.ok) {
-							const data = await response.json() as { data?: unknown };
-							payload.detail = data.data ?? data;
-						}
+					if (response.ok) {
+						const data = (await response.json()) as { data?: unknown };
+						payload.detail = data.data ?? data;
+					}
 				}
 			} else if (event.blacklistEntry) {
 				payload.detail = event.blacklistEntry;
@@ -411,7 +391,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 			if (!isNaN(numericId)) {
 				onLoadDetail(numericId);
 			} else {
-				alert('Unable to load validation details for this detection');
+				setExportError('Unable to load validation details for this detection');
 			}
 			return;
 		}
@@ -421,12 +401,12 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 			try {
 				const response = await fetch(`/api/analytics/validations/by-erfid/${event.erfid}`, {
 					headers: {
-						'X-API-KEY': apiKey
-					}
+						'X-API-KEY': apiKey,
+					},
 				});
 
 				if (response.ok) {
-					const data = await response.json() as { success: boolean; data?: { id: number } };
+					const data = (await response.json()) as { success: boolean; data?: { id: number } };
 					if (data.success && data.data && data.data.id) {
 						onLoadDetail(data.data.id);
 						return;
@@ -441,7 +421,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 		if (onLoadBlacklistDetail && event.blacklistEntry) {
 			onLoadBlacklistDetail(event.blacklistEntry);
 		} else {
-			alert('No validation or blacklist details available for this block');
+			setExportError('No validation or blacklist details available for this block');
 		}
 	};
 
@@ -453,8 +433,8 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 					<CardDescription>
 						Recent threat detections and active enforcement. Shows {totalActiveBlocks} actively blocked{' '}
 						{totalActiveBlocks === 1 ? 'identity' : 'identities'} and {totalDetections} recent{' '}
-						{totalDetections === 1 ? 'detection' : 'detections'}.
-						Active blocks expire based on progressive timeouts (1h → 4h → 8h → 12h → 24h).
+						{totalDetections === 1 ? 'detection' : 'detections'}. Active blocks expire based on progressive timeouts (1h → 4h → 8h → 12h →
+						24h).
 					</CardDescription>
 				</div>
 				<button
@@ -474,7 +454,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 							options={[
 								{ value: 'all', label: 'All' },
 								{ value: 'active', label: 'Blocked (Active)' },
-								{ value: 'detection', label: 'Blocked (Expired)' }
+								{ value: 'detection', label: 'Blocked (Expired)' },
 							]}
 							value={statusFilter}
 							onChange={setStatusFilter}
@@ -488,7 +468,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 								{ value: 'critical', label: 'Critical (≥90)' },
 								{ value: 'high', label: 'High (70-89)' },
 								{ value: 'medium', label: 'Medium (50-69)' },
-								{ value: 'low', label: 'Low (<50)' }
+								{ value: 'low', label: 'Low (<50)' },
 							]}
 							value={riskLevelFilter}
 							onChange={setRiskLevelFilter}
@@ -518,9 +498,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 							</div>
 						)}
 					</div>
-					{exportError && (
-						<p className="text-xs text-destructive mt-2">{exportError}</p>
-					)}
+					{exportError && <p className="text-xs text-destructive mt-2">{exportError}</p>}
 				</div>
 
 				{displayEvents.length === 0 ? (
@@ -534,11 +512,11 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 						<div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
 							{displayEvents.map((event) => {
 								// Parse block_reason to get the actual calculated risk score
-							const parsed = parseBlockReason(event.blockReason);
-							// Use parsed risk score if available, otherwise fall back to database value
-							const actualRiskScore = parsed.riskScore ?? event.riskScore;
-							const riskLevel = getRiskLevel(actualRiskScore);
-							const breakdownSummary = summarizeRiskBreakdown(event.riskBreakdown);
+								const parsed = parseBlockReason(event.blockReason);
+								// Use parsed risk score if available, otherwise fall back to database value
+								const actualRiskScore = parsed.riskScore ?? event.riskScore;
+								const riskLevel = getRiskLevel(actualRiskScore);
+								const breakdownSummary = summarizeRiskBreakdown(event.riskBreakdown);
 
 								return (
 									<div
@@ -548,11 +526,12 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 										{/* Header Row: Status + Risk Score + Detection Type + Button */}
 										<div className="flex items-start justify-between gap-4">
 											<div className="flex-1 flex items-center gap-4 flex-wrap min-w-0">
-												<div className="flex items-center gap-2 flex-wrap">
-													{getStatusBadge(event)}
-												</div>
+												<div className="flex items-center gap-2 flex-wrap">{getStatusBadge(event)}</div>
 												<div className="flex items-center gap-2">
-													<span className="inline-flex px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 text-xs font-medium flex-shrink-0" title="Risk assessment score (0-100)">
+													<span
+														className="inline-flex px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 text-xs font-medium flex-shrink-0"
+														title="Risk assessment score (0-100)"
+													>
 														Risk Score:
 													</span>
 													<span className={`text-xs font-semibold ${getRiskColor(actualRiskScore)}`}>
@@ -585,52 +564,67 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 
 										{/* Main Info Grid */}
 										<div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
-												<div className="min-w-0 space-y-1.5">
-													{event.ipAddress && event.identifierType === 'ephemeral' && (
-														<p className="flex items-center gap-2">
-															<span className="inline-flex px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs font-medium flex-shrink-0">IP:</span>
-															<span className="font-mono text-xs text-foreground truncate select-all">{event.ipAddress}</span>
-														</p>
-													)}
-													{event.country && (
-														<p className="flex items-center gap-2">
-															<span className="inline-flex px-2 py-0.5 rounded-md bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-medium flex-shrink-0">Country:</span>
-															<span className="text-xs text-foreground">{event.country}</span>
-														</p>
-													)}
-													{event.city && (
-														<p className="flex items-center gap-2">
-															<span className="inline-flex px-2 py-0.5 rounded-md bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-medium flex-shrink-0">City:</span>
-															<span className="text-xs text-foreground">{event.city}</span>
-														</p>
-													)}
-												</div>
-												<div className="min-w-0 space-y-1.5">
-													<p className="flex items-center gap-2 min-w-0">
-														<span className="inline-flex px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs font-medium flex-shrink-0">
-															{event.identifierType === 'ephemeral' ? 'Ephemeral ID:' : 'IP Address:'}
+											<div className="min-w-0 space-y-1.5">
+												{event.ipAddress && event.identifierType === 'ephemeral' && (
+													<p className="flex items-center gap-2">
+														<span className="inline-flex px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs font-medium flex-shrink-0">
+															IP:
 														</span>
-														<span className="font-mono text-xs font-medium text-foreground select-all overflow-hidden text-ellipsis whitespace-nowrap" title={event.ephemeralId || event.ipAddress || 'N/A'}>
-															{event.ephemeralId || event.ipAddress}
-														</span>
+														<span className="font-mono text-xs text-foreground truncate select-all">{event.ipAddress}</span>
 													</p>
-													<p className="flex items-center gap-2 min-w-0">
-														<span className="inline-flex px-2 py-0.5 rounded-md bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 text-xs font-medium flex-shrink-0" title="TLS fingerprint">
-															JA4:
+												)}
+												{event.country && (
+													<p className="flex items-center gap-2">
+														<span className="inline-flex px-2 py-0.5 rounded-md bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-medium flex-shrink-0">
+															Country:
 														</span>
-														<span className="font-mono text-xs font-medium text-foreground select-all overflow-hidden text-ellipsis whitespace-nowrap" title={event.ja4 || 'N/A'}>
-															{event.ja4 || 'N/A'}
-														</span>
+														<span className="text-xs text-foreground">{event.country}</span>
 													</p>
-												</div>
-											<div className="min-w-0">
-												{/* Empty column for spacing */}
+												)}
+												{event.city && (
+													<p className="flex items-center gap-2">
+														<span className="inline-flex px-2 py-0.5 rounded-md bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-medium flex-shrink-0">
+															City:
+														</span>
+														<span className="text-xs text-foreground">{event.city}</span>
+													</p>
+												)}
 											</div>
+											<div className="min-w-0 space-y-1.5">
+												<p className="flex items-center gap-2 min-w-0">
+													<span className="inline-flex px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs font-medium flex-shrink-0">
+														{event.identifierType === 'ephemeral' ? 'Ephemeral ID:' : 'IP Address:'}
+													</span>
+													<span
+														className="font-mono text-xs font-medium text-foreground select-all overflow-hidden text-ellipsis whitespace-nowrap"
+														title={event.ephemeralId || event.ipAddress || 'N/A'}
+													>
+														{event.ephemeralId || event.ipAddress}
+													</span>
+												</p>
+												<p className="flex items-center gap-2 min-w-0">
+													<span
+														className="inline-flex px-2 py-0.5 rounded-md bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 text-xs font-medium flex-shrink-0"
+														title="TLS fingerprint"
+													>
+														JA4:
+													</span>
+													<span
+														className="font-mono text-xs font-medium text-foreground select-all overflow-hidden text-ellipsis whitespace-nowrap"
+														title={event.ja4 || 'N/A'}
+													>
+														{event.ja4 || 'N/A'}
+													</span>
+												</p>
+											</div>
+											<div className="min-w-0">{/* Empty column for spacing */}</div>
 										</div>
 
 										{/* Block Reason */}
 										<div className="min-w-0 pt-3 border-t border-border/50">
-											<span className="inline-flex px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-medium mb-2">Detection Details</span>
+											<span className="inline-flex px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-xs font-medium mb-2">
+												Detection Details
+											</span>
 											{(() => {
 												const parsed = parseBlockReason(event.blockReason);
 												return (
@@ -642,9 +636,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 																<div className="flex flex-wrap gap-1.5">
 																	{parsed.triggers.map((trigger, idx) => {
 																		// Truncate long trigger text for display
-																		const displayText = trigger.length > 80
-																			? trigger.substring(0, 80) + '...'
-																			: trigger;
+																		const displayText = trigger.length > 80 ? trigger.substring(0, 80) + '...' : trigger;
 																		return (
 																			<span
 																				key={idx}
@@ -658,9 +650,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 																</div>
 															</div>
 														) : (
-															<p className="text-xs text-muted-foreground italic">
-																No detailed triggers available
-															</p>
+															<p className="text-xs text-muted-foreground italic">No detailed triggers available</p>
 														)}
 
 														{/* Risk contribution summary */}
@@ -718,7 +708,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 	);
 }
 
-function inferDetectionType(blockReason: string): 'email_fraud_detection' | 'ephemeral_id_tracking' | 'ja4_fingerprinting' | 'token_replay_protection' | 'turnstile_validation' | 'pre_validation_blacklist' | 'duplicate_email' | 'other' {
+function inferDetectionType(blockReason: string): DetectionType {
 	const reason = blockReason.toLowerCase();
 
 	// Token replay protection
@@ -727,7 +717,10 @@ function inferDetectionType(blockReason: string): 'email_fraud_detection' | 'eph
 	}
 
 	// Email fraud detection (Layer 1)
-	if (reason.includes('email') && (reason.includes('fraud') || reason.includes('random') || reason.includes('sequential') || reason.includes('dated'))) {
+	if (
+		reason.includes('email') &&
+		(reason.includes('fraud') || reason.includes('random') || reason.includes('sequential') || reason.includes('dated'))
+	) {
 		return 'email_fraud_detection';
 	}
 
@@ -742,10 +735,15 @@ function inferDetectionType(blockReason: string): 'email_fraud_detection' | 'eph
 	}
 
 	// Ephemeral ID tracking (Layer 2) - covers submission count, validation frequency, IP diversity
-	if (reason.includes('ephemeral') || reason.includes('automated') || reason.includes('multiple submissions') ||
-	    reason.includes('validation') || reason.includes('frequency') ||
-	    reason.includes('ip') && reason.includes('diversity') || reason.includes('multiple ip') ||
-	    reason.includes('duplicate') && reason.includes('attempt')) {
+	if (
+		reason.includes('ephemeral') ||
+		reason.includes('automated') ||
+		reason.includes('multiple submissions') ||
+		(reason.includes('validation') && reason.includes('frequency')) ||
+		(reason.includes('ip') && reason.includes('diversity')) ||
+		reason.includes('multiple ip') ||
+		(reason.includes('duplicate') && reason.includes('attempt'))
+	) {
 		return 'ephemeral_id_tracking';
 	}
 
@@ -758,31 +756,51 @@ function inferDetectionType(blockReason: string): 'email_fraud_detection' | 'eph
 }
 
 /**
- * Parse block reason to extract risk score and triggers
+ * Parse block reason to extract risk score, triggers, and top components.
+ *
+ * Expected format:
+ *   "Risk score 70 >= 70. Triggers: Email: random, Multiple submissions from same IP (2 in 60 min). Top components: emailFraud=90, ipRateLimit=25, ephemeralId=10"
  */
 function parseBlockReason(blockReason: string): {
 	riskScore?: number;
 	threshold?: number;
 	triggers: string[];
+	topComponents: Array<{ name: string; score: number }>;
 	fullText: string;
 } {
-	// Try to parse "Risk score X >= Y. Triggers: ..." format
 	const riskScoreMatch = blockReason.match(/Risk score (\d+(?:\.\d+)?) >= (\d+)/);
-	const triggersMatch = blockReason.match(/Triggers: (.+)$/);
-
 	const riskScore = riskScoreMatch ? parseFloat(riskScoreMatch[1]) : undefined;
 	const threshold = riskScoreMatch ? parseInt(riskScoreMatch[2], 10) : undefined;
 
+	// Separate "Triggers: ..." from ". Top components: ..."
+	const triggersMatch = blockReason.match(/Triggers:\s*(.+?)(?:\.\s*Top components:|$)/);
+	const topComponentsMatch = blockReason.match(/Top components:\s*(.+)$/);
+
 	let triggers: string[] = [];
 	if (triggersMatch) {
-		// Split by comma, but preserve commas within trigger descriptions
-		triggers = triggersMatch[1].split(/,\s*(?=[A-Z])/).map(t => t.trim());
+		triggers = triggersMatch[1]
+			.split(/,\s*/)
+			.map((t) => t.trim())
+			.filter(Boolean);
+	}
+
+	let topComponents: Array<{ name: string; score: number }> = [];
+	if (topComponentsMatch) {
+		topComponents = topComponentsMatch[1]
+			.split(/,\s*/)
+			.map((pair) => {
+				const m = pair.match(/^(\w+)=(\d+)/);
+				if (!m) return null;
+				return { name: m[1], score: parseInt(m[2], 10) };
+			})
+			.filter((x): x is { name: string; score: number } => x !== null);
 	}
 
 	return {
 		riskScore,
 		threshold,
 		triggers,
+		topComponents,
 		fullText: blockReason,
 	};
 }
@@ -822,7 +840,7 @@ function summarizeRiskBreakdown(raw?: string | null): RiskBreakdownSummary | nul
 				reason: typeof component.reason === 'string' ? component.reason : undefined,
 			}))
 			.sort((a, b) => b.contribution - a.contribution)
-			.slice(0, 4);
+			.slice(0, 6);
 
 		if (!entries.length) {
 			return null;
@@ -838,9 +856,7 @@ function renderRiskBreakdownSummary(summary: RiskBreakdownSummary | null, isActi
 	if (!summary) {
 		return (
 			<p className="text-xs text-muted-foreground italic">
-				{isActiveBlock
-					? 'Detailed risk breakdown unavailable (blocked before Turnstile validation).'
-					: 'Risk breakdown unavailable.'}
+				{isActiveBlock ? 'Detailed risk breakdown unavailable (blocked before Turnstile validation).' : 'Risk breakdown unavailable.'}
 			</p>
 		);
 	}
@@ -859,11 +875,7 @@ function renderRiskBreakdownSummary(summary: RiskBreakdownSummary | null, isActi
 							<span>{component.score.toFixed(0)}/100 score</span>
 							<span>{Math.round(component.weight * 100)}% weight</span>
 						</div>
-						{component.reason && (
-							<p className="text-[11px] text-muted-foreground mt-1">
-								{component.reason}
-							</p>
-						)}
+						{component.reason && <p className="text-[11px] text-muted-foreground mt-1">{component.reason}</p>}
 					</div>
 				))}
 			</div>

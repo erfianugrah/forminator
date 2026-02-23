@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from './ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface AddressData {
 	street?: string;
@@ -48,7 +42,7 @@ export function AddressInput({ value, onChange, disabled, error, defaultCountry 
 			state: '',
 			postalCode: '',
 			country: defaultCountry.toUpperCase(),
-		}
+		},
 	);
 
 	useEffect(() => {
@@ -95,11 +89,7 @@ export function AddressInput({ value, onChange, disabled, error, defaultCountry 
 				<Label htmlFor="country" className="text-xs text-muted-foreground font-normal">
 					Country
 				</Label>
-				<Select
-					value={address.country}
-					onValueChange={(value) => handleChange('country', value)}
-					disabled={disabled}
-				>
+				<Select value={address.country} onValueChange={(value) => handleChange('country', value)} disabled={disabled}>
 					<SelectTrigger className={error ? 'border-destructive' : ''}>
 						<SelectValue placeholder="Select country..." />
 					</SelectTrigger>

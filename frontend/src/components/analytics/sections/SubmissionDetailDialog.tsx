@@ -65,12 +65,8 @@ export function SubmissionDetailDialog({ submission, loading, onClose, config }:
 				) : submission ? (
 					<>
 						<DialogHeader>
-							<DialogTitle>
-								Submission Details - ID #{submission.id}
-							</DialogTitle>
-							<DialogDescription>
-								Complete information for this submission
-							</DialogDescription>
+							<DialogTitle>Submission Details - ID #{submission.id}</DialogTitle>
+							<DialogDescription>Complete information for this submission</DialogDescription>
 						</DialogHeader>
 
 						<div className="p-6 space-y-6">
@@ -103,21 +99,30 @@ export function SubmissionDetailDialog({ submission, loading, onClose, config }:
 									<div>
 										<span className="text-muted-foreground">Submitted:</span>
 										<p className="font-medium">
-											{new Date(submission.created_at).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+											{new Date(submission.created_at).toLocaleString('en-US', {
+												year: 'numeric',
+												month: '2-digit',
+												day: '2-digit',
+												hour: '2-digit',
+												minute: '2-digit',
+												second: '2-digit',
+												hour12: false,
+											})}
 										</p>
 									</div>
 								</div>
 							</div>
 
 							{/* Fraud Risk Assessment */}
-							{submission.risk_score_breakdown && (() => {
-								try {
-									const breakdown = JSON.parse(submission.risk_score_breakdown);
-									return <FraudAssessment breakdown={breakdown} config={config} />;
-								} catch (e) {
-									return null;
-								}
-							})()}
+							{submission.risk_score_breakdown &&
+								(() => {
+									try {
+										const breakdown = JSON.parse(submission.risk_score_breakdown);
+										return <FraudAssessment breakdown={breakdown} config={config} />;
+									} catch (e) {
+										return null;
+									}
+								})()}
 
 							{/* Geographic Data */}
 							<div>
@@ -150,9 +155,7 @@ export function SubmissionDetailDialog({ submission, loading, onClose, config }:
 									<div>
 										<span className="text-muted-foreground">Coordinates:</span>
 										<p className="font-mono text-xs">
-											{submission.latitude && submission.longitude
-												? `${submission.latitude}, ${submission.longitude}`
-												: 'N/A'}
+											{submission.latitude && submission.longitude ? `${submission.latitude}, ${submission.longitude}` : 'N/A'}
 										</p>
 									</div>
 									<div>
@@ -176,9 +179,7 @@ export function SubmissionDetailDialog({ submission, loading, onClose, config }:
 									</div>
 									<div>
 										<span className="text-muted-foreground">ASN:</span>
-										<p className="font-mono text-xs">
-											{submission.asn ? `AS${submission.asn}` : 'N/A'}
-										</p>
+										<p className="font-mono text-xs">{submission.asn ? `AS${submission.asn}` : 'N/A'}</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">AS Organization:</span>
@@ -214,8 +215,8 @@ export function SubmissionDetailDialog({ submission, loading, onClose, config }:
 												submission.bot_score && submission.bot_score < 30
 													? 'text-destructive'
 													: submission.bot_score && submission.bot_score >= 70
-													? 'text-green-600 dark:text-green-400'
-													: 'text-yellow-600 dark:text-yellow-400'
+														? 'text-green-600 dark:text-green-400'
+														: 'text-yellow-600 dark:text-yellow-400'
 											}`}
 										>
 											{submission.bot_score !== null ? submission.bot_score : 'N/A'}
@@ -223,9 +224,7 @@ export function SubmissionDetailDialog({ submission, loading, onClose, config }:
 									</div>
 									<div>
 										<span className="text-muted-foreground">Client Trust Score:</span>
-										<p className="font-medium">
-											{submission.client_trust_score !== null ? submission.client_trust_score : 'N/A'}
-										</p>
+										<p className="font-medium">{submission.client_trust_score !== null ? submission.client_trust_score : 'N/A'}</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">Verified Bot:</span>
@@ -254,19 +253,21 @@ export function SubmissionDetailDialog({ submission, loading, onClose, config }:
 							</div>
 
 							{/* JA4 Intelligence */}
-							{submission.ja4 && submission.ja4_signals && (() => {
-								try {
-									const signals = JSON.parse(submission.ja4_signals);
-									return <JA4SignalsDetail signals={signals} ja4Fingerprint={submission.ja4} config={config} />;
-								} catch (e) {
-									return (
-										<div>
-											<h3 className="text-lg font-semibold mb-3">JA4 Fingerprint</h3>
-											<p className="font-mono text-xs break-all">{submission.ja4}</p>
-										</div>
-									);
-								}
-							})()}
+							{submission.ja4 &&
+								submission.ja4_signals &&
+								(() => {
+									try {
+										const signals = JSON.parse(submission.ja4_signals);
+										return <JA4SignalsDetail signals={signals} ja4Fingerprint={submission.ja4} config={config} />;
+									} catch (e) {
+										return (
+											<div>
+												<h3 className="text-lg font-semibold mb-3">JA4 Fingerprint</h3>
+												<p className="font-mono text-xs break-all">{submission.ja4}</p>
+											</div>
+										);
+									}
+								})()}
 						</div>
 					</>
 				) : null}

@@ -11,9 +11,7 @@ interface DateOfBirthInputProps {
 export function DateOfBirthInput({ value, onChange, disabled, error }: DateOfBirthInputProps) {
 	// Calculate max date (18 years ago from today)
 	const today = new Date();
-	const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
-		.toISOString()
-		.split('T')[0];
+	const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate()).toISOString().split('T')[0];
 
 	// Min date (120 years ago)
 	const minDate = new Date(today.getFullYear() - 120, 0, 1).toISOString().split('T')[0];
@@ -21,8 +19,7 @@ export function DateOfBirthInput({ value, onChange, disabled, error }: DateOfBir
 	return (
 		<div className="space-y-2">
 			<Label htmlFor="dateOfBirth" className="text-sm font-medium">
-				Date of Birth{' '}
-				<span className="text-xs text-muted-foreground font-normal">(Optional, must be 18+)</span>
+				Date of Birth <span className="text-xs text-muted-foreground font-normal">(Optional, must be 18+)</span>
 			</Label>
 			<div className="">
 				<Input
@@ -40,9 +37,7 @@ export function DateOfBirthInput({ value, onChange, disabled, error }: DateOfBir
 					placeholder="YYYY-MM-DD"
 				/>
 			</div>
-			<p className="text-xs text-muted-foreground">
-				You must be at least 18 years old to register
-			</p>
+			<p className="text-xs text-muted-foreground">You must be at least 18 years old to register</p>
 		</div>
 	);
 }

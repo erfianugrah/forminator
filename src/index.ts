@@ -18,7 +18,7 @@ app.use('*', logger());
 app.use('*', async (c, next) => {
 	// Get allowed origins from environment variable
 	const allowedOriginsEnv = c.env.ALLOWED_ORIGINS || 'https://form.erfi.dev';
-	const allowedOrigins = allowedOriginsEnv.split(',').map(o => o.trim());
+	const allowedOrigins = allowedOriginsEnv.split(',').map((o) => o.trim());
 
 	// Add localhost in development
 	if (c.env.ENVIRONMENT !== 'production') {
@@ -60,11 +60,11 @@ app.use('*', async (c, next) => {
 	c.header(
 		'Content-Security-Policy',
 		"default-src 'self'; " +
-		"script-src 'self' https://challenges.cloudflare.com; " +
-		"frame-src https://challenges.cloudflare.com; " +
-		"connect-src 'self' https://challenges.cloudflare.com; " +
-		"style-src 'self' 'unsafe-inline'; " +
-		"img-src 'self' data: https:;"
+			"script-src 'self' https://challenges.cloudflare.com; " +
+			'frame-src https://challenges.cloudflare.com; ' +
+			"connect-src 'self' https://challenges.cloudflare.com; " +
+			"style-src 'self' 'unsafe-inline'; " +
+			"img-src 'self' data: https:;",
 	);
 });
 
@@ -108,16 +108,11 @@ app.all('*', async (c) => {
 				return configRoute.fetch(normalizedRequest, c.env, c.executionCtx);
 
 			case 'health':
-				const cfg = getConfig(c.env);
+				// Only expose minimal info publicly — internal details require authentication
 				return c.json({
 					status: 'ok',
 					timestamp: new Date().toISOString(),
 					version: '1.0.0',
-					routes: routes,  // Show configured routes for debugging
-					risk: {
-						mode: cfg.risk.mode,
-						blockThreshold: cfg.risk.blockThreshold,
-					},
 				});
 
 			case 'admin':
@@ -138,7 +133,7 @@ app.all('*', async (c) => {
 			message: 'Route not defined. Enable static assets or point your frontend at the documented API routes.',
 			docs: 'https://github.com/erfi-forminator/forminator/blob/main/docs/backend-only.md',
 		},
-		404
+		404,
 	);
 });
 

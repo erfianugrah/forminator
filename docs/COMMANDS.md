@@ -18,6 +18,7 @@ Complete reference for all npm and wrangler commands used in the Forminator proj
 ## Overview
 
 The Forminator project uses two separate package.json files:
+
 - **Root** (`/package.json`) - Worker backend dependencies and scripts
 - **Frontend** (`/frontend/package.json`) - Astro frontend dependencies and scripts
 
@@ -121,6 +122,7 @@ Runs all tests with browser window visible (non-headless mode).
 ### Test Files
 
 Test files are configured in package.json but not yet implemented. The test commands reference:
+
 - `tests/form-submission.spec.ts` - For basic form validation and submission tests
 - `tests/ephemeral-id.spec.ts` - For ephemeral ID fraud detection pattern tests
 - `tests/fraud-stress-test.spec.ts` - For high-volume submission pattern tests
@@ -157,6 +159,7 @@ npm run deploy
 ```
 
 This command:
+
 1. Builds frontend (`npm run build`)
 2. Type-checks worker (`npx tsc --noEmit`)
 3. Deploys worker with built frontend (`wrangler deploy`)
@@ -278,6 +281,7 @@ wrangler tail --method POST
 **Issue:** `wrangler dev` fails to start
 
 **Solutions:**
+
 ```bash
 # Check wrangler version
 wrangler --version
@@ -294,6 +298,7 @@ npm install -g wrangler@latest
 **Issue:** `npm run build` fails
 
 **Solutions:**
+
 ```bash
 # Check Node.js version (requires 18+)
 node --version
@@ -312,6 +317,7 @@ npx tsc --noEmit
 **Issue:** Tests fail with connection errors
 
 **Solutions:**
+
 ```bash
 # Ensure worker is running
 wrangler dev --remote
@@ -328,6 +334,7 @@ wrangler d1 execute DB --file=./schema.sql --remote
 **Issue:** `Couldn't find DB with name...`
 
 **Solutions:**
+
 ```bash
 # List databases
 wrangler d1 list
@@ -344,6 +351,7 @@ wrangler d1 create DB
 **Issue:** Worker can't access secrets
 
 **Solutions:**
+
 ```bash
 # For local development: Create .dev.vars
 cat > .dev.vars << EOF
@@ -364,6 +372,7 @@ wrangler secret list
 **Issue:** `Error: listen EADDRINUSE: address already in use :::8787`
 
 **Solutions:**
+
 ```bash
 # Find process using port 8787
 lsof -ti:8787
@@ -383,17 +392,17 @@ wrangler dev --port 8788
 
 ```json
 {
-  "scripts": {
-    "build": "cd frontend && npm run build",
-    "deploy": "npm run build && npx tsc --noEmit && wrangler deploy",
-    "test": "playwright test",
-    "test:basic": "playwright test tests/form-submission.spec.ts tests/ephemeral-id.spec.ts",
-    "test:fraud": "playwright test tests/fraud-stress-test.spec.ts",
-    "test:fraud:headed": "playwright test tests/fraud-stress-test.spec.ts --headed",
-    "test:ui": "playwright test --ui",
-    "test:headed": "playwright test --headed",
-    "tail": "wrangler tail"
-  }
+	"scripts": {
+		"build": "cd frontend && npm run build",
+		"deploy": "npm run build && npx tsc --noEmit && wrangler deploy",
+		"test": "playwright test",
+		"test:basic": "playwright test tests/form-submission.spec.ts tests/ephemeral-id.spec.ts",
+		"test:fraud": "playwright test tests/fraud-stress-test.spec.ts",
+		"test:fraud:headed": "playwright test tests/fraud-stress-test.spec.ts --headed",
+		"test:ui": "playwright test --ui",
+		"test:headed": "playwright test --headed",
+		"tail": "wrangler tail"
+	}
 }
 ```
 
@@ -401,11 +410,11 @@ wrangler dev --port 8788
 
 ```json
 {
-  "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview"
-  }
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview"
+	}
 }
 ```
 

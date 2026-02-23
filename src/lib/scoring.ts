@@ -48,6 +48,41 @@ export interface FingerprintDetailSummary {
 	};
 }
 
+export interface ScoringDecision {
+	/** Weight redistribution applied because some signals were inactive */
+	weightRedistribution?: {
+		inactiveWeight: number;
+		normalizationFactor: number;
+		reason: string;
+	};
+	/** Corroboration bonus when 3+ signals fire simultaneously */
+	corroborationBonus?: {
+		applied: boolean;
+		bonus: number;
+		corroboratingSignals: string[];
+		threshold: number;
+		minSignals: number;
+	};
+	/** Whether a deterministic trigger forced the score to the block threshold */
+	deterministicBlock?: {
+		trigger: string;
+		qualified: boolean;
+		mode: string;
+	};
+	/** Whether a force-block trigger (token replay / turnstile failure) was used */
+	forceBlock?: {
+		trigger: string;
+	};
+	/** The raw weighted sum before adjustments */
+	baseScore: number;
+	/** Score after weight redistribution */
+	normalizedScore: number;
+	/** Score after corroboration bonus */
+	adjustedScore: number;
+	/** Final score after deterministic/force-block floor */
+	finalScore: number;
+}
+
 export interface RiskScoreBreakdown {
 	tokenReplay: number;
 	emailFraud: number;
@@ -61,11 +96,23 @@ export interface RiskScoreBreakdown {
 	latencyMismatch: number;
 	total: number;
 	components: Record<string, RiskComponent>;
+	/** Full decision trail showing how the final score was reached */
+	decision?: ScoringDecision;
 	fingerprintDetails?: FingerprintDetailSummary;
 	fingerprintWarnings?: string[];
 }
 
 const FORCE_BLOCK_TRIGGERS = new Set(['token_replay', 'turnstile_failed']);
+
+/**
+ * Deterministic triggers that can force the score to the block threshold in defensive mode
+ * when their qualification check passes (see `qualifiesForDeterministicBlock`).
+ *
+ * Note: 'repeat_offender' is a planned extension point — the qualification logic exists
+ * but no route handler currently passes `recentRepeatOffender: true` or
+ * `blockTrigger: 'repeat_offender'`. Wire it up when repeat-offender detection
+ * is added to the submission flow.
+ */
 const DETERMINISTIC_TRIGGERS = new Set([
 	'ephemeral_id_fraud',
 	'validation_frequency',
@@ -87,10 +134,24 @@ export function calculateNormalizedRiskScore(
 		headerFingerprintScore?: number; // 0-100
 		tlsAnomalyScore?: number; // 0-100
 		latencyMismatchScore?: number; // 0-100
+		/** Planned: set to true when the submitter is a known repeat offender (not yet wired up) */
 		recentRepeatOffender?: boolean;
-		blockTrigger?: 'token_replay' | 'email_fraud' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'ip_rate_limit' | 'header_fingerprint' | 'tls_anomaly' | 'latency_mismatch' | 'duplicate_email' | 'turnstile_failed' | 'repeat_offender';
+		blockTrigger?:
+			| 'token_replay'
+			| 'email_fraud'
+			| 'ephemeral_id_fraud'
+			| 'ja4_session_hopping'
+			| 'ip_diversity'
+			| 'validation_frequency'
+			| 'ip_rate_limit'
+			| 'header_fingerprint'
+			| 'tls_anomaly'
+			| 'latency_mismatch'
+			| 'duplicate_email'
+			| 'turnstile_failed'
+			| 'repeat_offender';
 	},
-	config: FraudDetectionConfig
+	config: FraudDetectionConfig,
 ): RiskScoreBreakdown {
 	// Normalize each component
 	const components: Record<string, RiskComponent> = {};
@@ -200,7 +261,7 @@ export function calculateNormalizedRiskScore(
 						? 'Multiple submissions from IP'
 						: ipRateLimitScore >= 25
 							? 'Legitimate retry from IP'
-					: 'First submission from IP',
+							: 'First submission from IP',
 	};
 
 	// Header Fingerprint Reuse (0-100 provided by collector)
@@ -248,49 +309,107 @@ export function calculateNormalizedRiskScore(
 					: 'RTT consistent with platform',
 	};
 
-	// Calculate total (weighted sum, capped at 100)
+	// ========== SCORE CALCULATION WITH FULL DECISION TRAIL ==========
 	let total = 0;
+	const decision: ScoringDecision = {
+		baseScore: 0,
+		normalizedScore: 0,
+		adjustedScore: 0,
+		finalScore: 0,
+	};
 
 	const isForceBlockTrigger = checks.blockTrigger && FORCE_BLOCK_TRIGGERS.has(checks.blockTrigger);
-	const isDeterministicTrigger =
-		checks.blockTrigger && DETERMINISTIC_TRIGGERS.has(checks.blockTrigger);
+	const isDeterministicTrigger = checks.blockTrigger && DETERMINISTIC_TRIGGERS.has(checks.blockTrigger);
 
 	if (components.tokenReplay.score === 100) {
 		// Token replay is instant block
 		total = 100;
+		decision.forceBlock = { trigger: 'token_replay' };
+		decision.baseScore = 100;
+		decision.normalizedScore = 100;
+		decision.adjustedScore = 100;
+		decision.finalScore = 100;
 	} else {
 		const baseScore = Object.values(components).reduce((sum, c) => sum + c.contribution, 0);
+		decision.baseScore = Math.round(baseScore * 100) / 100;
 
-		// When token replay is not applicable (score=0), re-normalize weights
-		// so other components can achieve 100% instead of max 72%
-		// This ensures the block threshold (70) is meaningful
-		const tokenReplayWeight = config.risk.weights.tokenReplay;
-		const isTokenReplayApplicable = components.tokenReplay.score > 0;
-		const normalizationFactor = isTokenReplayApplicable ? 1.0 : 1.0 / (1.0 - tokenReplayWeight);
+		// Re-normalize weights when some signals are not applicable
+		let inactiveWeight = 0;
+		const inactiveReasons: string[] = [];
+		if (components.tokenReplay.score === 0) {
+			inactiveWeight += config.risk.weights.tokenReplay;
+			inactiveReasons.push(`tokenReplay (${(config.risk.weights.tokenReplay * 100).toFixed(0)}%)`);
+		}
+		const ephemeralAtBaseline = components.ephemeralId.rawScore === undefined || components.ephemeralId.rawScore <= 1;
+		const validationAtBaseline = components.validationFrequency.rawScore === undefined || components.validationFrequency.rawScore <= 1;
+		const ipDiversityAtBaseline = components.ipDiversity.rawScore === undefined || components.ipDiversity.rawScore <= 1;
+		if (ephemeralAtBaseline && validationAtBaseline && ipDiversityAtBaseline) {
+			inactiveWeight += config.risk.weights.ephemeralId;
+			inactiveWeight += config.risk.weights.validationFrequency;
+			inactiveWeight += config.risk.weights.ipDiversity;
+			inactiveReasons.push(
+				`ephemeralId+validationFrequency+ipDiversity (${((config.risk.weights.ephemeralId + config.risk.weights.validationFrequency + config.risk.weights.ipDiversity) * 100).toFixed(0)}%) — all at baseline`,
+			);
+		}
+		const normalizationFactor = inactiveWeight < 1.0 ? 1.0 / (1.0 - inactiveWeight) : 1.0;
 		const normalizedScore = baseScore * normalizationFactor;
+		decision.normalizedScore = Math.round(normalizedScore * 100) / 100;
+
+		if (inactiveWeight > 0) {
+			decision.weightRedistribution = {
+				inactiveWeight: Math.round(inactiveWeight * 100) / 100,
+				normalizationFactor: Math.round(normalizationFactor * 1000) / 1000,
+				reason: inactiveReasons.join('; '),
+			};
+		}
+
+		// Corroboration bonus
+		const CORROBORATION_THRESHOLD = 30;
+		const CORROBORATION_MIN_SIGNALS = 3;
+		const CORROBORATION_BONUS = 15;
+		const corroboratingSignals = Object.entries(components)
+			.filter(([key]) => key !== 'tokenReplay')
+			.filter(([, comp]) => comp.score >= CORROBORATION_THRESHOLD);
+		const corroborationBonusValue = corroboratingSignals.length >= CORROBORATION_MIN_SIGNALS ? CORROBORATION_BONUS : 0;
+		decision.corroborationBonus = {
+			applied: corroborationBonusValue > 0,
+			bonus: corroborationBonusValue,
+			corroboratingSignals: corroboratingSignals.map(([key]) => key),
+			threshold: CORROBORATION_THRESHOLD,
+			minSignals: CORROBORATION_MIN_SIGNALS,
+		};
+
+		const adjustedScore = normalizedScore + corroborationBonusValue;
+		decision.adjustedScore = Math.round(adjustedScore * 100) / 100;
 
 		if (isForceBlockTrigger) {
-			// Only definitive triggers (token replay / Turnstile failure) may override totals
 			const blockThreshold = config.risk.blockThreshold;
-			switch (checks.blockTrigger) {
-				case 'turnstile_failed':
-					total = Math.max(normalizedScore, blockThreshold);
-					break;
-				default:
-					total = Math.max(normalizedScore, blockThreshold);
-			}
-			total = Math.min(100, Math.round(total * 10) / 10);
+			total = Math.min(100, Math.round(Math.max(adjustedScore, blockThreshold) * 10) / 10);
+			decision.forceBlock = { trigger: checks.blockTrigger! };
 		} else if (
 			isDeterministicTrigger &&
 			config.risk.mode !== 'additive' &&
 			qualifiesForDeterministicBlock(checks.blockTrigger!, checks, components, config)
 		) {
 			const blockThreshold = config.risk.blockThreshold;
-			total = Math.max(blockThreshold, normalizedScore);
-			total = Math.min(100, Math.round(total * 10) / 10);
+			total = Math.min(100, Math.round(Math.max(blockThreshold, adjustedScore) * 10) / 10);
+			decision.deterministicBlock = {
+				trigger: checks.blockTrigger!,
+				qualified: true,
+				mode: config.risk.mode,
+			};
+		} else if (isDeterministicTrigger && config.risk.mode !== 'additive') {
+			// Deterministic trigger existed but didn't qualify
+			total = Math.min(100, Math.round(adjustedScore * 10) / 10);
+			decision.deterministicBlock = {
+				trigger: checks.blockTrigger!,
+				qualified: false,
+				mode: config.risk.mode,
+			};
 		} else {
-			total = Math.min(100, Math.round(normalizedScore * 10) / 10);
+			total = Math.min(100, Math.round(adjustedScore * 10) / 10);
 		}
+		decision.finalScore = total;
 	}
 
 	return {
@@ -306,6 +425,7 @@ export function calculateNormalizedRiskScore(
 		latencyMismatch: components.latencyMismatch.score,
 		total,
 		components,
+		decision,
 	};
 }
 
@@ -327,14 +447,14 @@ function normalizeEphemeralIdScore(count: number, config: FraudDetectionConfig):
 
 // Normalize validation attempts to 0-100
 function normalizeValidationScore(count: number, config: FraudDetectionConfig): number {
-	if (count === 1) return 0; // Normal
+	if (count <= 1) return 0; // Normal (including 0 as defensive fallback)
 	if (count === config.detection.validationFrequencyWarnThreshold) return 40; // Acceptable retry
 	return 100; // At block threshold = aggressive
 }
 
 // Normalize IP diversity to 0-100
 function normalizeIPScore(count: number, config: FraudDetectionConfig): number {
-	if (count === 1) return 0; // Normal
+	if (count <= 1) return 0; // Normal (including 0 as defensive fallback)
 	if (count === config.detection.ipDiversityThreshold) return 50; // Suspicious
 	return 100; // Above threshold = proxy rotation
 }
@@ -362,7 +482,7 @@ function qualifiesForDeterministicBlock(
 		recentRepeatOffender?: boolean;
 	},
 	components: Record<string, RiskComponent>,
-	config: FraudDetectionConfig
+	config: FraudDetectionConfig,
 ): boolean {
 	switch (trigger) {
 		case 'ephemeral_id_fraud':
@@ -376,15 +496,11 @@ function qualifiesForDeterministicBlock(
 				(components.ephemeralId?.score ?? 0) >= config.risk.blockThreshold
 			);
 		case 'ja4_session_hopping':
-			return (
-				(checks.ja4RawScore ?? 0) >= 140 &&
-				(checks.ipRateLimitScore ?? 0) >= 25
-			);
+			return (checks.ja4RawScore ?? 0) >= 140 && (checks.ipRateLimitScore ?? 0) >= 25;
 		case 'email_fraud':
-			return (
-				(components.emailFraud?.score ?? 0) >= config.risk.blockThreshold &&
-				(checks.uniqueIPCount ?? 1) > 1
-			);
+			// Email fraud is self-sufficient evidence — no multi-IP requirement.
+			// A clearly fraudulent email pattern should block on the first attempt.
+			return (components.emailFraud?.score ?? 0) >= config.risk.blockThreshold;
 		case 'duplicate_email':
 			return true;
 		case 'repeat_offender':

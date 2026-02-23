@@ -21,7 +21,7 @@ export default defineConfig({
 		locale: 'en-US',
 		timezoneId: 'America/New_York',
 		permissions: ['geolocation'],
-		geolocation: { latitude: 40.7128, longitude: -74.0060 }, // New York
+		geolocation: { latitude: 40.7128, longitude: -74.006 }, // New York
 
 		// Additional stealth settings
 		javaScriptEnabled: true,
@@ -40,7 +40,6 @@ export default defineConfig({
 					args: [
 						'--disable-blink-features=AutomationControlled',
 						'--disable-dev-shm-usage',
-						'--disable-web-security',
 						'--disable-features=IsolateOrigins,site-per-process',
 						'--no-sandbox',
 						'--disable-setuid-sandbox',

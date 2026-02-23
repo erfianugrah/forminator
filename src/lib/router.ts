@@ -21,7 +21,7 @@ const DEFAULT_ROUTES: RouteConfig = {
 	admin: '/api/admin',
 	geo: '/api/geo',
 	health: '/api/health',
-	config: '/api/config'
+	config: '/api/config',
 };
 
 // In-memory cache (loaded once per worker instance)
@@ -37,9 +37,7 @@ export function getRouteConfig(env: Env): RouteConfig {
 	try {
 		if (env.ROUTES) {
 			// Handle both string and object formats
-			const routes = typeof env.ROUTES === 'string'
-				? JSON.parse(env.ROUTES)
-				: env.ROUTES;
+			const routes = typeof env.ROUTES === 'string' ? JSON.parse(env.ROUTES) : env.ROUTES;
 
 			const merged: RouteConfig = { ...DEFAULT_ROUTES, ...routes };
 			cachedRoutes = merged;
@@ -64,20 +62,13 @@ export function getRouteConfig(env: Env): RouteConfig {
  * - "/api/submissions/test" matches "submissions" route
  * - "/sign-ups" matches "submissions" if configured as "/sign-ups"
  */
-export function matchRoute(
-	path: string,
-	routes: RouteConfig
-): keyof RouteConfig | null {
+export function matchRoute(path: string, routes: RouteConfig): keyof RouteConfig | null {
 	// Normalize path (remove trailing slash)
-	const normalizedPath = path.endsWith('/') && path.length > 1
-		? path.slice(0, -1)
-		: path;
+	const normalizedPath = path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path;
 
 	// Sort routes by pattern length (longest first) to match most specific route
 	// This ensures "/api/submissions" matches before "/api"
-	const sortedRoutes = Object.entries(routes).sort(
-		([, a], [, b]) => b.length - a.length
-	);
+	const sortedRoutes = Object.entries(routes).sort(([, a], [, b]) => b.length - a.length);
 
 	// Check each configured route (longest first)
 	for (const [name, pattern] of sortedRoutes) {

@@ -3,6 +3,7 @@
 ## Architecture
 
 Dual validation strategy using React Hook Form + Zod:
+
 - **Client**: Immediate feedback with `onBlur` mode
 - **Server**: Security enforcement using the same Zod schema
 - **Shared schema**: Both client and server use identical validation rules
@@ -26,62 +27,71 @@ src/
 Located in `/frontend/src/lib/validation.ts` (client) and `/src/lib/validation.ts` (server). Both share the same shape (server adds a few transforms):
 
 ```typescript
-const addressSchema = z.object({
-  street: z.string().max(100).optional(),
-  street2: z.string().max(100).optional(),
-  city: z.string().max(100).optional(),
-  state: z.string().max(100).optional(),
-  postalCode: z.string().max(20).optional(),
-  country: z.string().optional(),
-}).optional()
-  .refine((val) => {
-    if (!val) return true;
-    const hasAddressContent = val.street || val.street2 || val.city || val.state || val.postalCode;
-    if (!hasAddressContent) return true;
-    return !!val.country && val.country.length >= 2;
-  }, 'Country is required when providing an address')
-  .transform((val) => {
-    if (!val) return undefined;
-    const hasContent = val.street || val.street2 || val.city || val.state || val.postalCode || val.country;
-    return hasContent ? val : undefined;
-  });
+const addressSchema = z
+	.object({
+		street: z.string().max(100).optional(),
+		street2: z.string().max(100).optional(),
+		city: z.string().max(100).optional(),
+		state: z.string().max(100).optional(),
+		postalCode: z.string().max(20).optional(),
+		country: z.string().optional(),
+	})
+	.optional()
+	.refine((val) => {
+		if (!val) return true;
+		const hasAddressContent = val.street || val.street2 || val.city || val.state || val.postalCode;
+		if (!hasAddressContent) return true;
+		return !!val.country && val.country.length >= 2;
+	}, 'Country is required when providing an address')
+	.transform((val) => {
+		if (!val) return undefined;
+		const hasContent = val.street || val.street2 || val.city || val.state || val.postalCode || val.country;
+		return hasContent ? val : undefined;
+	});
 
 export const formSchema = z.object({
-  firstName: z.string()
-    .min(1, 'First name is required')
-    .max(50, 'First name must be less than 50 characters')
-    .regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
-  lastName: z.string()
-    .min(1, 'Last name is required')
-    .max(50, 'Last name must be less than 50 characters')
-    .regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
-  email: z.string()
-    .min(1, 'Email is required')
-    .email('Invalid email address')
-    .max(100, 'Email must be less than 100 characters'),
-  phone: z.string().optional()
-    .transform((val) => {
-      if (!val || val.trim() === '') return undefined;
-      const cleaned = val.replace(/[^\d+]/g, '');
-      return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
-    })
-    .pipe(
-      z.string().regex(/^\+[1-9]\d{1,14}$/, 'Phone must contain 7-15 digits').optional()
-    ),
-  address: addressSchema,
-  dateOfBirth: z.string().optional()
-    .transform((val) => !val || val.trim() === '' ? undefined : val)
-    .pipe(
-      z.string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-        .refine((date) => {
-          const birthDate = new Date(date);
-          const today = new Date();
-          const age = today.getFullYear() - birthDate.getFullYear();
-          return age >= 18 && age <= 120;
-        }, 'You must be at least 18 years old')
-        .optional()
-    ),
+	firstName: z
+		.string()
+		.min(1, 'First name is required')
+		.max(50, 'First name must be less than 50 characters')
+		.regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
+	lastName: z
+		.string()
+		.min(1, 'Last name is required')
+		.max(50, 'Last name must be less than 50 characters')
+		.regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
+	email: z.string().min(1, 'Email is required').email('Invalid email address').max(100, 'Email must be less than 100 characters'),
+	phone: z
+		.string()
+		.optional()
+		.transform((val) => {
+			if (!val || val.trim() === '') return undefined;
+			const cleaned = val.replace(/[^\d+]/g, '');
+			return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
+		})
+		.pipe(
+			z
+				.string()
+				.regex(/^\+[1-9]\d{1,14}$/, 'Phone must contain 7-15 digits')
+				.optional(),
+		),
+	address: addressSchema,
+	dateOfBirth: z
+		.string()
+		.optional()
+		.transform((val) => (!val || val.trim() === '' ? undefined : val))
+		.pipe(
+			z
+				.string()
+				.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+				.refine((date) => {
+					const birthDate = new Date(date);
+					const today = new Date();
+					const age = today.getFullYear() - birthDate.getFullYear();
+					return age >= 18 && age <= 120;
+				}, 'You must be at least 18 years old')
+				.optional(),
+		),
 });
 ```
 
@@ -94,20 +104,24 @@ export const formSchema = z.object({
 ### Validation Rules
 
 **Names** use regex to:
+
 - Allow letters, spaces, hyphens (Mary-Jane), and apostrophes (O'Brien)
 - Reject numbers and special characters
 
 **Phone** normalization:
+
 - Client accepts any format `(555) 123-4567`, `555-123-4567`, `+1 555 123 4567`
 - Schema strips formatting, prepends `+1` if no country code, and enforces the E.164 regex in a `.pipe()`
 - Empty string returns `undefined`, so optional phones simply disappear from the payload
 
 **Address** object:
+
 - Each field has its own max length (100 chars for lines/city/state, 20 for postal code)
 - If any field other than `country` has a value, the refinement enforces `country` to be present (prevents half-filled addresses)
 - The final `.transform()` collapses completely empty objects to `undefined`, keeping D1 rows tidy
 
 **Date of Birth** validates age:
+
 - Checks date format (YYYY-MM-DD)
 - Calculates age accounting for month and day (not just year)
 - Enforces 18+ age requirement
@@ -119,15 +133,15 @@ export const formSchema = z.object({
 ```typescript
 // frontend/src/components/SubmissionForm.tsx
 const {
-  register,
-  handleSubmit,
-  formState: { errors, isSubmitting },
-  setValue,
-  watch,
-  reset,
+	register,
+	handleSubmit,
+	formState: { errors, isSubmitting },
+	setValue,
+	watch,
+	reset,
 } = useForm<FormData>({
-  resolver: zodResolver(formSchema),
-  mode: 'onBlur',  // Validates when user leaves field
+	resolver: zodResolver(formSchema),
+	mode: 'onBlur', // Validates when user leaves field
 });
 ```
 
@@ -157,6 +171,7 @@ Standard inputs use the spread operator with `register()`:
 The `register()` function connects the field to React Hook Form, adding change/blur handlers and form state management.
 
 **Accessibility attributes:**
+
 - `aria-invalid`: Tells screen readers the input is invalid
 - `aria-describedby`: Links error message to input for screen readers
 - `id` on error message: Required for `aria-describedby` reference
@@ -178,6 +193,7 @@ const phoneValue = watch('phone');  // Subscribe to phone field changes
 ```
 
 Uses manual state management:
+
 - `watch('phone')` creates a controlled component
 - `setValue()` manually updates React Hook Form state
 - `shouldValidate: true` triggers validation on change
@@ -229,45 +245,51 @@ User clicks Submit button
 ```typescript
 // src/routes/submissions.ts
 submissions.post('/', async (c) => {
-  // 1. Parse request body
-  const body = await c.req.json();
+	// 1. Parse request body
+	const body = await c.req.json();
 
-  // 2. Validate with Zod
-  const validationResult = formSchema.safeParse(body);
+	// 2. Validate with Zod
+	const validationResult = formSchema.safeParse(body);
 
-  if (!validationResult.success) {
-    return c.json({
-      success: false,
-      message: 'Validation failed',
-      errors: validationResult.error.flatten().fieldErrors,
-    }, 400);
-  }
+	if (!validationResult.success) {
+		return c.json(
+			{
+				success: false,
+				message: 'Validation failed',
+				errors: validationResult.error.flatten().fieldErrors,
+			},
+			400,
+		);
+	}
 
-  // 3. Data is now typed and validated
-  const data = validationResult.data;
+	// 3. Data is now typed and validated
+	const data = validationResult.data;
 
-  // 4. Sanitize after validation
-  const sanitized = {
-    firstName: sanitizeInput(data.firstName),
-    lastName: sanitizeInput(data.lastName),
-    email: normalizeEmail(data.email),
-    phone: data.phone,  // Already normalized by transform
-    address: data.address ? {
-      street: data.address.street ? sanitizeInput(data.address.street) : undefined,
-      street2: data.address.street2 ? sanitizeInput(data.address.street2) : undefined,
-      city: data.address.city ? sanitizeInput(data.address.city) : undefined,
-      state: data.address.state ? sanitizeInput(data.address.state) : undefined,
-      postalCode: data.address.postalCode ? sanitizeInput(data.address.postalCode) : undefined,
-      country: data.address.country ? sanitizeInput(data.address.country) : undefined,
-    } : undefined,
-    dateOfBirth: data.dateOfBirth,
-  };
+	// 4. Sanitize after validation
+	const sanitized = {
+		firstName: sanitizeInput(data.firstName),
+		lastName: sanitizeInput(data.lastName),
+		email: normalizeEmail(data.email),
+		phone: data.phone, // Already normalized by transform
+		address: data.address
+			? {
+					street: data.address.street ? sanitizeInput(data.address.street) : undefined,
+					street2: data.address.street2 ? sanitizeInput(data.address.street2) : undefined,
+					city: data.address.city ? sanitizeInput(data.address.city) : undefined,
+					state: data.address.state ? sanitizeInput(data.address.state) : undefined,
+					postalCode: data.address.postalCode ? sanitizeInput(data.address.postalCode) : undefined,
+					country: data.address.country ? sanitizeInput(data.address.country) : undefined,
+				}
+			: undefined,
+		dateOfBirth: data.dateOfBirth,
+	};
 
-  // 5. Continue with Turnstile verification and database insertion
+	// 5. Continue with Turnstile verification and database insertion
 });
 ```
 
 Processing sequence:
+
 1. Parse - Get data from request
 2. Validate - Ensure data matches schema
 3. Sanitize - Remove dangerous characters
@@ -281,25 +303,33 @@ Server schema mirrors the client version but adds transforms so optional fields 
 ```typescript
 // src/lib/validation.ts
 export const formSubmissionSchema = z.object({
-  // ...
-  phone: z.string().optional()
-    .transform((val) => {
-      if (!val || val.trim() === '') return undefined;
-      const cleaned = val.replace(/[^\d+]/g, '');
-      return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
-    })
-    .pipe(
-      z.string().regex(/^\+[1-9]\d{1,14}$/, 'Phone must contain 7-15 digits').optional()
-    ),
-  address: addressSchema, // optional object, collapses to undefined when empty
-  dateOfBirth: z.string().optional()
-    .transform((val) => !val || val.trim() === '' ? undefined : val)
-    .pipe(/* YYYY-MM-DD regex + age check */),
-  turnstileToken: z.string().min(1, 'Turnstile token is required').optional(),
+	// ...
+	phone: z
+		.string()
+		.optional()
+		.transform((val) => {
+			if (!val || val.trim() === '') return undefined;
+			const cleaned = val.replace(/[^\d+]/g, '');
+			return cleaned.startsWith('+') ? cleaned : `+1${cleaned}`;
+		})
+		.pipe(
+			z
+				.string()
+				.regex(/^\+[1-9]\d{1,14}$/, 'Phone must contain 7-15 digits')
+				.optional(),
+		),
+	address: addressSchema, // optional object, collapses to undefined when empty
+	dateOfBirth: z
+		.string()
+		.optional()
+		.transform((val) => (!val || val.trim() === '' ? undefined : val))
+		.pipe(/* YYYY-MM-DD regex + age check */),
+	turnstileToken: z.string().min(1, 'Turnstile token is required').optional(),
 });
 ```
 
 Transform examples (phone):
+
 - `+1 (555) 123-4567` → `+15551234567`
 - `555-123-4567` → `+15551234567` (assumes US)
 - `+44 20 7946 0958` → `+442079460958`
@@ -313,18 +343,19 @@ E.164 format enables international queries/SMS integrations while keeping the sc
 ```typescript
 // src/lib/sanitizer.ts
 export function sanitizeInput(input: string): string {
-  return input
-    .replace(/<[^>]*>/g, '')    // Remove HTML tags: <script>alert()</script>
-    .replace(/[<>'"]/g, '')     // Remove dangerous chars: < > ' "
-    .trim();                     // Remove leading/trailing whitespace
+	return input
+		.replace(/<[^>]*>/g, '') // Remove HTML tags: <script>alert()</script>
+		.replace(/[<>'"]/g, '') // Remove dangerous chars: < > ' "
+		.trim(); // Remove leading/trailing whitespace
 }
 
 export function normalizeEmail(email: string): string {
-  return email.toLowerCase().trim();
+	return email.toLowerCase().trim();
 }
 ```
 
 Prevents:
+
 - **XSS attacks**: Removes `<script>`, `<img>`, etc.
 - **Quote escaping**: Strips `'` and `"` that could break SQL queries
 - **HTML injection**: Removes all tags and dangerous characters
@@ -344,6 +375,7 @@ Sanitization happens after validation to ensure required fields aren't empty bef
 ```
 
 Visual feedback:
+
 - Red border on input: `className={errors.firstName ? 'border-destructive' : ''}`
 - Error message below field
 - Icon indicator (if applicable)
@@ -351,39 +383,43 @@ Visual feedback:
 ### Server Error Responses
 
 **Validation failure (400):**
+
 ```json
 {
-  "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "firstName": ["First name is required"],
-    "email": ["Invalid email address"],
-    "phone": ["Phone must contain 7-15 digits"]
-  }
+	"success": false,
+	"message": "Validation failed",
+	"errors": {
+		"firstName": ["First name is required"],
+		"email": ["Invalid email address"],
+		"phone": ["Phone must contain 7-15 digits"]
+	}
 }
 ```
 
 **Turnstile verification failed (400):**
+
 ```json
 {
-  "success": false,
-  "message": "Turnstile verification failed"
+	"success": false,
+	"message": "Turnstile verification failed"
 }
 ```
 
 **Fraud detected (403):**
+
 ```json
 {
-  "success": false,
-  "message": "Submission blocked due to suspicious activity"
+	"success": false,
+	"message": "Submission blocked due to suspicious activity"
 }
 ```
 
 **Server error (500):**
+
 ```json
 {
-  "success": false,
-  "message": "Internal server error"
+	"success": false,
+	"message": "Internal server error"
 }
 ```
 
@@ -392,28 +428,37 @@ Visual feedback:
 ### XSS Prevention
 
 **Input sanitization:**
+
 ```typescript
-sanitizeInput(data.firstName)  // Removes HTML tags and quotes
+sanitizeInput(data.firstName); // Removes HTML tags and quotes
 ```
 
 **Output encoding:**
+
 - React automatically escapes JSX content
 - No `dangerouslySetInnerHTML` used in the application
 
 ### SQL Injection Prevention
 
 **Parameterized queries:**
+
 ```typescript
 // ✅ SAFE - Uses parameter binding
-db.prepare(`
+db.prepare(
+	`
   INSERT INTO submissions (first_name, last_name, email)
   VALUES (?, ?, ?)
-`).bind(firstName, lastName, email).run();
+`,
+)
+	.bind(firstName, lastName, email)
+	.run();
 
 // ❌ NEVER DO THIS - Vulnerable to SQL injection
-db.prepare(`
+db.prepare(
+	`
   INSERT INTO submissions VALUES ('${firstName}', '${lastName}', '${email}')
-`).run();
+`,
+).run();
 ```
 
 D1 automatically escapes parameters in `.bind()`, preventing injection.
@@ -421,6 +466,7 @@ D1 automatically escapes parameters in `.bind()`, preventing injection.
 ### CSRF Protection
 
 Turnstile token provides CSRF protection:
+
 - Must be obtained from form page
 - Single-use (replay protection via token hash in database)
 - Expires after 5 minutes
@@ -432,22 +478,22 @@ Turnstile token provides CSRF protection:
 
 ```typescript
 test('should show validation errors for empty fields', async ({ page }) => {
-  await page.goto('/');
-  await page.click('button[type="submit"]');
+	await page.goto('/');
+	await page.click('button[type="submit"]');
 
-  // Trigger validation
-  await page.locator('input[name="firstName"]').click();
-  await page.locator('input[name="lastName"]').click();
+	// Trigger validation
+	await page.locator('input[name="firstName"]').click();
+	await page.locator('input[name="lastName"]').click();
 
-  await expect(page.locator('text=First name is required')).toBeVisible({ timeout: 2000 });
+	await expect(page.locator('text=First name is required')).toBeVisible({ timeout: 2000 });
 });
 
 test('should validate email format', async ({ page }) => {
-  await page.goto('/');
-  await page.fill('input[name="email"]', 'invalid-email');
-  await page.locator('input[name="firstName"]').click(); // Trigger blur
+	await page.goto('/');
+	await page.fill('input[name="email"]', 'invalid-email');
+	await page.locator('input[name="firstName"]').click(); // Trigger blur
 
-  await expect(page.locator('text=Invalid email address')).toBeVisible({ timeout: 2000 });
+	await expect(page.locator('text=Invalid email address')).toBeVisible({ timeout: 2000 });
 });
 ```
 

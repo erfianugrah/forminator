@@ -6,15 +6,13 @@ import { ArrowUpDown, Eye, Download } from 'lucide-react';
 export function createSubmissionColumns(
 	loadSubmissionDetail: (id: number) => void,
 	exportSubmission: (id: number) => void,
-	exportingSubmissionId: number | null
+	exportingSubmissionId: number | null,
 ): ColumnDef<Submission, any>[] {
 	return [
 		{
 			accessorKey: 'id',
 			header: 'ID',
-			cell: ({ row }) => (
-				<span className="text-xs font-mono text-muted-foreground">#{row.original.id}</span>
-			),
+			cell: ({ row }) => <span className="text-xs font-mono text-muted-foreground">#{row.original.id}</span>,
 		},
 		{
 			accessorKey: 'first_name',
@@ -38,35 +36,25 @@ export function createSubmissionColumns(
 		{
 			accessorKey: 'remote_ip',
 			header: 'IP',
-			cell: ({ row }) => (
-				<span className="font-mono text-xs">{row.original.remote_ip || 'N/A'}</span>
-			),
+			cell: ({ row }) => <span className="font-mono text-xs">{row.original.remote_ip || 'N/A'}</span>,
 		},
 		{
 			accessorKey: 'risk_score',
 			header: ({ column }) => (
-				<button
-					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="flex items-center gap-1 hover:underline"
-				>
+				<button onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')} className="flex items-center gap-1 hover:underline">
 					Risk Score
 					<ArrowUpDown className="h-3 w-3" />
 				</button>
 			),
 			cell: ({ row }) => {
 				const score = row.original.risk_score || 0;
-				const variant =
-					score >= 70
-						? 'destructive'
-						: score >= 40
-						? 'default'
-						: 'secondary';
+				const variant = score >= 70 ? 'destructive' : score >= 40 ? 'default' : 'secondary';
 				const color =
 					score >= 70
 						? 'text-red-600 dark:text-red-400'
 						: score >= 40
-						? 'text-yellow-600 dark:text-yellow-400'
-						: 'text-green-600 dark:text-green-400';
+							? 'text-yellow-600 dark:text-yellow-400'
+							: 'text-green-600 dark:text-green-400';
 
 				return (
 					<Badge variant={variant} className={`font-mono ${color}`}>
@@ -87,8 +75,8 @@ export function createSubmissionColumns(
 							score && score < 30
 								? 'text-destructive'
 								: score && score >= 70
-								? 'text-green-600 dark:text-green-400'
-								: 'text-yellow-600 dark:text-yellow-400'
+									? 'text-green-600 dark:text-green-400'
+									: 'text-yellow-600 dark:text-yellow-400'
 						}`}
 					>
 						{score !== null ? score : 'N/A'}
@@ -130,7 +118,17 @@ export function createSubmissionColumns(
 			accessorKey: 'created_at',
 			header: 'Date',
 			cell: ({ row }) => (
-				<span className="text-xs">{new Date(row.original.created_at).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
+				<span className="text-xs">
+					{new Date(row.original.created_at).toLocaleString('en-US', {
+						year: 'numeric',
+						month: '2-digit',
+						day: '2-digit',
+						hour: '2-digit',
+						minute: '2-digit',
+						second: '2-digit',
+						hour12: false,
+					})}
+				</span>
 			),
 		},
 		{

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface TurnstileEffectivenessEntry {
 	success: boolean;
@@ -163,151 +163,163 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 	const [fraudPatterns, setFraudPatterns] = useState<any>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const abortControllerRef = useRef<AbortController | null>(null);
 
-	const loadData = async () => {
-		if (!apiKey) return;
+	const loadData = useCallback(
+		async (signal?: AbortSignal) => {
+			if (!apiKey) return;
 
-		setLoading(true);
-		setError(null);
+			setLoading(true);
+			setError(null);
 
-		const headers: HeadersInit = { 'X-API-KEY': apiKey };
+			const headers: HeadersInit = { 'X-API-KEY': apiKey };
 
-		try {
-			const [
-				statsRes,
-				countriesRes,
-				botScoresRes,
-				asnRes,
-				tlsRes,
-				ja3Res,
-				ja4Res,
-				emailPatternsRes,
-				timeSeriesRes,
-				fingerprintHeaderRes,
-				fingerprintTlsRes,
-				fingerprintLatencyRes,
-				testingBypassRes,
-				blockedStatsRes,
-				blockReasonsRes,
-			] = await Promise.all([
-				fetch('/api/analytics/stats', { headers }),
-				fetch('/api/analytics/countries', { headers }),
-				fetch('/api/analytics/bot-scores', { headers }),
-				fetch('/api/analytics/asn', { headers }),
-				fetch('/api/analytics/tls', { headers }),
-				fetch('/api/analytics/ja3', { headers }),
-				fetch('/api/analytics/ja4', { headers }),
-				fetch('/api/analytics/email-patterns', { headers }),
-				fetch('/api/analytics/time-series?metric=submissions&interval=day', { headers }),
-				fetch('/api/analytics/time-series?metric=fingerprint_header_blocks&interval=day', { headers }),
-				fetch('/api/analytics/time-series?metric=fingerprint_tls_blocks&interval=day', { headers }),
-				fetch('/api/analytics/time-series?metric=fingerprint_latency_blocks&interval=day', { headers }),
-				fetch('/api/analytics/time-series?metric=testing_bypass&interval=day', { headers }),
-				fetch('/api/analytics/blocked-stats', { headers }),
-				fetch('/api/analytics/block-reasons', { headers }),
-			]);
-
-			if (
-				!statsRes.ok ||
-				!countriesRes.ok ||
-				!botScoresRes.ok ||
-				!asnRes.ok ||
-				!tlsRes.ok ||
-				!ja3Res.ok ||
-				!ja4Res.ok ||
-				!timeSeriesRes.ok ||
-				!fingerprintHeaderRes.ok ||
-				!fingerprintTlsRes.ok ||
-				!fingerprintLatencyRes.ok ||
-				!testingBypassRes.ok
-			) {
-				throw new Error('Failed to fetch analytics');
-			}
-
-			const [
-				statsData,
-				countriesData,
-				botScoresData,
-				asnDataRes,
-				tlsDataRes,
-				ja3DataRes,
-				ja4DataRes,
-			emailPatternsData,
-				timeSeriesDataRes,
-				fingerprintHeaderData,
-				fingerprintTlsData,
-				fingerprintLatencyData,
-				testingBypassData,
-				blockedStatsData,
-				blockReasonsData,
-			] = await Promise.all([
-				statsRes.json(),
-				countriesRes.json(),
-				botScoresRes.json(),
-				asnRes.json(),
-				tlsRes.json(),
-				ja3Res.json(),
-			ja4Res.json(),
-				emailPatternsRes.json(),
-				timeSeriesRes.json(),
-				fingerprintHeaderRes.json(),
-				fingerprintTlsRes.json(),
-				fingerprintLatencyRes.json(),
-				testingBypassRes.json(),
-				blockedStatsRes.json(),
-				blockReasonsRes.json(),
-			]);
-
-			setStats((statsData as any).data);
-			setCountries((countriesData as any).data);
-			setBotScores((botScoresData as any).data);
-			setAsnData((asnDataRes as any).data);
-			setTlsData((tlsDataRes as any).data);
-		setEmailPatterns((emailPatternsData as any).data || []);
-			setJa3Data((ja3DataRes as any).data);
-			setJa4Data((ja4DataRes as any).data);
-			setTimeSeriesData((timeSeriesDataRes as any).data || []);
-			setFingerprintSeries({
-				header: (fingerprintHeaderData as any).data || [],
-				tls: (fingerprintTlsData as any).data || [],
-				latency: (fingerprintLatencyData as any).data || [],
-			});
-			setTestingBypassSeries((testingBypassData as any).data || []);
-			setBlockedStats((blockedStatsData as any).data);
-			setBlockReasons((blockReasonsData as any).data);
-
-			// Load fraud patterns separately
 			try {
-				const fraudRes = await fetch('/api/analytics/fraud-patterns', { headers });
-				if (fraudRes.ok) {
-					const fraudDataRes = await fraudRes.json();
-					setFraudPatterns((fraudDataRes as any).data);
+				const [
+					statsRes,
+					countriesRes,
+					botScoresRes,
+					asnRes,
+					tlsRes,
+					ja3Res,
+					ja4Res,
+					emailPatternsRes,
+					timeSeriesRes,
+					fingerprintHeaderRes,
+					fingerprintTlsRes,
+					fingerprintLatencyRes,
+					testingBypassRes,
+					blockedStatsRes,
+					blockReasonsRes,
+				] = await Promise.all([
+					fetch('/api/analytics/stats', { headers, signal }),
+					fetch('/api/analytics/countries', { headers, signal }),
+					fetch('/api/analytics/bot-scores', { headers, signal }),
+					fetch('/api/analytics/asn', { headers, signal }),
+					fetch('/api/analytics/tls', { headers, signal }),
+					fetch('/api/analytics/ja3', { headers, signal }),
+					fetch('/api/analytics/ja4', { headers, signal }),
+					fetch('/api/analytics/email-patterns', { headers, signal }),
+					fetch('/api/analytics/time-series?metric=submissions&interval=day', { headers, signal }),
+					fetch('/api/analytics/time-series?metric=fingerprint_header_blocks&interval=day', { headers, signal }),
+					fetch('/api/analytics/time-series?metric=fingerprint_tls_blocks&interval=day', { headers, signal }),
+					fetch('/api/analytics/time-series?metric=fingerprint_latency_blocks&interval=day', { headers, signal }),
+					fetch('/api/analytics/time-series?metric=testing_bypass&interval=day', { headers, signal }),
+					fetch('/api/analytics/blocked-stats', { headers, signal }),
+					fetch('/api/analytics/block-reasons', { headers, signal }),
+				]);
+
+				if (
+					!statsRes.ok ||
+					!countriesRes.ok ||
+					!botScoresRes.ok ||
+					!asnRes.ok ||
+					!tlsRes.ok ||
+					!ja3Res.ok ||
+					!ja4Res.ok ||
+					!emailPatternsRes.ok ||
+					!timeSeriesRes.ok ||
+					!fingerprintHeaderRes.ok ||
+					!fingerprintTlsRes.ok ||
+					!fingerprintLatencyRes.ok ||
+					!testingBypassRes.ok ||
+					!blockedStatsRes.ok ||
+					!blockReasonsRes.ok
+				) {
+					throw new Error('Failed to fetch analytics');
+				}
+
+				const [
+					statsData,
+					countriesData,
+					botScoresData,
+					asnDataRes,
+					tlsDataRes,
+					ja3DataRes,
+					ja4DataRes,
+					emailPatternsData,
+					timeSeriesDataRes,
+					fingerprintHeaderData,
+					fingerprintTlsData,
+					fingerprintLatencyData,
+					testingBypassData,
+					blockedStatsData,
+					blockReasonsData,
+				] = await Promise.all([
+					statsRes.json(),
+					countriesRes.json(),
+					botScoresRes.json(),
+					asnRes.json(),
+					tlsRes.json(),
+					ja3Res.json(),
+					ja4Res.json(),
+					emailPatternsRes.json(),
+					timeSeriesRes.json(),
+					fingerprintHeaderRes.json(),
+					fingerprintTlsRes.json(),
+					fingerprintLatencyRes.json(),
+					testingBypassRes.json(),
+					blockedStatsRes.json(),
+					blockReasonsRes.json(),
+				]);
+
+				setStats((statsData as any).data);
+				setCountries((countriesData as any).data);
+				setBotScores((botScoresData as any).data);
+				setAsnData((asnDataRes as any).data);
+				setTlsData((tlsDataRes as any).data);
+				setEmailPatterns((emailPatternsData as any).data || []);
+				setJa3Data((ja3DataRes as any).data);
+				setJa4Data((ja4DataRes as any).data);
+				setTimeSeriesData((timeSeriesDataRes as any).data || []);
+				setFingerprintSeries({
+					header: (fingerprintHeaderData as any).data || [],
+					tls: (fingerprintTlsData as any).data || [],
+					latency: (fingerprintLatencyData as any).data || [],
+				});
+				setTestingBypassSeries((testingBypassData as any).data || []);
+				setBlockedStats((blockedStatsData as any).data);
+				setBlockReasons((blockReasonsData as any).data);
+
+				// Load fraud patterns separately
+				try {
+					const fraudRes = await fetch('/api/analytics/fraud-patterns', { headers, signal });
+					if (fraudRes.ok) {
+						const fraudDataRes = await fraudRes.json();
+						setFraudPatterns((fraudDataRes as any).data);
+					}
+				} catch (err) {
+					if (err instanceof DOMException && err.name === 'AbortError') return;
+					console.error('Error loading fraud patterns:', err);
 				}
 			} catch (err) {
-				console.error('Error loading fraud patterns:', err);
+				if (err instanceof DOMException && err.name === 'AbortError') return;
+				console.error('Error loading analytics:', err);
+				const errorMessage =
+					err instanceof Error ? err.message : 'Failed to load analytics data. Please check your API key and network connection.';
+				setError(errorMessage);
+			} finally {
+				setLoading(false);
 			}
-		} catch (err) {
-			console.error('Error loading analytics:', err);
-			const errorMessage = err instanceof Error
-				? err.message
-				: 'Failed to load analytics data. Please check your API key and network connection.';
-			setError(errorMessage);
-		} finally {
-			setLoading(false);
-		}
-	};
+		},
+		[apiKey],
+	);
 
 	useEffect(() => {
-		loadData();
-	}, [apiKey]);
+		abortControllerRef.current?.abort();
+		const controller = new AbortController();
+		abortControllerRef.current = controller;
+		loadData(controller.signal);
+		return () => controller.abort();
+	}, [loadData]);
 
 	// Auto-refresh
 	useEffect(() => {
 		if (!autoRefresh || !apiKey) return;
 
-		const intervalId = setInterval(loadData, refreshInterval * 1000);
+		const intervalId = setInterval(() => loadData(), refreshInterval * 1000);
 		return () => clearInterval(intervalId);
-	}, [autoRefresh, refreshInterval, apiKey]);
+	}, [autoRefresh, refreshInterval, apiKey, loadData]);
 
 	return {
 		stats,
@@ -326,6 +338,6 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 		fraudPatterns,
 		loading,
 		error,
-		refresh: loadData,
+		refresh: () => loadData(),
 	};
 }

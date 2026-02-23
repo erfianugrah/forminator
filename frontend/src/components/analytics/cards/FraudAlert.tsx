@@ -1,6 +1,11 @@
-import { AlertTriangle, Shield, Activity, Globe, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Shield, Activity, Globe, Zap, Eye } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import { Alert, AlertDescription } from '../../ui/alert';
+import { Badge } from '../../ui/badge';
+import { BlacklistDetailDialog } from '../sections/BlacklistDetailDialog';
+import type { BlacklistEntry } from '../../../hooks/useBlacklist';
+import type { FraudDetectionConfig } from '../../../hooks/useConfig';
 
 interface FraudPattern {
 	blacklisted: any[];
@@ -12,6 +17,7 @@ interface FraudPattern {
 interface FraudAlertProps {
 	data: FraudPattern | null;
 	loading?: boolean;
+	config?: FraudDetectionConfig;
 }
 
 /**
@@ -19,7 +25,9 @@ interface FraudAlertProps {
  * Aligns with fraud detection in src/routes/submissions.ts:96-242
  * Shows: blacklisted IDs, high-risk patterns, proxy rotation, and high-frequency validators
  */
-export function FraudAlert({ data, loading }: FraudAlertProps) {
+export function FraudAlert({ data, loading, config }: FraudAlertProps) {
+	const [selectedEntry, setSelectedEntry] = useState<BlacklistEntry | null>(null);
+
 	if (loading) {
 		return (
 			<Card>
@@ -41,11 +49,7 @@ export function FraudAlert({ data, loading }: FraudAlertProps) {
 		return null;
 	}
 
-	const totalAlerts =
-		data.blacklisted.length +
-		data.high_risk_ephemeral.length +
-		data.proxy_rotation.length +
-		data.high_frequency.length;
+	const totalAlerts = data.blacklisted.length + data.high_risk_ephemeral.length + data.proxy_rotation.length + data.high_frequency.length;
 
 	if (totalAlerts === 0) {
 		return (
@@ -87,30 +91,114 @@ export function FraudAlert({ data, loading }: FraudAlertProps) {
 								Blacklisted Ephemeral IDs ({data.blacklisted.length})
 							</div>
 							<div className="space-y-2 text-sm">
-								{data.blacklisted.slice(0, 3).map((item: any, index: number) => (
-									<div key={index} className="p-2 bg-secondary rounded border border-red-600/20">
-										<div className="flex justify-between items-start">
-											<span className="font-mono text-xs break-all">{item.ephemeral_id}</span>
-											<span className={`text-xs px-2 py-0.5 rounded ${
-												item.confidence === 'high' ? 'bg-red-600 text-white' :
-												item.confidence === 'medium' ? 'bg-orange-600 text-white' :
-												'bg-yellow-600 text-white'
-											}`}>
-												{item.confidence}
-											</span>
+								{data.blacklisted.slice(0, 3).map((item: any, index: number) => {
+									const parsed = parseBlacklistReason(item.block_reason || '');
+									return (
+										<div key={index} className="p-3 bg-secondary rounded-lg border border-red-600/20 space-y-2">
+											{/* Header: Ephemeral ID + Confidence */}
+											<div className="flex justify-between items-start gap-2">
+												<span className="font-mono text-xs break-all text-foreground">{item.ephemeral_id || item.ip_address}</span>
+												<Badge
+													variant={(item.detection_confidence || item.confidence) === 'high' ? 'destructive' : 'default'}
+													className="flex-shrink-0"
+												>
+													{item.detection_confidence || item.confidence}
+												</Badge>
+											</div>
+
+											{/* Risk Score */}
+											{parsed.riskScore !== undefined && (
+												<div className="flex items-center gap-2">
+													<span className="text-xs text-muted-foreground">Risk Score:</span>
+													<span
+														className={`text-sm font-semibold ${
+															parsed.riskScore >= 70
+																? 'text-red-600 dark:text-red-400'
+																: parsed.riskScore >= 40
+																	? 'text-yellow-600 dark:text-yellow-400'
+																	: 'text-green-600 dark:text-green-400'
+														}`}
+													>
+														{parsed.riskScore}
+														{parsed.threshold !== undefined && (
+															<span className="text-xs font-normal text-muted-foreground ml-1">
+																/ {parsed.threshold} threshold
+															</span>
+														)}
+													</span>
+												</div>
+											)}
+
+											{/* Trigger Pills */}
+											{parsed.triggers.length > 0 && (
+												<div className="flex flex-wrap gap-1.5">
+													{parsed.triggers.map((trigger, idx) => (
+														<span
+															key={idx}
+															className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium ${getTriggerColor(trigger)}`}
+														>
+															{trigger}
+														</span>
+													))}
+												</div>
+											)}
+
+											{/* Top Components */}
+											{parsed.topComponents.length > 0 && (
+												<div className="flex flex-wrap gap-1.5">
+													{parsed.topComponents.map((comp) => (
+														<span
+															key={comp.name}
+															className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono bg-muted border border-border"
+														>
+															<span className="text-muted-foreground">{formatComponentName(comp.name)}</span>
+															<span className="font-semibold">{comp.score}</span>
+														</span>
+													))}
+												</div>
+											)}
+
+											{/* Meta: submissions + expiry + actions */}
+											<div className="flex items-center justify-between pt-1 border-t border-border/40">
+												<div className="flex items-center gap-3 text-xs text-muted-foreground">
+													<span>Submissions: {item.submission_count}</span>
+													<span>•</span>
+													<span>
+														Expires:{' '}
+														{new Date(item.expires_at).toLocaleString('en-US', {
+															year: 'numeric',
+															month: '2-digit',
+															day: '2-digit',
+															hour: '2-digit',
+															minute: '2-digit',
+															second: '2-digit',
+															hour12: false,
+														})}
+													</span>
+												</div>
+												<div className="flex items-center gap-2">
+													<button
+														onClick={() => setSelectedEntry(toBlacklistEntry(item))}
+														className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium flex-shrink-0"
+														title="View full breakdown"
+													>
+														<Eye size={14} />
+														<span>Details</span>
+													</button>
+													<button
+														onClick={() => exportBlacklistEntry(item)}
+														className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-md text-xs font-medium hover:bg-accent"
+														title="Export entry JSON"
+													>
+														Export
+													</button>
+												</div>
+											</div>
 										</div>
-										<div className="text-xs text-muted-foreground mt-1">
-											{item.block_reason}
-										</div>
-										<div className="text-xs text-muted-foreground mt-1">
-											Submissions: {item.submission_count} • Expires: {new Date(item.expires_at).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-										</div>
-									</div>
-								))}
+									);
+								})}
 								{data.blacklisted.length > 3 && (
-									<div className="text-xs text-muted-foreground">
-										+{data.blacklisted.length - 3} more blocked IDs
-									</div>
+									<div className="text-xs text-muted-foreground">+{data.blacklisted.length - 3} more blocked IDs</div>
 								)}
 							</div>
 						</AlertDescription>
@@ -138,15 +226,11 @@ export function FraudAlert({ data, loading }: FraudAlertProps) {
 										<div className="text-xs text-muted-foreground mt-1">
 											{item.unique_ips} unique IPs • {item.countries || 'Unknown countries'}
 										</div>
-										<div className="text-xs text-muted-foreground">
-											Timespan: {item.time_span_minutes?.toFixed(1) || '0'} minutes
-										</div>
+										<div className="text-xs text-muted-foreground">Timespan: {item.time_span_minutes?.toFixed(1) || '0'} minutes</div>
 									</div>
 								))}
 								{data.high_risk_ephemeral.length > 3 && (
-									<div className="text-xs text-muted-foreground">
-										+{data.high_risk_ephemeral.length - 3} more high-risk IDs
-									</div>
+									<div className="text-xs text-muted-foreground">+{data.high_risk_ephemeral.length - 3} more high-risk IDs</div>
 								)}
 							</div>
 						</AlertDescription>
@@ -180,9 +264,7 @@ export function FraudAlert({ data, loading }: FraudAlertProps) {
 									</div>
 								))}
 								{data.proxy_rotation.length > 3 && (
-									<div className="text-xs text-muted-foreground">
-										+{data.proxy_rotation.length - 3} more proxy rotation patterns
-									</div>
+									<div className="text-xs text-muted-foreground">+{data.proxy_rotation.length - 3} more proxy rotation patterns</div>
 								)}
 							</div>
 						</AlertDescription>
@@ -216,15 +298,129 @@ export function FraudAlert({ data, loading }: FraudAlertProps) {
 									</div>
 								))}
 								{data.high_frequency.length > 3 && (
-									<div className="text-xs text-muted-foreground">
-										+{data.high_frequency.length - 3} more high-frequency validators
-									</div>
+									<div className="text-xs text-muted-foreground">+{data.high_frequency.length - 3} more high-frequency validators</div>
 								)}
 							</div>
 						</AlertDescription>
 					</Alert>
 				)}
 			</CardContent>
+
+			<BlacklistDetailDialog entry={selectedEntry} onClose={() => setSelectedEntry(null)} config={config} />
 		</Card>
 	);
+}
+
+// ========== HELPERS ==========
+
+/** Export a blacklisted item as a JSON file download */
+function exportBlacklistEntry(item: any): void {
+	const entry = toBlacklistEntry(item);
+	const exportData = {
+		exportedAt: new Date().toISOString(),
+		type: 'blacklist_entry',
+		data: {
+			...entry,
+			risk_score_breakdown: entry.risk_score_breakdown ? JSON.parse(entry.risk_score_breakdown) : null,
+			detection_metadata: entry.detection_metadata ? JSON.parse(entry.detection_metadata) : null,
+		},
+	};
+	const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = `blacklist-${entry.id || 'entry'}.json`;
+	a.click();
+	URL.revokeObjectURL(url);
+}
+
+/** Map a fraud-patterns blacklisted item to the BlacklistEntry shape for the detail dialog.
+ * The fraud-patterns query now returns the same column names as /api/analytics/blacklist,
+ * but we keep fallbacks for the old aliases (confidence, created_at) for robustness. */
+function toBlacklistEntry(item: any): BlacklistEntry {
+	return {
+		id: item.id ?? 0,
+		ephemeral_id: item.ephemeral_id ?? null,
+		ip_address: item.ip_address ?? null,
+		ja4: item.ja4 ?? null,
+		country: item.country ?? null,
+		city: item.city ?? null,
+		detection_type: item.detection_type ?? null,
+		detection_confidence: item.detection_confidence ?? item.confidence ?? null,
+		block_reason: item.block_reason ?? '',
+		risk_score: item.risk_score ?? 0,
+		risk_score_breakdown: item.risk_score_breakdown ?? null,
+		ja4_signals: item.ja4_signals ?? null,
+		offense_count: item.offense_count ?? 1,
+		blocked_at: item.blocked_at ?? item.created_at ?? '',
+		expires_at: item.expires_at ?? '',
+		erfid: item.erfid ?? null,
+		submission_count: item.submission_count ?? null,
+		last_seen_at: item.last_seen_at ?? null,
+		detection_metadata: item.detection_metadata ?? null,
+	};
+}
+
+const COMPONENT_LABELS: Record<string, string> = {
+	tokenReplay: 'Token Replay',
+	emailFraud: 'Email Fraud',
+	ephemeralId: 'Device Tracking',
+	validationFrequency: 'Validation Freq',
+	ipDiversity: 'IP Diversity',
+	ja4SessionHopping: 'Session Hopping',
+	ipRateLimit: 'IP Rate Limit',
+	headerFingerprint: 'Header FP',
+	tlsAnomaly: 'TLS Anomaly',
+	latencyMismatch: 'Latency Mismatch',
+};
+
+function formatComponentName(key: string): string {
+	return COMPONENT_LABELS[key] || key;
+}
+
+function parseBlacklistReason(blockReason: string): {
+	riskScore?: number;
+	threshold?: number;
+	triggers: string[];
+	topComponents: Array<{ name: string; score: number }>;
+} {
+	const riskScoreMatch = blockReason.match(/Risk score (\d+(?:\.\d+)?) >= (\d+)/);
+	const riskScore = riskScoreMatch ? parseFloat(riskScoreMatch[1]) : undefined;
+	const threshold = riskScoreMatch ? parseInt(riskScoreMatch[2], 10) : undefined;
+
+	const triggersMatch = blockReason.match(/Triggers:\s*(.+?)(?:\.\s*Top components:|$)/);
+	const topComponentsMatch = blockReason.match(/Top components:\s*(.+)$/);
+
+	let triggers: string[] = [];
+	if (triggersMatch) {
+		triggers = triggersMatch[1]
+			.split(/,\s*/)
+			.map((t) => t.trim())
+			.filter(Boolean);
+	}
+
+	let topComponents: Array<{ name: string; score: number }> = [];
+	if (topComponentsMatch) {
+		topComponents = topComponentsMatch[1]
+			.split(/,\s*/)
+			.map((pair) => {
+				const m = pair.match(/^(\w+)=(\d+)/);
+				if (!m) return null;
+				return { name: m[1], score: parseInt(m[2], 10) };
+			})
+			.filter((x): x is { name: string; score: number } => x !== null);
+	}
+
+	return { riskScore, threshold, triggers, topComponents };
+}
+
+function getTriggerColor(trigger: string): string {
+	const lower = trigger.toLowerCase();
+	if (lower.includes('email')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+	if (lower.includes('ja4') || lower.includes('session')) return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+	if (lower.includes('ip') || lower.includes('proxy')) return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300';
+	if (lower.includes('velocity') || lower.includes('rapid') || lower.includes('frequency'))
+		return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+	if (lower.includes('duplicate')) return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300';
+	return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
 }

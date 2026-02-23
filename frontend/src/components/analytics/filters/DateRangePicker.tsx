@@ -100,18 +100,13 @@ export function DateRangePicker({ value, onChange, className = '' }: DateRangePi
 			>
 				<Calendar size={18} />
 				<span className="text-sm flex-1 text-left">{formatDateRange(value)}</span>
-				<ChevronDown
-					size={16}
-					className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
-				/>
+				<ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
 			</button>
 
 			{isOpen && (
 				<div className="absolute top-full left-0 mt-2 w-56 bg-popover border border-border rounded-md shadow-lg z-50 backdrop-blur-sm">
 					<div className="p-2">
-						<div className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">
-							Quick Select
-						</div>
+						<div className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">Quick Select</div>
 						{PRESETS.map((preset) => (
 							<button
 								key={preset.label}
@@ -123,9 +118,7 @@ export function DateRangePicker({ value, onChange, className = '' }: DateRangePi
 						))}
 						<div className="border-t border-border my-2" />
 						<div className="px-3 py-2 space-y-3">
-							<div className="text-xs font-medium text-muted-foreground mb-2">
-								Custom Range
-							</div>
+							<div className="text-xs font-medium text-muted-foreground mb-2">Custom Range</div>
 							<div className="space-y-2">
 								<label className="block">
 									<span className="text-xs text-muted-foreground">Start Date</span>

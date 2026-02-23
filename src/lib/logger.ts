@@ -1,11 +1,10 @@
 import pino from 'pino';
 
 // Create logger instance
+// Note: env label is static since Workers don't have process.env at module level.
+// The actual ENVIRONMENT value is available per-request via Hono context.
 export const logger = pino({
 	level: 'info',
-	base: {
-		env: 'production',
-	},
 	formatters: {
 		level: (label) => {
 			return { level: label };

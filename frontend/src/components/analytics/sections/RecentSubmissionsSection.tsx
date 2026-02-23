@@ -12,6 +12,7 @@ import { subDays } from 'date-fns';
 import type { CountryData } from '../../../hooks/useAnalytics';
 import type { Submission } from '../../../hooks/useSubmissions';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
+import type { FraudDetectionConfig } from '../../../hooks/useConfig';
 import { downloadJson } from '../../../lib/download';
 
 interface RecentSubmissionsSectionProps {
@@ -43,6 +44,7 @@ interface RecentSubmissionsSectionProps {
 	sorting: SortingState;
 	onSortingChange: (updater: SortingState | ((old: SortingState) => SortingState)) => void;
 	apiKey: string;
+	config?: FraudDetectionConfig;
 }
 
 export function RecentSubmissionsSection({
@@ -68,6 +70,7 @@ export function RecentSubmissionsSection({
 	sorting,
 	onSortingChange,
 	apiKey,
+	config,
 }: RecentSubmissionsSectionProps) {
 	const [exportingAll, setExportingAll] = useState(false);
 	const [exportingSubmissionId, setExportingSubmissionId] = useState<number | null>(null);
@@ -87,7 +90,7 @@ export function RecentSubmissionsSection({
 				throw new Error('Failed to export submission');
 			}
 
-			const data = await response.json() as { data?: unknown };
+			const data = (await response.json()) as { data?: unknown };
 			downloadJson(`submission-${submissionId}.json`, {
 				exportedAt: new Date().toISOString(),
 				data: data.data ?? data,
@@ -135,10 +138,10 @@ export function RecentSubmissionsSection({
 				headers: { 'X-API-KEY': apiKey },
 			});
 
-				if (!response.ok) {
-					const errorPayload = await response.json().catch(() => null) as { message?: string } | null;
-					throw new Error(errorPayload?.message || 'Failed to export submissions');
-				}
+			if (!response.ok) {
+				const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+				throw new Error(errorPayload?.message || 'Failed to export submissions');
+			}
 
 			const blob = await response.blob();
 			const url = window.URL.createObjectURL(blob);
@@ -163,9 +166,7 @@ export function RecentSubmissionsSection({
 			<CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div>
 					<CardTitle>Recent Submissions</CardTitle>
-					<CardDescription>
-						Search and filter form submissions (click row for full details)
-					</CardDescription>
+					<CardDescription>Search and filter form submissions (click row for full details)</CardDescription>
 				</div>
 				<button
 					onClick={handleExportAllSubmissions}
@@ -177,21 +178,17 @@ export function RecentSubmissionsSection({
 			</CardHeader>
 			<CardContent className="space-y-6">
 				{/* Risk Score Info */}
-				<RiskScoreInfo />
+				<RiskScoreInfo apiKey={apiKey} config={config} />
 
 				{/* Filters */}
 				<div className="space-y-5">
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-						<SearchBar
-							value={searchQuery}
-							onChange={onSearchQueryChange}
-							placeholder="Search by email, name, or IP..."
-						/>
+						<SearchBar value={searchQuery} onChange={onSearchQueryChange} placeholder="Search by email, name, or IP..." />
 						<SingleSelect
 							options={[
 								{ value: 'all', label: 'All Submissions' },
-							{ value: 'allowed', label: 'Allowed Only' },
-							{ value: 'blocked', label: 'Blocked Only' },
+								{ value: 'allowed', label: 'Allowed Only' },
+								{ value: 'blocked', label: 'Blocked Only' },
 							]}
 							value={allowedStatus}
 							onChange={(value) => onAllowedStatusChange(value as 'all' | 'allowed' | 'blocked')}
@@ -206,14 +203,7 @@ export function RecentSubmissionsSection({
 						<DateRangePicker value={dateRange} onChange={onDateRangeChange} />
 					</div>
 					<div className="w-full max-w-2xl">
-						<RangeSlider
-							min={0}
-							max={100}
-							value={botScoreRange}
-							onChange={onBotScoreRangeChange}
-							label="Bot Score Range"
-							step={1}
-						/>
+						<RangeSlider min={0} max={100} value={botScoreRange} onChange={onBotScoreRangeChange} label="Bot Score Range" step={1} />
 					</div>
 					<div className="flex flex-wrap gap-4 text-sm">
 						<label className="flex items-center gap-2">
@@ -242,9 +232,7 @@ export function RecentSubmissionsSection({
 						</label>
 					</div>
 				</div>
-				{exportError && (
-					<p className="text-xs text-destructive -mt-2">{exportError}</p>
-				)}
+				{exportError && <p className="text-xs text-destructive -mt-2">{exportError}</p>}
 
 				{/* Data Table */}
 				{loading ? (

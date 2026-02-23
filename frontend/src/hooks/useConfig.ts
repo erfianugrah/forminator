@@ -32,6 +32,16 @@ export interface FraudDetectionConfig {
 		browserRatioThreshold: number;
 		h2h3RatioThreshold: number;
 		cacheRatioThreshold: number;
+		scoreThresholds: {
+			browserHopping: number;
+			suspiciousClustering: number;
+		};
+		riskScoreIncrements: {
+			clustering: number;
+			velocity: number;
+			globalAnomaly: number;
+			botPattern: number;
+		};
 	};
 	detection: {
 		ephemeralIdSubmissionThreshold: number;
@@ -46,6 +56,8 @@ export interface FraudDetectionConfig {
 			rapidGlobalWindowMinutes: number;
 			extendedGlobalThreshold: number;
 			extendedGlobalWindowMinutes: number;
+			velocityThresholdMinutes: number;
+			useRiskScoreThreshold: boolean;
 		};
 	};
 	fingerprint: {
@@ -88,7 +100,7 @@ const DEFAULT_CONFIG: FraudDetectionConfig = {
 			tokenReplay: 0.28,
 			emailFraud: 0.14,
 			ephemeralId: 0.15,
-			validationFrequency: 0.10,
+			validationFrequency: 0.1,
 			ipDiversity: 0.07,
 			ja4SessionHopping: 0.06,
 			ipRateLimit: 0.07,
@@ -104,6 +116,16 @@ const DEFAULT_CONFIG: FraudDetectionConfig = {
 		browserRatioThreshold: 0.2,
 		h2h3RatioThreshold: 0.9,
 		cacheRatioThreshold: 0.5,
+		scoreThresholds: {
+			browserHopping: 140,
+			suspiciousClustering: 80,
+		},
+		riskScoreIncrements: {
+			clustering: 80,
+			velocity: 60,
+			globalAnomaly: 50,
+			botPattern: 40,
+		},
 	},
 	detection: {
 		ephemeralIdSubmissionThreshold: 2,
@@ -118,6 +140,8 @@ const DEFAULT_CONFIG: FraudDetectionConfig = {
 			rapidGlobalWindowMinutes: 5,
 			extendedGlobalThreshold: 5,
 			extendedGlobalWindowMinutes: 60,
+			velocityThresholdMinutes: 10,
+			useRiskScoreThreshold: true,
 		},
 	},
 	fingerprint: {
@@ -144,10 +168,27 @@ const DEFAULT_CONFIG: FraudDetectionConfig = {
 };
 
 /**
+ * Recursively merge source into target, preserving defaults for missing keys.
+ * Only plain objects are merged; arrays and primitives from source win outright.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function deepMerge(target: any, source: any): any {
+	if (source === null || source === undefined) return target;
+	if (typeof source !== 'object' || Array.isArray(source)) return source;
+	if (typeof target !== 'object' || target === null || Array.isArray(target)) return source;
+
+	const result = { ...target };
+	for (const key of Object.keys(source)) {
+		result[key] = deepMerge(target[key], source[key]);
+	}
+	return result;
+}
+
+/**
  * React hook to fetch fraud detection configuration
  * Returns config with loading and error states
  */
-export function useConfig() {
+export function useConfig(apiKey?: string) {
 	const [config, setConfig] = useState<FraudDetectionConfig>(DEFAULT_CONFIG);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -155,14 +196,20 @@ export function useConfig() {
 	useEffect(() => {
 		async function fetchConfig() {
 			try {
-				const response = await fetch('/api/config');
+				const headers: Record<string, string> = {};
+				if (apiKey) {
+					headers['X-API-KEY'] = apiKey;
+				}
+				const response = await fetch('/api/config', { headers });
 				if (!response.ok) {
 					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 				}
 
-				const json = await response.json() as { success: boolean; data?: FraudDetectionConfig };
+				const json = (await response.json()) as { success: boolean; data?: Partial<FraudDetectionConfig> };
 				if (json.success && json.data) {
-					setConfig(json.data);
+					// Deep-merge server response into defaults so any fields the backend
+					// omits (e.g. unauthenticated path) still have sensible fallbacks
+					setConfig((prev) => deepMerge(prev, json.data!) as FraudDetectionConfig);
 					setError(null);
 				} else {
 					throw new Error('Invalid config response format');
@@ -177,7 +224,7 @@ export function useConfig() {
 		}
 
 		fetchConfig();
-	}, []);
+	}, [apiKey]);
 
 	return { config, loading, error };
 }
@@ -185,10 +232,7 @@ export function useConfig() {
 /**
  * Helper to get risk level classification
  */
-export function getRiskLevel(
-	riskScore: number,
-	config: FraudDetectionConfig
-): 'low' | 'medium' | 'high' {
+export function getRiskLevel(riskScore: number, config: FraudDetectionConfig): 'low' | 'medium' | 'high' {
 	const { levels } = config.risk;
 
 	if (riskScore >= levels.high.min) return 'high';
@@ -199,9 +243,6 @@ export function getRiskLevel(
 /**
  * Helper to check if score should block
  */
-export function shouldBlock(
-	riskScore: number,
-	config: FraudDetectionConfig
-): boolean {
+export function shouldBlock(riskScore: number, config: FraudDetectionConfig): boolean {
 	return riskScore >= config.risk.blockThreshold;
 }

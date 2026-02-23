@@ -152,23 +152,25 @@ export function ChartsSection({
 
 									// Color gradient: vibrant colors cycling through palette
 									const colors = [
-										'hsl(213, 82%, 58%)',  // Bright blue
-										'hsl(193, 82%, 52%)',  // Cyan
-										'hsl(179, 72%, 48%)',  // Teal
-										'hsl(163, 72%, 45%)',  // Green-teal
-										'hsl(142, 72%, 48%)',  // Green
-										'hsl(88, 72%, 52%)',   // Yellow-green
-										'hsl(43, 82%, 58%)',   // Yellow
-										'hsl(28, 82%, 58%)',   // Orange
-										'hsl(14, 82%, 58%)',   // Red-orange
-										'hsl(353, 82%, 58%)',  // Red
+										'hsl(213, 82%, 58%)', // Bright blue
+										'hsl(193, 82%, 52%)', // Cyan
+										'hsl(179, 72%, 48%)', // Teal
+										'hsl(163, 72%, 45%)', // Green-teal
+										'hsl(142, 72%, 48%)', // Green
+										'hsl(88, 72%, 52%)', // Yellow-green
+										'hsl(43, 82%, 58%)', // Yellow
+										'hsl(28, 82%, 58%)', // Orange
+										'hsl(14, 82%, 58%)', // Red-orange
+										'hsl(353, 82%, 58%)', // Red
 									];
 									const barColor = colors[index % colors.length];
 
 									return (
 										<div key={index} className="space-y-1">
 											<div className="flex justify-between items-center text-sm">
-												<span className="font-medium truncate" title={item.country}>{item.country}</span>
+												<span className="font-medium truncate" title={item.country}>
+													{item.country}
+												</span>
 												<span className="font-semibold text-foreground ml-2">{item.count}</span>
 											</div>
 											<div className="h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -176,7 +178,7 @@ export function ChartsSection({
 													className="h-full rounded-full transition-all"
 													style={{
 														width: `${percentage}%`,
-														backgroundColor: barColor
+														backgroundColor: barColor,
 													}}
 												/>
 											</div>
@@ -186,9 +188,7 @@ export function ChartsSection({
 							)}
 						</div>
 						{countries.length > 10 && (
-							<div className="mt-3 text-center text-xs text-muted-foreground">
-								+{countries.length - 10} more countries
-							</div>
+							<div className="mt-3 text-center text-xs text-muted-foreground">+{countries.length - 10} more countries</div>
 						)}
 					</CardContent>
 				</Card>
@@ -225,7 +225,12 @@ export function ChartsSection({
 									} else if (rangeStr.includes('50-59') || rangeStr.includes('40-49')) {
 										// Suspicious
 										barColor = 'hsl(43, 82%, 58%)'; // Yellow
-									} else if (rangeStr.includes('30-39') || rangeStr.includes('2-29') || rangeStr.includes('20-29') || rangeStr.includes('10-19')) {
+									} else if (
+										rangeStr.includes('30-39') ||
+										rangeStr.includes('2-29') ||
+										rangeStr.includes('20-29') ||
+										rangeStr.includes('10-19')
+									) {
 										// Probably bot
 										barColor = 'hsl(28, 82%, 58%)'; // Orange
 									} else if (rangeStr.includes('1') || rangeStr.includes('0-9') || rangeStr === '1-9') {
@@ -253,7 +258,7 @@ export function ChartsSection({
 													className="h-full rounded-full transition-all"
 													style={{
 														width: `${percentage}%`,
-														backgroundColor: barColor
+														backgroundColor: barColor,
 													}}
 												/>
 											</div>
@@ -283,7 +288,9 @@ export function ChartsSection({
 								asnData.slice(0, 20).map((item, index) => (
 									<div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">
 										<div className="flex-1 min-w-0 pr-4">
-											<p className="text-sm font-mono truncate" title={item.asn}>AS{item.asn}</p>
+											<p className="text-sm font-mono truncate" title={item.asn}>
+												AS{item.asn}
+											</p>
 											<p className="text-xs text-muted-foreground truncate" title={item.as_organization || 'Unknown'}>
 												{item.as_organization || 'Unknown'}
 											</p>
@@ -293,11 +300,7 @@ export function ChartsSection({
 								))
 							)}
 						</div>
-						{asnData.length > 20 && (
-							<div className="mt-3 text-center text-xs text-muted-foreground">
-								+{asnData.length - 20} more
-							</div>
-						)}
+						{asnData.length > 20 && <div className="mt-3 text-center text-xs text-muted-foreground">+{asnData.length - 20} more</div>}
 					</CardContent>
 				</Card>
 
@@ -328,11 +331,7 @@ export function ChartsSection({
 								))
 							)}
 						</div>
-						{tlsData.length > 20 && (
-							<div className="mt-3 text-center text-xs text-muted-foreground">
-								+{tlsData.length - 20} more
-							</div>
-						)}
+						{tlsData.length > 20 && <div className="mt-3 text-center text-xs text-muted-foreground">+{tlsData.length - 20} more</div>}
 					</CardContent>
 				</Card>
 
@@ -358,11 +357,7 @@ export function ChartsSection({
 								))
 							)}
 						</div>
-						{ja3Data.length > 20 && (
-							<div className="mt-3 text-center text-xs text-muted-foreground">
-								+{ja3Data.length - 20} more
-							</div>
-						)}
+						{ja3Data.length > 20 && <div className="mt-3 text-center text-xs text-muted-foreground">+{ja3Data.length - 20} more</div>}
 					</CardContent>
 				</Card>
 			</div>
@@ -390,11 +385,7 @@ export function ChartsSection({
 							))
 						)}
 					</div>
-					{ja4Data.length > 20 && (
-						<div className="mt-3 text-center text-xs text-muted-foreground">
-							+{ja4Data.length - 20} more
-						</div>
-					)}
+					{ja4Data.length > 20 && <div className="mt-3 text-center text-xs text-muted-foreground">+{ja4Data.length - 20} more</div>}
 				</CardContent>
 			</Card>
 		</>

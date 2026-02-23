@@ -52,6 +52,7 @@ turnstile.render(container, {
 ### Exposed Methods
 
 The widget component exposes these methods (`TurnstileWidgetHandle:54-57`):
+
 - `execute()` - Start verification challenge
 - `reset()` - Reset widget to initial state
 
@@ -64,6 +65,7 @@ The widget component exposes these methods (`TurnstileWidgetHandle:54-57`):
 The backend implements a 6-layer fraud detection system integrated with Turnstile validation (`src/routes/submissions.ts`):
 
 **Layer 0: Pre-Validation Blacklist** (lines 100-140)
+
 ```typescript
 const blacklist = await checkPreValidationBlock(ephemeralId, remoteIp, db);
 if (blacklist.blocked) return 403; // Previously flagged as fraudulent
@@ -72,6 +74,7 @@ if (blacklist.blocked) return 403; // Previously flagged as fraudulent
 Fast D1 lookup before expensive Turnstile API call. Blocks repeat offenders on `ephemeral_id`, `ip_address`, or `ja4` identifiers.
 
 **Token Replay Detection** (lines 58-87)
+
 ```typescript
 const tokenHash = hashToken(turnstileToken);
 const isReused = await checkTokenReuse(tokenHash, db);
@@ -81,6 +84,7 @@ if (isReused) return 400; // Token replay attack
 SHA256 hash check before calling Turnstile API to prevent token reuse. Blocks replay attempts early while providing a fraud signal.
 
 **Layer 1: Email Fraud Detection**
+
 ```typescript
 const emailResult = await detectEmailFraud(email, env.FRAUD_DETECTOR);
 if (emailResult.decision === 'block') return 400; // Fraudulent email pattern
@@ -89,6 +93,7 @@ if (emailResult.decision === 'block') return 400; // Fraudulent email pattern
 Worker-to-Worker RPC call to markov-mail service (0.1-0.5ms). Detects sequential patterns, disposable domains, and unusual formats using Markov Chain analysis.
 
 **Layer 1.5: Turnstile Validation** (lines 89-94)
+
 ```typescript
 const validation = await validateTurnstileToken(token, remoteIp, secretKey);
 // Extracts ephemeral ID even on failed validations for fraud tracking
@@ -135,12 +140,13 @@ After fraud detection runs, check if Turnstile validation was successful:
 
 ```typescript
 if (!validation.valid) {
-  // Enhanced error responses with user-friendly messages
-  return 400; // Validation failed with error code dictionary
+	// Enhanced error responses with user-friendly messages
+	return 400; // Validation failed with error code dictionary
 }
 ```
 
 **Duplicate Email Check** (lines 212-242)
+
 ```typescript
 const existing = await db.query('SELECT id FROM submissions WHERE email = ?');
 if (existing) return 409; // Duplicate email conflict
@@ -151,23 +157,25 @@ if (existing) return 409; // Duplicate email conflict
 **Error Dictionary** (`src/lib/turnstile-errors.ts`)
 
 Maps 30+ error codes from Cloudflare documentation to user-friendly messages:
+
 - User-friendly messages (shown to users)
 - Debug messages (logged for developers)
 - Action recommendations (retry/reload/contact_support/check_config)
 - Pattern matching: `102001` → `102xxx`, `110601` → `11060x`
 
 **Error Response Format** (`src/routes/submissions.ts:199-207`):
+
 ```json
 {
-  "error": "Verification failed",
-  "message": "Verification expired. Please complete the verification again.",
-  "errorCode": "106010",
-  "debug": {
-    "codes": ["106010"],
-    "messages": ["Challenge timeout"],
-    "actions": ["retry"],
-    "categories": ["client"]
-  }
+	"error": "Verification failed",
+	"message": "Verification expired. Please complete the verification again.",
+	"errorCode": "106010",
+	"debug": {
+		"codes": ["106010"],
+		"messages": ["Challenge timeout"],
+		"actions": ["retry"],
+		"categories": ["client"]
+	}
 }
 ```
 
@@ -245,28 +253,34 @@ src/
 ### API Methods
 
 **`render(container, config)`**
+
 - Initial widget creation on component mount
 - Returns widgetId for future operations
 
 **`execute(widgetId)`**
+
 - Trigger challenge manually
 - Used with `execution: 'execute'` config
 - Called when user submits form after validation passes
 
 **`reset(widgetId)`**
+
 - Clear widget and re-run challenge
 - Used after form submission (success or error)
 - Used when token expires or theme changes
 
 **`remove(widgetId)`**
+
 - Destroy widget completely
 - Called on component unmount
 
 **`getResponse(widgetId)`**
+
 - Retrieve current token
 - Check if token exists before submission
 
 **`isExpired(widgetId)`**
+
 - Check token validity
 - Used to decide whether to reset widget
 
@@ -288,17 +302,18 @@ All token validation happens server-side:
 
 ```typescript
 const validation = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    secret: env['TURNSTILE-SECRET-KEY'],
-    response: token,
-    remoteip: request.headers.get('CF-Connecting-IP')
-  })
+	method: 'POST',
+	headers: { 'Content-Type': 'application/json' },
+	body: JSON.stringify({
+		secret: env['TURNSTILE-SECRET-KEY'],
+		response: token,
+		remoteip: request.headers.get('CF-Connecting-IP'),
+	}),
 });
 ```
 
 Verification checks:
+
 - `success` is true
 - `hostname` matches expected domain
 - `action` matches if specified
@@ -321,6 +336,7 @@ connect-src 'self' https://challenges.cloudflare.com
 ### Frontend Environment Variables
 
 Create `frontend/.env`:
+
 ```
 PUBLIC_TURNSTILE_SITEKEY=0x4AAAAAACAjw0bmUZ7V7fh2
 ```
@@ -328,12 +344,14 @@ PUBLIC_TURNSTILE_SITEKEY=0x4AAAAAACAjw0bmUZ7V7fh2
 ### Backend Secrets
 
 Set via `wrangler secret put`:
+
 ```bash
 wrangler secret put TURNSTILE-SECRET-KEY
 wrangler secret put X-API-KEY
 ```
 
 Or via `.dev.vars` for local development:
+
 ```
 TURNSTILE-SECRET-KEY=your_secret_key
 X-API-KEY=your_api_key
@@ -344,10 +362,12 @@ X-API-KEY=your_api_key
 For local testing and CI/CD, bypass Turnstile while still running fraud detection:
 
 **Requirements:**
+
 - `ALLOW_TESTING_BYPASS=true` in environment
 - Valid `X-API-KEY` header in request
 
 **Example:**
+
 ```bash
 curl -X POST http://localhost:8787/api/submissions \
   -H "Content-Type: application/json" \
@@ -369,21 +389,23 @@ Only Turnstile site-verify API call is skipped. All fraud detection layers still
 
 Cloudflare provides test sitekeys:
 
-| Sitekey | Behavior | Secret Key |
-|---------|----------|------------|
-| `1x00000000000000000000AA` | Always passes (visible) | `1x0000000000000000000000000000000AA` |
-| `2x00000000000000000000AB` | Always blocks (visible) | `2x0000000000000000000000000000000AA` |
+| Sitekey                    | Behavior                     | Secret Key                            |
+| -------------------------- | ---------------------------- | ------------------------------------- |
+| `1x00000000000000000000AA` | Always passes (visible)      | `1x0000000000000000000000000000000AA` |
+| `2x00000000000000000000AB` | Always blocks (visible)      | `2x0000000000000000000000000000000AA` |
 | `3x00000000000000000000FF` | Forces interactive challenge | `3x0000000000000000000000000000000AA` |
 
 ### Test Coverage
 
 Playwright tests cover (`tests/` directory):
+
 - Form validation and submission flow
 - Ephemeral ID fraud detection patterns
 - High-volume submission stress tests
 - Error handling scenarios
 
 Run tests with:
+
 ```bash
 npm test                  # All tests
 npm run test:basic        # Basic flow
@@ -474,6 +496,7 @@ JA4 fraud check:               D1 aggregation
 ### Performance Optimization
 
 Pre-validation blacklist:
+
 - Blocks most repeat attempts without calling Turnstile API
 - Turnstile API only called for new/unknown requests
 - Progressive timeouts make attacks impractical

@@ -1,11 +1,4 @@
-import {
-	ResponsiveContainer,
-	PieChart as RechartsPieChart,
-	Pie,
-	Cell,
-	Tooltip,
-	Legend,
-} from 'recharts';
+import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
 
 interface DataItem {
 	name: string;
@@ -59,13 +52,8 @@ export function PieChart({
 		const formattedValue = formatTooltip ? formatTooltip(value) : value.toLocaleString();
 
 		// Calculate percentage
-		const total = payload[0].payload.percent
-			? 100
-			: data.payload?.total ||
-			  payload[0].payload.total ||
-			  data.value;
-		const percentage = payload[0].payload.percent ||
-			((value / total) * 100).toFixed(1);
+		const total = payload[0].payload.percent ? 100 : data.payload?.total || payload[0].payload.total || data.value;
+		const percentage = payload[0].payload.percent || ((value / total) * 100).toFixed(1);
 
 		return (
 			<div className="bg-popover border border-border rounded-lg shadow-lg p-3">
@@ -117,10 +105,7 @@ export function PieChart({
 						labelLine={false}
 					>
 						{data.map((entry, index) => (
-							<Cell
-								key={`cell-${index}`}
-								fill={colors[index % colors.length]}
-							/>
+							<Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
 						))}
 					</Pie>
 					<Tooltip content={<CustomTooltip />} />
@@ -129,9 +114,7 @@ export function PieChart({
 							verticalAlign="bottom"
 							height={36}
 							iconType="circle"
-							formatter={(value, entry: any) => (
-								<span className="text-xs text-foreground">{value}</span>
-							)}
+							formatter={(value, entry: any) => <span className="text-xs text-foreground">{value}</span>}
 						/>
 					)}
 				</RechartsPieChart>

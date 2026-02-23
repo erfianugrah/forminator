@@ -54,15 +54,15 @@ wrangler d1 execute DB --command="SELECT name FROM sqlite_master WHERE type='tab
 **Last Updated**: 2025-12-XX  
 **Highlights**:
 
-| Category              | Key Columns / Tables                                                                                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core Form Payload     | `submissions.first_name`, `last_name`, `email`, `phone`, `address`, `date_of_birth`                                                                          |
-| Geo & Network         | `country`, `region`, `city`, `postal_code`, `timezone`, `latitude`, `longitude`, `continent`, `is_eu_country`, `asn`, `as_organization`, `colo`, `deviceType` |
-| Bot/Fingerprint       | `bot_score`, `client_trust_score`, `verified_bot`, `ja3_hash`, `ja4`, `ja4_signals`, `headersFingerprint`, TLS snapshot columns                               |
-| Email Fraud Signals   | `email_risk_score`, `email_fraud_signals`, `email_pattern_type`, `email_markov_detected`, `email_ood_detected`, `fraud_blocks.*`                              |
-| Risk & Analytics      | `risk_score_breakdown`, `form_data`, `request_headers`, `extended_metadata`, `erfid`, `testing_bypass`                                                       |
-| Blacklist & Timeouts  | `fraud_blacklist.*` (offense counts, confidence, `risk_score_breakdown`)                                                                                      |
-| Fingerprint Baseline  | `fingerprint_baselines` table with (`type`, `fingerprint_key`, `ja4_bucket`, `asn_bucket`, `hit_count`, `last_seen`)                                          |
+| Category             | Key Columns / Tables                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core Form Payload    | `submissions.first_name`, `last_name`, `email`, `phone`, `address`, `date_of_birth`                                                                           |
+| Geo & Network        | `country`, `region`, `city`, `postal_code`, `timezone`, `latitude`, `longitude`, `continent`, `is_eu_country`, `asn`, `as_organization`, `colo`, `deviceType` |
+| Bot/Fingerprint      | `bot_score`, `client_trust_score`, `verified_bot`, `ja3_hash`, `ja4`, `ja4_signals`, `headersFingerprint`, TLS snapshot columns                               |
+| Email Fraud Signals  | `email_risk_score`, `email_fraud_signals`, `email_pattern_type`, `email_markov_detected`, `email_ood_detected`, `fraud_blocks.*`                              |
+| Risk & Analytics     | `risk_score_breakdown`, `form_data`, `request_headers`, `extended_metadata`, `erfid`, `testing_bypass`                                                        |
+| Blacklist & Timeouts | `fraud_blacklist.*` (offense counts, confidence, `risk_score_breakdown`)                                                                                      |
+| Fingerprint Baseline | `fingerprint_baselines` table with (`type`, `fingerprint_key`, `ja4_bucket`, `asn_bucket`, `hit_count`, `last_seen`)                                          |
 
 > **Note:** Both `submissions` and `turnstile_validations` now include a `testing_bypass` boolean used by analytics to audit Turnstile shortcut usage.
 

@@ -7,14 +7,14 @@ Forminator ships with an Astro demo form, but the Cloudflare Worker (fraud detec
 ## 1. Deploying without static assets
 
 1. **Disable asset serving**
-   - Remove the `"assets"` block from your `wrangler` config *or* override it at deploy time.
+   - Remove the `"assets"` block from your `wrangler` config _or_ override it at deploy time.
    - Set `DISABLE_STATIC_ASSETS` to `"true"` via `wrangler deploy --var DISABLE_STATIC_ASSETS=true` or by adding to `vars`:
      ```jsonc
      {
-       "vars": {
-         "DISABLE_STATIC_ASSETS": "true",
-         "ALLOWED_ORIGINS": "https://yourapp.com"
-       }
+     	"vars": {
+     		"DISABLE_STATIC_ASSETS": "true",
+     		"ALLOWED_ORIGINS": "https://yourapp.com",
+     	},
      }
      ```
 2. **Keep the API routes**
@@ -36,29 +36,30 @@ Submitters should POST JSON to the submissions route you configured (default `/a
 
 ```ts
 async function submitForm(payload) {
-  const res = await fetch('https://api.example.com/api/submissions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...payload,
-      turnstileToken: window.turnstileToken,
-    }),
-  });
+	const res = await fetch('https://api.example.com/api/submissions', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			...payload,
+			turnstileToken: window.turnstileToken,
+		}),
+	});
 
-  const data = await res.json();
-  if (!res.ok) {
-    if (res.status === 429) {
-      // data.retryAfter (seconds) and data.expiresAt are provided
-      throw new Error(data.message);
-    }
-    throw new Error(data.message || 'Submission failed');
-  }
+	const data = await res.json();
+	if (!res.ok) {
+		if (res.status === 429) {
+			// data.retryAfter (seconds) and data.expiresAt are provided
+			throw new Error(data.message);
+		}
+		throw new Error(data.message || 'Submission failed');
+	}
 
-  return data; // Contains erfid, success message, etc.
+	return data; // Contains erfid, success message, etc.
 }
 ```
 
 **Responses**
+
 - `200 OK`: success payload with `erfid`, optional `message`.
 - `400 / 422`: validation errors with `message`.
 - `409`: duplicate email (exact message provided).
@@ -74,11 +75,11 @@ The repository ships a lightweight fetch wrapper in [`clients/forminator-client.
 import { submitToForminator } from '../../clients/forminator-client';
 
 await submitToForminator({
-  endpoint: 'https://api.example.com/api/submissions',
-  payload: {
-    ...formValues,
-    turnstileToken,
-  },
+	endpoint: 'https://api.example.com/api/submissions',
+	payload: {
+		...formValues,
+		turnstileToken,
+	},
 });
 ```
 

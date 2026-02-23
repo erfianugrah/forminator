@@ -30,7 +30,7 @@ declare global {
 					'unsupported-callback'?: () => void;
 					language?: string;
 					tabindex?: number;
-				}
+				},
 			): string;
 			reset(widgetId: string): void;
 			remove(widgetId: string): void;
@@ -58,139 +58,126 @@ export interface TurnstileWidgetHandle {
 }
 
 const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
-	({
-		onValidated,
-		onError,
-		onBeforeInteractive,
-		onAfterInteractive,
-		onExpired,
-		onTimeout,
-		onUnsupported,
-		action = 'registration-form'
-	}, ref) => {
+	(
+		{ onValidated, onError, onBeforeInteractive, onAfterInteractive, onExpired, onTimeout, onUnsupported, action = 'registration-form' },
+		ref,
+	) => {
 		const containerRef = useRef<HTMLDivElement>(null);
 		const widgetIdRef = useRef<string | null>(null);
 		const [isLoading, setIsLoading] = useState(true);
 		const [isExecuted, setIsExecuted] = useState(false);
 		const [error, setError] = useState<string | null>(null);
 
-	useEffect(() => {
-		// Check if Turnstile script is loaded
-		if (!window.turnstile) {
-			setError('Turnstile script not loaded');
-			setIsLoading(false);
-			return;
-		}
-
-		// Get current theme
-		const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-
-		// Prevent double-rendering in React Strict Mode (development)
-		let isRendering = false;
-
-		// Render widget when ready
-		window.turnstile.ready(() => {
-			if (!containerRef.current || widgetIdRef.current || isRendering) return;
-
-			isRendering = true;
-
-			try {
-				const widgetId = window.turnstile!.render(containerRef.current, {
-					sitekey: TURNSTILE_SITEKEY,
-					theme: 'auto', // Auto syncs with system preference
-					size: 'flexible', // Responsive
-					appearance: 'execute', // Show when executed
-					execution: 'execute', // Manual trigger on form submit
-					retry: 'auto',
-					'refresh-expired': 'auto',
-					'response-field': false, // Manual token handling
-					action,
-					callback: (token) => {
-						console.log('Turnstile validation successful', { timestamp: Date.now() });
-						onValidated(token);
-					},
-					'error-callback': (err) => {
-						console.error('Turnstile error:', err);
-						setError('Verification failed. Please try again.');
-						onError?.(err);
-					},
-					'expired-callback': () => {
-						console.warn('Turnstile token expired');
-						setError('Verification expired. Please try again.');
-						onExpired?.();
-					},
-					'timeout-callback': () => {
-						console.warn('Turnstile timeout');
-						setError('Verification timed out. Please try again.');
-						onTimeout?.();
-					},
-					'before-interactive-callback': () => {
-						console.log('Turnstile entering interactive mode');
-						onBeforeInteractive?.();
-					},
-					'after-interactive-callback': () => {
-						console.log('Turnstile leaving interactive mode');
-						onAfterInteractive?.();
-					},
-					'unsupported-callback': () => {
-						console.error('Turnstile not supported');
-						setError('Your browser does not support verification.');
-						onUnsupported?.();
-					},
-					language: 'auto',
-					tabindex: 0,
-				});
-
-				widgetIdRef.current = widgetId;
+		useEffect(() => {
+			// Check if Turnstile script is loaded
+			if (!window.turnstile) {
+				setError('Turnstile script not loaded');
 				setIsLoading(false);
-				console.log('Turnstile widget rendered:', widgetId, { timestamp: Date.now() });
-			} catch (err) {
-				console.error('Error rendering Turnstile:', err);
-				setError('Failed to load verification widget');
-				setIsLoading(false);
-			} finally {
-				isRendering = false;
+				return;
 			}
-		});
 
-		// Cleanup on unmount
-		return () => {
-			if (widgetIdRef.current && window.turnstile) {
+			// Get current theme
+			const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+
+			// Prevent double-rendering in React Strict Mode (development)
+			let isRendering = false;
+
+			// Render widget when ready
+			window.turnstile.ready(() => {
+				if (!containerRef.current || widgetIdRef.current || isRendering) return;
+
+				isRendering = true;
+
 				try {
-					console.log('Cleaning up Turnstile widget:', widgetIdRef.current);
-					window.turnstile.remove(widgetIdRef.current);
-					widgetIdRef.current = null;
-				} catch (err) {
-					console.error('Error removing Turnstile widget:', err);
-				}
-			}
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []); // Only run once on mount - callbacks are captured in closure
+					const widgetId = window.turnstile!.render(containerRef.current, {
+						sitekey: TURNSTILE_SITEKEY,
+						theme: 'auto', // Auto syncs with system preference
+						size: 'flexible', // Responsive
+						appearance: 'execute', // Show when executed
+						execution: 'execute', // Manual trigger on form submit
+						retry: 'auto',
+						'refresh-expired': 'auto',
+						'response-field': false, // Manual token handling
+						action,
+						callback: (token) => {
+							onValidated(token);
+						},
+						'error-callback': (err) => {
+							console.error('Turnstile error:', err);
+							setError('Verification failed. Please try again.');
+							onError?.(err);
+						},
+						'expired-callback': () => {
+							console.warn('Turnstile token expired');
+							setError('Verification expired. Please try again.');
+							onExpired?.();
+						},
+						'timeout-callback': () => {
+							console.warn('Turnstile timeout');
+							setError('Verification timed out. Please try again.');
+							onTimeout?.();
+						},
+						'before-interactive-callback': () => {
+							onBeforeInteractive?.();
+						},
+						'after-interactive-callback': () => {
+							onAfterInteractive?.();
+						},
+						'unsupported-callback': () => {
+							console.error('Turnstile not supported');
+							setError('Your browser does not support verification.');
+							onUnsupported?.();
+						},
+						language: 'auto',
+						tabindex: 0,
+					});
 
-	// Expose methods to parent component via ref
-	useImperativeHandle(ref, () => ({
-		execute: () => {
-			console.log('Execute called, widgetId:', widgetIdRef.current);
-			if (widgetIdRef.current && window.turnstile) {
-				setIsExecuted(true);
-				window.turnstile.execute(widgetIdRef.current);
-			} else {
-				console.error('Cannot execute: widgetId not available');
-			}
-		},
-		reset: () => {
-			console.log('Reset called, widgetId:', widgetIdRef.current);
-			if (widgetIdRef.current && window.turnstile) {
-				window.turnstile.reset(widgetIdRef.current);
-				setIsExecuted(false);
-				setError(null);
-			}
-		},
-		isReady: () => {
-			return widgetIdRef.current !== null && window.turnstile !== undefined;
-		},
-	}));
+					widgetIdRef.current = widgetId;
+					setIsLoading(false);
+				} catch (err) {
+					console.error('Error rendering Turnstile:', err);
+					setError('Failed to load verification widget');
+					setIsLoading(false);
+				} finally {
+					isRendering = false;
+				}
+			});
+
+			// Cleanup on unmount
+			return () => {
+				if (widgetIdRef.current && window.turnstile) {
+					try {
+						window.turnstile.remove(widgetIdRef.current);
+						widgetIdRef.current = null;
+					} catch (err) {
+						console.error('Error removing Turnstile widget:', err);
+					}
+				}
+			};
+			// eslint-disable-next-line react-hooks/exhaustive-deps
+		}, []); // Only run once on mount - callbacks are captured in closure
+
+		// Expose methods to parent component via ref
+		useImperativeHandle(ref, () => ({
+			execute: () => {
+				if (widgetIdRef.current && window.turnstile) {
+					setIsExecuted(true);
+					window.turnstile.execute(widgetIdRef.current);
+				} else {
+					console.error('Cannot execute: widgetId not available');
+				}
+			},
+			reset: () => {
+				if (widgetIdRef.current && window.turnstile) {
+					window.turnstile.reset(widgetIdRef.current);
+					setIsExecuted(false);
+					setError(null);
+				}
+			},
+			isReady: () => {
+				return widgetIdRef.current !== null && window.turnstile !== undefined;
+			},
+		}));
 
 		return (
 			<div className="turnstile-container" data-testid="turnstile-widget">
@@ -213,12 +200,7 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 							<div className="absolute inset-0 bg-primary/20 rounded-full animate-ping"></div>
 							{/* Shield icon */}
 							<div className="relative bg-primary/10 p-4 rounded-full">
-								<svg
-									className="w-12 h-12 text-primary"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
+								<svg className="w-12 h-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path
 										strokeLinecap="round"
 										strokeLinejoin="round"
@@ -246,7 +228,7 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
 				)}
 			</div>
 		);
-	}
+	},
 );
 
 TurnstileWidget.displayName = 'TurnstileWidget';

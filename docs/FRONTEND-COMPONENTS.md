@@ -19,6 +19,7 @@ Complete guide to the Forminator frontend architecture, component structure, and
 ## Overview
 
 The Forminator frontend is a static Astro site with React components, built for:
+
 - Fast performance (static generation)
 - Modern UI/UX (shadcn/ui design system)
 - Dark mode support (CSS custom properties)
@@ -26,6 +27,7 @@ The Forminator frontend is a static Astro site with React components, built for:
 - Accessibility (WCAG compliance)
 
 **Architecture:**
+
 ```
 Astro (Static Site Generator)
     ├─ React Components (Interactive islands)
@@ -40,15 +42,15 @@ Astro (Static Site Generator)
 
 ### Core Technologies
 
-| Technology | Purpose | Version |
-|------------|---------|---------|
-| **Astro** | Static site generator, page routing | 5.x |
-| **React** | Interactive components | 19.x |
-| **TypeScript** | Type safety | 5.x |
-| **Tailwind CSS** | Utility-first styling | 4.x |
-| **shadcn/ui** | Component primitives | Latest |
-| **Zod** | Schema validation | 3.x |
-| **React Hook Form** | Form state management | 7.x |
+| Technology          | Purpose                             | Version |
+| ------------------- | ----------------------------------- | ------- |
+| **Astro**           | Static site generator, page routing | 5.x     |
+| **React**           | Interactive components              | 19.x    |
+| **TypeScript**      | Type safety                         | 5.x     |
+| **Tailwind CSS**    | Utility-first styling               | 4.x     |
+| **shadcn/ui**       | Component primitives                | Latest  |
+| **Zod**             | Schema validation                   | 3.x     |
+| **React Hook Form** | Form state management               | 7.x     |
 
 ### Component Libraries
 
@@ -71,20 +73,20 @@ The color system is defined in `frontend/src/styles/global.css` using CSS custom
 
 ```css
 :root {
-  --background: 220 18% 97%;
-  --foreground: 220 16% 20%;
-  --primary: 213 40% 48%;
-  --primary-foreground: 0 0% 100%;
-  --destructive: 354 42% 56%;
-  --destructive-foreground: 0 0% 100%;
-  /* ... other semantic color tokens */
+	--background: 220 18% 97%;
+	--foreground: 220 16% 20%;
+	--primary: 213 40% 48%;
+	--primary-foreground: 0 0% 100%;
+	--destructive: 354 42% 56%;
+	--destructive-foreground: 0 0% 100%;
+	/* ... other semantic color tokens */
 }
 
 .dark {
-  --background: 220 18% 16%;
-  --foreground: 218 24% 88%;
-  --primary: 213 42% 55%;
-  /* ... dark mode variants */
+	--background: 220 18% 16%;
+	--foreground: 218 24% 88%;
+	--primary: 213 42% 55%;
+	/* ... dark mode variants */
 }
 ```
 
@@ -93,16 +95,19 @@ The color system is defined in `frontend/src/styles/global.css` using CSS custom
 ### Dark/Light Mode
 
 **Dark Mode:**
+
 - Dark gray backgrounds (220 18% 16%)
 - Light text (218 24% 88%)
 - Blue primary accent (213 42% 55%)
 
 **Light Mode:**
+
 - Light gray backgrounds (220 18% 97%)
 - Dark text (220 16% 20%)
 - Blue primary accent (213 40% 48%)
 
 **Implementation:**
+
 ```typescript
 // Toggle handled by Astro's built-in dark mode
 // Uses prefers-color-scheme media query
@@ -112,12 +117,14 @@ The color system is defined in `frontend/src/styles/global.css` using CSS custom
 ### SVG Flags
 
 Country flags rendered using the **flag-icons** library:
+
 - Small bundle size (vs. image sprites)
 - Sharp rendering at any size
 - CSS-based flag rendering
 - Supports 200+ countries
 
 **Usage:**
+
 ```typescript
 // Imported in global.css
 @import "flag-icons/css/flag-icons.min.css";
@@ -133,6 +140,7 @@ Country flags rendered using the **flag-icons** library:
 **Implementation:** Custom-built phone input component (not a library dependency).
 
 **Features:**
+
 - 200+ countries with dial codes
 - SVG flag icons (via flag-icons library)
 - Searchable country dropdown
@@ -141,6 +149,7 @@ Country flags rendered using the **flag-icons** library:
 - Automatic country detection via geolocation API
 
 **Components:**
+
 ```
 frontend/src/components/phone/
 ├── PhoneInput.tsx       # Main phone input
@@ -154,6 +163,7 @@ frontend/src/components/phone/
 #### Enhanced Date Picker
 
 **Features:**
+
 - Calendar popup interface
 - Keyboard navigation
 - Visual feedback (hover, focus states)
@@ -161,6 +171,7 @@ frontend/src/components/phone/
 - Accessible (ARIA labels)
 
 **Implementation:**
+
 ```typescript
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -193,6 +204,7 @@ import { Calendar } from '@/components/ui/calendar';
 ```
 
 **States:**
+
 - **Idle** - Initial state, form ready
 - **Validating** - Client-side validation in progress
 - **Server Validation** - Turnstile + backend processing
@@ -200,16 +212,17 @@ import { Calendar } from '@/components/ui/calendar';
 - **Error** - Red X, error message with retry
 
 **Implementation:**
+
 ```typescript
 const [flowStep, setFlowStep] = useState<FlowStep>('idle');
 
 // Update flow step during submission
 const onSubmit = async (data) => {
-  setFlowStep('validating');
-  // ... validation
-  setFlowStep('server-validation');
-  // ... submit
-  setFlowStep('success'); // or 'error'
+	setFlowStep('validating');
+	// ... validation
+	setFlowStep('server-validation');
+	// ... submit
+	setFlowStep('success'); // or 'error'
 };
 ```
 
@@ -220,6 +233,7 @@ const onSubmit = async (data) => {
 All components designed mobile-first, then enhanced for larger screens.
 
 **Breakpoints:**
+
 ```css
 /* Tailwind default breakpoints */
 sm:  640px  /* Phones landscape */
@@ -230,21 +244,22 @@ xl:  1280px /* Desktops */
 ```
 
 **Example:**
+
 ```jsx
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  {/* 1 column mobile, 2 tablets, 3 desktop */}
-</div>
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{/* 1 column mobile, 2 tablets, 3 desktop */}</div>
 ```
 
 #### Searchable Dropdowns
 
 **Features:**
+
 - Keyboard navigation (arrow keys, enter, escape)
 - Type-to-search filtering
 - Virtualization for long lists (200+ countries)
 - Accessible (ARIA labels, focus management)
 
 **Implementation:**
+
 ```typescript
 import { Command, CommandInput, CommandList, CommandItem } from '@/components/ui/command';
 
@@ -266,28 +281,28 @@ Consistent scrollbar styling across browsers using CSS custom properties:
 
 ```css
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+	width: 8px;
+	height: 8px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
-  border-radius: 4px;
+	background: hsl(var(--muted));
+	border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
+	background: hsl(var(--muted-foreground) / 0.3);
+	border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+	background: hsl(var(--muted-foreground) / 0.5);
 }
 
 /* Firefox */
 .custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--muted));
+	scrollbar-width: thin;
+	scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--muted));
 }
 ```
 
@@ -379,6 +394,7 @@ frontend/src/
 The analytics dashboard provides comprehensive fraud monitoring and submission analytics.
 
 **Architecture:**
+
 - **Modular Design**: 330-line main component with 7 section components
 - **Custom Hooks**: 5 hooks for data fetching and state management
 - **Real-time Updates**: Polling with configurable intervals
@@ -391,12 +407,14 @@ The analytics dashboard provides comprehensive fraud monitoring and submission a
 **Location:** Top of dashboard
 
 **Features:**
+
 - Export data (CSV/JSON)
 - Refresh data
 - Clear all filters
 - Last updated timestamp
 
 **Actions:**
+
 ```typescript
 - exportData() → Downloads CSV/JSON
 - refresh() → Refetches all data
@@ -407,24 +425,25 @@ The analytics dashboard provides comprehensive fraud monitoring and submission a
 
 **5 Key Metrics:**
 
-| Metric | Description | Trend Indicator |
-|--------|-------------|-----------------|
-| Total Validations | All validation attempts | TrendingUp/Down icon |
-| Allowed Rate | Percentage of successful submissions | Color-coded (green/red) |
-| Avg Risk Score | Average risk score (0-100) | Numerical change |
-| Session Hopping Blocks | JA4 fraud detections | Count with trend |
-| Email Fraud Blocks | Markov-Mail blocks | Count with trend |
+| Metric                 | Description                          | Trend Indicator         |
+| ---------------------- | ------------------------------------ | ----------------------- |
+| Total Validations      | All validation attempts              | TrendingUp/Down icon    |
+| Allowed Rate           | Percentage of successful submissions | Color-coded (green/red) |
+| Avg Risk Score         | Average risk score (0-100)           | Numerical change        |
+| Session Hopping Blocks | JA4 fraud detections                 | Count with trend        |
+| Email Fraud Blocks     | Markov-Mail blocks                   | Count with trend        |
 
 **Trend Calculations:**
+
 ```typescript
 const trend = current - previous;
 const trendPercentage = (trend / previous) * 100;
 
 // Color coding
 if (metric === 'allowedRate') {
-  return trend > 0 ? 'text-green-500' : 'text-red-500';
+	return trend > 0 ? 'text-green-500' : 'text-red-500';
 } else {
-  return trend > 0 ? 'text-red-500' : 'text-green-500';
+	return trend > 0 ? 'text-red-500' : 'text-green-500';
 }
 ```
 
@@ -433,12 +452,14 @@ if (metric === 'allowedRate') {
 **Purpose:** Display critical fraud pattern warnings
 
 **Alert Types:**
+
 - High block rate (>50%)
 - Spike in fraudulent submissions
 - New attack patterns detected
 - System anomalies
 
 **Example:**
+
 ```typescript
 {isHighBlockRate && (
   <Alert variant="destructive">
@@ -454,12 +475,14 @@ if (metric === 'allowedRate') {
 #### 4. RecentSubmissionsSection
 
 **Features:**
+
 - Searchable/filterable table with pagination
 - Risk score visualization
 - Clickable rows → submission detail dialog
 - RiskScoreInfo component (educational tooltip)
 
 **Filters:**
+
 - Search (name, email)
 - Date range
 - Country (multi-select)
@@ -467,6 +490,7 @@ if (metric === 'allowedRate') {
 - Status (allowed/blocked)
 
 **Columns:**
+
 - ID
 - Name
 - Email
@@ -477,6 +501,7 @@ if (metric === 'allowedRate') {
 - Actions (View Details)
 
 **Pagination:**
+
 ```typescript
 const [page, setPage] = useState(1);
 const [limit, setLimit] = useState(10);
@@ -491,6 +516,7 @@ const totalPages = Math.ceil(total / limit);
 **Purpose:** Unified view of active blocks and past detections
 
 **Features:**
+
 - Combined blacklist + blocked validations
 - Filtering by detection type, status, risk level
 - Pagination (10/25/50/100 per page)
@@ -498,11 +524,13 @@ const totalPages = Math.ceil(total / limit);
 - Time remaining for active blocks
 
 **Filters:**
+
 - Detection Type (ephemeral ID, email fraud, JA4, IP diversity)
 - Status (active, expired, all)
 - Risk Level (low, medium, high)
 
 **Columns:**
+
 - Detection Type (badge)
 - Reason
 - Risk Score (colored)
@@ -511,6 +539,7 @@ const totalPages = Math.ceil(total / limit);
 - Actions (View Details)
 
 **ValidationDetailDialog** shows all 35+ validation fields:
+
 - Geographic data (country, region, city, lat/long)
 - Network data (ASN, colo, HTTP protocol, TLS)
 - Bot detection (bot score, detection IDs, verified bot)
@@ -532,6 +561,7 @@ const totalPages = Math.ceil(total / limit);
 **Chart Library:** Recharts
 
 **Example:**
+
 ```typescript
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -555,6 +585,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 **Purpose:** Fetch core analytics statistics
 
 **Returns:**
+
 ```typescript
 {
   data: {
@@ -580,6 +611,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 **Purpose:** Fetch submissions with filtering and pagination
 
 **Parameters:**
+
 ```typescript
 {
   page: number;
@@ -595,6 +627,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 ```
 
 **Returns:**
+
 ```typescript
 {
   data: Submission[];
@@ -612,6 +645,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 **Purpose:** Fetch active blacklist entries
 
 **Returns:**
+
 ```typescript
 {
   data: BlacklistEntry[];
@@ -628,6 +662,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 **Purpose:** Fetch recent blocked validation attempts
 
 **Returns:**
+
 ```typescript
 {
   data: Validation[];
@@ -644,17 +679,19 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 **Purpose:** Fetch fraud detection configuration
 
 **Returns:**
+
 ```typescript
 {
-  data: FraudDetectionConfig;
-  isLoading: boolean;
-  error: Error | null;
+	data: FraudDetectionConfig;
+	isLoading: boolean;
+	error: Error | null;
 }
 ```
 
 **API Endpoint:** `GET /api/config`
 
 **Usage:**
+
 ```typescript
 const { data: config } = useConfig();
 
@@ -672,6 +709,7 @@ const weights = config?.risk?.weights;
 **File:** `frontend/src/components/SubmissionForm.tsx`
 
 **Features:**
+
 - React Hook Form integration
 - Zod schema validation (client-side)
 - International phone input
@@ -685,6 +723,7 @@ const weights = config?.risk?.weights;
 - Captures the `erfid`/`X-Request-Id` returned by the Worker for debugging toast + support links
 
 **Form Fields:**
+
 - firstName (required)
 - lastName (required)
 - email (required)
@@ -693,27 +732,28 @@ const weights = config?.risk?.weights;
 - dateOfBirth (optional)
 
 **Validation:**
+
 ```typescript
 import { zodResolver } from '@hookform/resolvers/zod';
 import { formSchema } from '../lib/validation';
 
 const form = useForm({
-  resolver: zodResolver(formSchema),
-  defaultValues: {
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    address: {
-      street: '',
-      street2: '',
-      city: '',
-      state: '',
-      postalCode: '',
-      country: '',
-    },
-    dateOfBirth: '',
-  },
+	resolver: zodResolver(formSchema),
+	defaultValues: {
+		firstName: '',
+		lastName: '',
+		email: '',
+		phone: '',
+		address: {
+			street: '',
+			street2: '',
+			city: '',
+			state: '',
+			postalCode: '',
+			country: '',
+		},
+		dateOfBirth: '',
+	},
 });
 
 const [lastErfid, setLastErfid] = useState<string | null>(null);
@@ -721,38 +761,39 @@ const [serverError, setServerError] = useState<string | null>(null);
 ```
 
 **Submission Flow:**
+
 ```typescript
 const onSubmit = async (data: FormData) => {
-  setFlowStep('validating');
+	setFlowStep('validating');
 
-  // Check if Turnstile token available
-  if (!turnstileToken) {
-    // Request Turnstile challenge
-    setFlowStep('turnstile');
-    return;
-  }
+	// Check if Turnstile token available
+	if (!turnstileToken) {
+		// Request Turnstile challenge
+		setFlowStep('turnstile');
+		return;
+	}
 
-  setFlowStep('server-validation');
+	setFlowStep('server-validation');
 
-  // Submit form
-  const response = await fetch('/api/submissions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...data, turnstileToken }),
-  });
+	// Submit form
+	const response = await fetch('/api/submissions', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ ...data, turnstileToken }),
+	});
 
-  const payload = await response.json();
+	const payload = await response.json();
 
-  if (response.ok) {
-    setFlowStep('success');
-    // Persist erfid for receipts/support (falls back to header if body omitted)
-    const erfid = payload.erfid ?? response.headers.get('X-Request-Id');
-    setLastErfid(erfid);
-  } else {
-    setFlowStep('error');
-    setServerError(payload.message ?? 'Submission failed');
-    setLastErfid(payload.erfid ?? response.headers.get('X-Request-Id'));
-  }
+	if (response.ok) {
+		setFlowStep('success');
+		// Persist erfid for receipts/support (falls back to header if body omitted)
+		const erfid = payload.erfid ?? response.headers.get('X-Request-Id');
+		setLastErfid(erfid);
+	} else {
+		setFlowStep('error');
+		setServerError(payload.message ?? 'Submission failed');
+		setLastErfid(payload.erfid ?? response.headers.get('X-Request-Id'));
+	}
 };
 ```
 
@@ -761,6 +802,7 @@ const onSubmit = async (data: FormData) => {
 **File:** `frontend/src/components/TurnstileWidget.tsx`
 
 **Features:**
+
 - Explicit rendering
 - Interaction-only appearance (hidden until needed)
 - Execute mode (manual challenge trigger)
@@ -769,6 +811,7 @@ const onSubmit = async (data: FormData) => {
 - Token expiration handling
 
 **Callbacks:**
+
 ```typescript
 <TurnstileWidget
   siteKey={TURNSTILE_SITEKEY}
@@ -801,13 +844,13 @@ const onSubmit = async (data: FormData) => {
 ### Tailwind CSS
 
 **Utility-First Approach:**
+
 ```jsx
-<button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md">
-  Submit
-</button>
+<button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md">Submit</button>
 ```
 
 **Benefits:**
+
 - No CSS file bloat
 - Consistent spacing/sizing
 - Responsive utilities (md:, lg:, etc.)
@@ -816,53 +859,56 @@ const onSubmit = async (data: FormData) => {
 ### shadcn/ui
 
 **Component Primitives:**
+
 - Accessible by default (ARIA labels, keyboard nav)
 - Customizable via Tailwind
 - Copy-paste components (not npm package)
 - Built on Radix UI primitives
 
 **Example Component:**
+
 ```tsx
 import { Button } from '@/components/ui/button';
 
 <Button variant="default" size="lg">
-  Click me
-</Button>
+	Click me
+</Button>;
 ```
 
 **Variants:**
+
 - default, destructive, outline, secondary, ghost, link
 - Sizes: sm, default, lg, icon
 
 ### CSS Variables
 
 **Theme Configuration:**
+
 ```css
 :root {
-  --background: 220 16% 22%;
-  --foreground: 218 27% 92%;
-  --primary: 213 32% 52%;
-  --primary-foreground: 218 27% 94%;
-  --secondary: 220 16% 28%;
-  --secondary-foreground: 218 27% 92%;
-  --destructive: 354 42% 56%;
-  --destructive-foreground: 218 27% 94%;
-  --muted: 220 16% 28%;
-  --muted-foreground: 219 28% 88%;
-  --accent: 220 16% 32%;
-  --accent-foreground: 218 27% 92%;
-  --border: 220 16% 36%;
-  --input: 220 16% 36%;
-  --ring: 213 32% 52%;
-  --radius: 0.5rem;
+	--background: 220 16% 22%;
+	--foreground: 218 27% 92%;
+	--primary: 213 32% 52%;
+	--primary-foreground: 218 27% 94%;
+	--secondary: 220 16% 28%;
+	--secondary-foreground: 218 27% 92%;
+	--destructive: 354 42% 56%;
+	--destructive-foreground: 218 27% 94%;
+	--muted: 220 16% 28%;
+	--muted-foreground: 219 28% 88%;
+	--accent: 220 16% 32%;
+	--accent-foreground: 218 27% 92%;
+	--border: 220 16% 36%;
+	--input: 220 16% 36%;
+	--ring: 213 32% 52%;
+	--radius: 0.5rem;
 }
 ```
 
 **Usage:**
+
 ```tsx
-<div className="bg-background text-foreground border border-border">
-  Content
-</div>
+<div className="bg-background text-foreground border border-border">Content</div>
 ```
 
 ### cn() Utility
@@ -875,15 +921,14 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+	return twMerge(clsx(inputs));
 }
 ```
 
 **Usage:**
+
 ```tsx
-<Button className={cn('bg-primary', isLoading && 'opacity-50')}>
-  Submit
-</Button>
+<Button className={cn('bg-primary', isLoading && 'opacity-50')}>Submit</Button>
 ```
 
 ---
@@ -893,6 +938,7 @@ export function cn(...inputs: ClassValue[]) {
 ### Local State (useState)
 
 **For component-specific state:**
+
 ```typescript
 const [isOpen, setIsOpen] = useState(false);
 const [selectedCountry, setSelectedCountry] = useState('US');
@@ -901,54 +947,61 @@ const [selectedCountry, setSelectedCountry] = useState('US');
 ### Form State (React Hook Form)
 
 **For complex forms:**
+
 ```typescript
 const form = useForm({
-  resolver: zodResolver(formSchema),
-  defaultValues: {},
+	resolver: zodResolver(formSchema),
+	defaultValues: {},
 });
 
-const { handleSubmit, formState: { errors } } = form;
+const {
+	handleSubmit,
+	formState: { errors },
+} = form;
 ```
 
 ### Server State (Custom Hooks)
 
 **For API data:**
+
 ```typescript
 const { data, isLoading, error, refresh } = useAnalytics();
 ```
 
 **Implementation:**
+
 ```typescript
 export function useAnalytics() {
-  const [data, setData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+	const [data, setData] = useState(null);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState(null);
 
-  const fetchData = async () => {
-    try {
-      const response = await fetch('/api/analytics/stats', {
-        headers: { 'X-API-KEY': API_KEY },
-      });
-      const json = await response.json();
-      setData(json);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+	const fetchData = async () => {
+		try {
+			const response = await fetch('/api/analytics/stats', {
+				headers: { 'X-API-KEY': API_KEY },
+			});
+			const json = await response.json();
+			setData(json);
+		} catch (err) {
+			setError(err);
+		} finally {
+			setIsLoading(false);
+		}
+	};
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+	useEffect(() => {
+		fetchData();
+	}, []);
 
-  return { data, isLoading, error, refresh: fetchData };
+	return { data, isLoading, error, refresh: fetchData };
 }
 ```
 
 ### URL State (For Filters)
 
 **For shareable dashboard filters:**
+
 ```typescript
 const [searchParams, setSearchParams] = useSearchParams();
 
@@ -997,24 +1050,28 @@ frontend/src/pages/analytics.astro
 ### Common Tasks
 
 **Add new form field:**
+
 1. Update Zod schema in `lib/validation.ts`
 2. Add field to form in `SubmissionForm.tsx`
 3. Update backend schema in `src/lib/validation.ts`
 4. Add column to D1 table in `schema.sql`
 
 **Add new analytics chart:**
+
 1. Create chart component in `components/analytics/charts/`
 2. Import in `ChartsSection.tsx`
 3. Fetch data via custom hook or inline fetch
 4. Configure chart with Recharts
 
 **Add new dashboard filter:**
+
 1. Create filter component in `components/analytics/filters/`
 2. Add filter state to dashboard
 3. Pass filter to API endpoint
 4. Update query in backend
 
 **Customize theme colors:**
+
 1. Edit `tailwind.config.mjs`
 2. Update CSS variables in `globals.css`
 3. Rebuild frontend: `npm run build`

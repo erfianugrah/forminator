@@ -361,9 +361,9 @@ export function getDebugErrorInfo(errorCodes: string[]): {
 
 	return {
 		codes,
-		messages: errors.map(e => e.debugMessage),
-		actions: errors.map(e => e.action),
-		categories: errors.map(e => e.category),
+		messages: errors.map((e) => e.debugMessage),
+		actions: errors.map((e) => e.action),
+		categories: errors.map((e) => e.category),
 	};
 }
 
@@ -371,7 +371,7 @@ export function getDebugErrorInfo(errorCodes: string[]): {
  * Check if error is configuration-related (needs developer attention)
  */
 export function isConfigurationError(errorCodes: string[]): boolean {
-	return errorCodes.some(code => {
+	return errorCodes.some((code) => {
 		const error = getTurnstileError(code);
 		return error.category === 'configuration';
 	});
@@ -381,7 +381,7 @@ export function isConfigurationError(errorCodes: string[]): boolean {
  * Check if error is user-recoverable (can retry)
  */
 export function isRetryableError(errorCodes: string[]): boolean {
-	return errorCodes.every(code => {
+	return errorCodes.every((code) => {
 		const error = getTurnstileError(code);
 		return error.action === 'retry';
 	});

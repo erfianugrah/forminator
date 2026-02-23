@@ -35,9 +35,7 @@ export function Dialog({ open, onClose, onOpenChange, children }: DialogProps) {
 				onClick={onClose || onOpenChange ? handleClose : undefined}
 			/>
 			{/* Dialog - let DialogContent control max-width */}
-			<div className="relative z-50">
-				{children}
-			</div>
+			<div className="relative z-50">{children}</div>
 		</div>
 	);
 }
@@ -48,7 +46,7 @@ export function DialogContent({ className, children, ...props }: React.HTMLAttri
 			className={cn(
 				'bg-background border rounded-lg shadow-xl dark:shadow-[0_20px_40px_rgba(0,0,0,0.7)]',
 				'overflow-y-auto max-h-[90vh] w-full max-w-4xl',
-				className
+				className,
 			)}
 			{...props}
 		>
@@ -58,28 +56,13 @@ export function DialogContent({ className, children, ...props }: React.HTMLAttri
 }
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-	return (
-		<div
-			className={cn('flex flex-col space-y-1.5 p-6 border-b', className)}
-			{...props}
-		/>
-	);
+	return <div className={cn('flex flex-col space-y-1.5 p-6 border-b', className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-	return (
-		<h2
-			className={cn('text-lg font-semibold leading-none tracking-tight', className)}
-			{...props}
-		/>
-	);
+	return <h2 className={cn('text-lg font-semibold leading-none tracking-tight', className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-	return (
-		<p
-			className={cn('text-sm text-muted-foreground', className)}
-			{...props}
-		/>
-	);
+	return <p className={cn('text-sm text-muted-foreground', className)} {...props} />;
 }

@@ -7,16 +7,16 @@ import tailwindcss from '@tailwindcss/vite';
 // https://astro.build/config
 // Frontend builds static files only - Worker handles serving and API routes
 export default defineConfig({
-  integrations: [react()],
+	integrations: [react()],
 
-  vite: {
-    // @ts-ignore - Vite plugin type mismatch between Astro and @tailwindcss/vite
-    plugins: [tailwindcss()]
-  },
+	vite: {
+		// @ts-ignore - Vite plugin type mismatch between Astro and @tailwindcss/vite
+		plugins: [tailwindcss()],
+	},
 
-  output: 'static',
+	output: 'static',
 
-  build: {
-    format: 'directory' // Creates index.html in directories for clean URLs
-  }
+	build: {
+		format: 'directory', // Creates index.html in directories for clean URLs
+	},
 });

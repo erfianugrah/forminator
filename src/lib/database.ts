@@ -78,19 +78,17 @@ export async function logValidation(
 		allowed: boolean;
 		blockReason?: string;
 		submissionId?: number;
-		detectionType?: string;  // Phase 1.5: Which fraud check triggered
-		riskScoreBreakdown?: RiskScoreBreakdown;  // Phase 1.5: Normalized breakdown
-		erfid?: string;  // Request tracking ID
+		detectionType?: string; // Phase 1.5: Which fraud check triggered
+		riskScoreBreakdown?: RiskScoreBreakdown; // Phase 1.5: Normalized breakdown
+		erfid?: string; // Request tracking ID
 		testingBypass?: boolean; // Testing bypass flag
-	}
-): Promise<void> {
-	const requestHeadersJson = data.metadata.requestHeaders
-		? JSON.stringify(data.metadata.requestHeaders)
-		: null;
+	},
+): Promise<number | null> {
+	const requestHeadersJson = data.metadata.requestHeaders ? JSON.stringify(data.metadata.requestHeaders) : null;
 	const extendedMetadataJson = JSON.stringify(data.metadata);
 
 	try {
-		await db
+		const result = await db
 			.prepare(
 				`INSERT INTO turnstile_validations (
 					token_hash, success, allowed, block_reason, challenge_ts, hostname,
@@ -105,7 +103,7 @@ export async function logValidation(
 					?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?
-				)`
+				) RETURNING id`,
 			)
 			.bind(
 				data.tokenHash,
@@ -118,7 +116,7 @@ export async function logValidation(
 				data.validation.ephemeralId || null,
 				data.riskScore,
 				data.validation.errors ? JSON.stringify(data.validation.errors) : null,
-				data.submissionId || null,
+				data.submissionId ?? null,
 				// Request metadata
 				data.metadata.remoteIp,
 				data.metadata.userAgent,
@@ -134,29 +132,83 @@ export async function logValidation(
 				data.metadata.colo || null,
 				data.metadata.httpProtocol || null,
 				data.metadata.tlsVersion || null,
-				data.metadata.botScore || null,
-				data.metadata.clientTrustScore || null,
+				data.metadata.botScore ?? null,
+				data.metadata.clientTrustScore ?? null,
 				data.metadata.verifiedBot || false,
 				data.metadata.jsDetectionPassed || false,
 				data.metadata.detectionIds ? JSON.stringify(data.metadata.detectionIds) : null,
-					data.metadata.ja3Hash || null,
-					data.metadata.ja4 || null,
-					data.metadata.ja4Signals ? JSON.stringify(data.metadata.ja4Signals) : null,
-					// Phase 1.5: Detection type and risk score breakdown
-					data.detectionType || null,
-					data.riskScoreBreakdown ? JSON.stringify(data.riskScoreBreakdown) : null,
-					requestHeadersJson,
-					extendedMetadataJson,
-					// Request tracking ID
-					data.erfid || null,
-					data.testingBypass ? 1 : 0
-				)
-			.run();
+				data.metadata.ja3Hash || null,
+				data.metadata.ja4 || null,
+				data.metadata.ja4Signals ? JSON.stringify(data.metadata.ja4Signals) : null,
+				// Phase 1.5: Detection type and risk score breakdown
+				data.detectionType || null,
+				data.riskScoreBreakdown ? JSON.stringify(data.riskScoreBreakdown) : null,
+				requestHeadersJson,
+				extendedMetadataJson,
+				// Request tracking ID
+				data.erfid || null,
+				data.testingBypass ? 1 : 0,
+			)
+			.first<{ id: number }>();
 
-		logger.info({ tokenHash: data.tokenHash, success: data.validation.valid }, 'Validation logged');
+		const insertedId = result?.id ?? null;
+		logger.info({ tokenHash: data.tokenHash, success: data.validation.valid, validationId: insertedId }, 'Validation logged');
+		return insertedId;
 	} catch (error) {
 		logger.error({ error }, 'Error logging validation');
 		throw error;
+	}
+}
+
+/**
+ * Update a previously-logged validation record with final decision data.
+ * Used by write-before-read pattern: an early "pending" validation is inserted
+ * before signal collection so concurrent requests see each other's records,
+ * then updated once the final risk score and blocking decision are made.
+ *
+ * @param db - D1 database instance
+ * @param validationId - The ID returned from logValidation
+ * @param data - Fields to update (risk score, allowed status, block reason, etc.)
+ */
+export async function updateValidationResult(
+	db: D1Database,
+	validationId: number,
+	data: {
+		riskScore: number;
+		allowed: boolean;
+		blockReason?: string;
+		submissionId?: number;
+		detectionType?: string;
+		riskScoreBreakdown?: RiskScoreBreakdown;
+	},
+): Promise<void> {
+	try {
+		await db
+			.prepare(
+				`UPDATE turnstile_validations
+				 SET risk_score = ?,
+				     allowed = ?,
+				     block_reason = ?,
+				     submission_id = ?,
+				     detection_type = ?,
+				     risk_score_breakdown = ?
+				 WHERE id = ?`,
+			)
+			.bind(
+				data.riskScore,
+				data.allowed,
+				data.blockReason || null,
+				data.submissionId ?? null,
+				data.detectionType || null,
+				data.riskScoreBreakdown ? JSON.stringify(data.riskScoreBreakdown) : null,
+				validationId,
+			)
+			.run();
+
+		logger.info({ validationId, allowed: data.allowed, riskScore: data.riskScore }, 'Validation result updated');
+	} catch (error) {
+		logger.error({ error, validationId }, 'Error updating validation result');
+		// Non-fatal: the early record is still valid for signal collection
 	}
 }
 
@@ -168,13 +220,13 @@ export async function logValidation(
 export async function logFraudBlock(
 	db: D1Database,
 	data: {
-		detectionType: string;           // 'email_fraud', 'ip_reputation', etc.
-		blockReason: string;             // Human-readable reason
-		riskScore: number;               // 0-100 scale
-		metadata: RequestMetadata;       // Request metadata
+		detectionType: string; // 'email_fraud', 'ip_reputation', etc.
+		blockReason: string; // Human-readable reason
+		riskScore: number; // 0-100 scale
+		metadata: RequestMetadata; // Request metadata
 		fraudSignals?: Record<string, any>; // Detection-specific signals
-		erfid?: string;                  // Request tracking ID
-	}
+		erfid?: string; // Request tracking ID
+	},
 ): Promise<void> {
 	try {
 		// Extract email fraud specific fields if present
@@ -182,7 +234,7 @@ export async function logFraudBlock(
 		const emailMarkovDetected = data.fraudSignals?.markovDetected ? 1 : 0;
 		const emailOodDetected = data.fraudSignals?.oodDetected ? 1 : 0;
 		const emailDisposableDomain = data.fraudSignals?.isDisposableDomain ? 1 : 0;
-		const emailTldRiskScore = data.fraudSignals?.tldRiskScore || null;
+		const emailTldRiskScore = data.fraudSignals?.tldRiskScore ?? null;
 
 		await db
 			.prepare(
@@ -200,7 +252,7 @@ export async function logFraudBlock(
 					?, ?,
 					?, ?,
 					?
-				)`
+				)`,
 			)
 			.bind(
 				data.detectionType,
@@ -216,7 +268,7 @@ export async function logFraudBlock(
 				emailTldRiskScore,
 				JSON.stringify(data.metadata),
 				data.fraudSignals ? JSON.stringify(data.fraudSignals) : null,
-				data.erfid || null
+				data.erfid || null,
 			)
 			.run();
 
@@ -226,7 +278,7 @@ export async function logFraudBlock(
 				risk_score: data.riskScore,
 				erfid: data.erfid,
 			},
-			'Fraud block logged to database'
+			'Fraud block logged to database',
 		);
 	} catch (error) {
 		logger.error({ error, detection_type: data.detectionType }, 'Error logging fraud block');
@@ -249,12 +301,10 @@ export async function createSubmission(
 	rawPayload?: Record<string, any> | null,
 	extractedEmail?: string | null,
 	extractedPhone?: string | null,
-	erfid?: string | null,  // Request tracking ID
-	testingBypass?: boolean
+	erfid?: string | null, // Request tracking ID
+	testingBypass?: boolean,
 ): Promise<number> {
-	const requestHeadersJson = metadata.requestHeaders
-		? JSON.stringify(metadata.requestHeaders)
-		: null;
+	const requestHeadersJson = metadata.requestHeaders ? JSON.stringify(metadata.requestHeaders) : null;
 	const extendedMetadataJson = JSON.stringify(metadata);
 
 	try {
@@ -281,7 +331,7 @@ export async function createSubmission(
 					?, ?, ?, ?, ?,
 					?,
 					?, ?, ?, ?, ?, ?, ?
-				)`
+				)`,
 			)
 			.bind(
 				formData.firstName,
@@ -308,8 +358,8 @@ export async function createSubmission(
 				metadata.httpProtocol || null,
 				metadata.tlsVersion || null,
 				metadata.tlsCipher || null,
-				metadata.botScore || null,
-				metadata.clientTrustScore || null,
+				metadata.botScore ?? null,
+				metadata.clientTrustScore ?? null,
 				metadata.verifiedBot || false,
 				metadata.detectionIds ? JSON.stringify(metadata.detectionIds) : null,
 				metadata.ja3Hash || null,
@@ -317,9 +367,9 @@ export async function createSubmission(
 				metadata.ja4Signals ? JSON.stringify(metadata.ja4Signals) : null,
 				emailFraudResult ? emailFraudResult.riskScore / 100 : null, // Convert back to 0.0-1.0
 				emailFraudResult ? JSON.stringify(emailFraudResult.signals) : null,
-				emailFraudResult?.signals.patternType || null,
-				emailFraudResult?.signals.markovDetected ? 1 : 0,
-				emailFraudResult?.signals.oodDetected ? 1 : 0,
+				emailFraudResult?.signals.patternType ?? null,
+				emailFraudResult ? (emailFraudResult.signals.markovDetected ? 1 : 0) : null,
+				emailFraudResult ? (emailFraudResult.signals.oodDetected ? 1 : 0) : null,
 				riskScoreBreakdown ? JSON.stringify(riskScoreBreakdown) : null,
 				// Phase 3: Store raw payload and extracted fields
 				rawPayload ? JSON.stringify(rawPayload) : null,
@@ -329,28 +379,26 @@ export async function createSubmission(
 				extendedMetadataJson,
 				// Request tracking ID
 				erfid || null,
-				testingBypass ? 1 : 0
+				testingBypass ? 1 : 0,
 			)
 			.run();
 
 		// D1 returns lastRowId as a string, convert to number
-		const submissionId = typeof result.meta.last_row_id === 'string'
-			? parseInt(result.meta.last_row_id, 10)
-			: result.meta.last_row_id;
+		const submissionId = typeof result.meta.last_row_id === 'string' ? parseInt(result.meta.last_row_id, 10) : result.meta.last_row_id;
 
-		logger.info(
-			{ submissionId, email: formData.email, ephemeralId },
-			'Submission created'
-		);
+		logger.info({ submissionId, email: formData.email, ephemeralId }, 'Submission created');
 
 		return submissionId;
 	} catch (error) {
-		logger.error({
-			error,
-			errorMessage: error instanceof Error ? error.message : 'Unknown error',
-			errorStack: error instanceof Error ? error.stack : undefined,
-			formData: { email: formData.email, hasAddress: !!formData.address }
-		}, 'Error creating submission');
+		logger.error(
+			{
+				error,
+				errorMessage: error instanceof Error ? error.message : 'Unknown error',
+				errorStack: error instanceof Error ? error.stack : undefined,
+				formData: { email: formData.email, hasAddress: !!formData.address },
+			},
+			'Error creating submission',
+		);
 		throw error;
 	}
 }
@@ -360,10 +408,7 @@ export async function createSubmission(
  */
 export async function getSubmission(db: D1Database, id: number) {
 	try {
-		return await db
-			.prepare('SELECT * FROM submissions WHERE id = ?')
-			.bind(id)
-			.first();
+		return await db.prepare('SELECT * FROM submissions WHERE id = ?').bind(id).first();
 	} catch (error) {
 		logger.error({ error, id }, 'Error fetching submission');
 		throw error;
@@ -373,11 +418,7 @@ export async function getSubmission(db: D1Database, id: number) {
 /**
  * Get recent submissions for analytics (legacy - use getSubmissions for advanced features)
  */
-export async function getRecentSubmissions(
-	db: D1Database,
-	limit: number = 50,
-	offset: number = 0
-) {
+export async function getRecentSubmissions(db: D1Database, limit: number = 50, offset: number = 0) {
 	try {
 		const result = await db
 			.prepare(
@@ -385,7 +426,7 @@ export async function getRecentSubmissions(
 				 created_at, remote_ip, user_agent, tls_version, asn, ja3_hash, ja4, ephemeral_id, erfid
 				 FROM submissions
 				 ORDER BY created_at DESC
-				 LIMIT ? OFFSET ?`
+				 LIMIT ? OFFSET ?`,
 			)
 			.bind(limit, offset)
 			.all();
@@ -420,18 +461,18 @@ export interface SubmissionsFilters {
 		tlsAnomaly?: boolean;
 		latencyMismatch?: boolean;
 	};
+	/** When true, raises the max limit from 100 to 5000 (for data export endpoints) */
+	export?: boolean;
 }
 
 /**
  * Get submissions with advanced filtering, sorting, and search
  */
-export async function getSubmissions(
-	db: D1Database,
-	filters: SubmissionsFilters = {}
-) {
+export async function getSubmissions(db: D1Database, filters: SubmissionsFilters = {}) {
 	try {
 		// Defaults and validation
-		const limit = Math.min(filters.limit || 50, 100);
+		const maxLimit = filters.export ? 5000 : 100;
+		const limit = Math.min(filters.limit || 50, maxLimit);
 		const offset = Math.max(filters.offset || 0, 0);
 		const sortBy = filters.sortBy || 'created_at';
 		const sortOrder = filters.sortOrder || 'desc';
@@ -472,17 +513,13 @@ export async function getSubmissions(
 		if (filters.startDate) {
 			whereClauses.push('s.created_at >= ?');
 			// Convert ISO date to SQLite format if it contains 'T'
-			const startDate = filters.startDate.includes('T')
-				? toSQLiteDateTime(new Date(filters.startDate))
-				: filters.startDate;
+			const startDate = filters.startDate.includes('T') ? toSQLiteDateTime(new Date(filters.startDate)) : filters.startDate;
 			bindings.push(startDate);
 		}
 		if (filters.endDate) {
 			whereClauses.push('s.created_at <= ?');
 			// Convert ISO date to SQLite format if it contains 'T'
-			const endDate = filters.endDate.includes('T')
-				? toSQLiteDateTime(new Date(filters.endDate))
-				: filters.endDate;
+			const endDate = filters.endDate.includes('T') ? toSQLiteDateTime(new Date(filters.endDate)) : filters.endDate;
 			bindings.push(endDate);
 		}
 
@@ -503,18 +540,21 @@ export async function getSubmissions(
 		}
 
 		// Allowed status filter (show blocked, allowed, or all)
+		// Note: `allowed` column is on turnstile_validations (tv), not submissions (s)
 		if (filters.allowed !== undefined && filters.allowed !== 'all') {
-			whereClauses.push('s.allowed = ?');
+			whereClauses.push('tv.allowed = ?');
 			bindings.push(filters.allowed ? 1 : 0);
 		}
 
-		// Search across multiple fields
+		// Search across multiple fields (escape LIKE wildcards to prevent wildcard injection)
 		if (filters.search && filters.search.trim()) {
-			const searchTerm = `%${filters.search.trim()}%`;
-			whereClauses.push('(s.email LIKE ? OR s.first_name LIKE ? OR s.last_name LIKE ? OR s.remote_ip LIKE ?)');
+			const escapedSearch = filters.search.trim().replace(/[%_\\]/g, '\\$&');
+			const searchTerm = `%${escapedSearch}%`;
+			whereClauses.push(
+				"(s.email LIKE ? ESCAPE '\\' OR s.first_name LIKE ? ESCAPE '\\' OR s.last_name LIKE ? ESCAPE '\\' OR s.remote_ip LIKE ? ESCAPE '\\')",
+			);
 			bindings.push(searchTerm, searchTerm, searchTerm, searchTerm);
 		}
-
 
 		const whereClause = whereClauses.join(' AND ');
 
@@ -539,16 +579,25 @@ export async function getSubmissions(
 		`;
 
 		// Build count query for total (must use same alias as main query)
+		// Include LEFT JOIN when filtering by `allowed` since that column is on turnstile_validations
+		const needsJoin = filters.allowed !== undefined && filters.allowed !== 'all';
 		const countQuery = `
 			SELECT COUNT(*) as total
 			FROM submissions s
+			${needsJoin ? 'LEFT JOIN turnstile_validations tv ON s.id = tv.submission_id' : ''}
 			WHERE ${whereClause}
 		`;
 
 		// Execute both queries
 		const [dataResult, countResult] = await Promise.all([
-			db.prepare(query).bind(...bindings, limit, offset).all(),
-			db.prepare(countQuery).bind(...bindings).first<{ total: number }>(),
+			db
+				.prepare(query)
+				.bind(...bindings, limit, offset)
+				.all(),
+			db
+				.prepare(countQuery)
+				.bind(...bindings)
+				.first<{ total: number }>(),
 		]);
 
 		logger.info(
@@ -557,7 +606,7 @@ export async function getSubmissions(
 				count: dataResult.results.length,
 				total: countResult?.total || 0,
 			},
-			'Submissions retrieved with filters'
+			'Submissions retrieved with filters',
 		);
 
 		const normalizedData = dataResult.results.map((row: any) => {
@@ -592,15 +641,7 @@ export async function getSubmissions(
  */
 export async function getValidationStats(db: D1Database) {
 	try {
-		const [
-			stats,
-			emailStats,
-			blacklistCount,
-			turnstileRows,
-			riskBuckets,
-			clientHintInstability,
-			velocityInsights,
-		] = await Promise.all([
+		const [stats, emailStats, blacklistCount, turnstileRows, riskBuckets, clientHintInstability, velocityInsights] = await Promise.all([
 			db
 				.prepare(
 					`SELECT
@@ -613,7 +654,7 @@ export async function getValidationStats(db: D1Database) {
 						SUM(CASE WHEN detection_type = 'header_fingerprint_reuse' THEN 1 ELSE 0 END) as header_fingerprint_blocks,
 						SUM(CASE WHEN detection_type = 'tls_fingerprint_anomaly' THEN 1 ELSE 0 END) as tls_anomaly_blocks,
 						SUM(CASE WHEN detection_type = 'latency_mismatch' THEN 1 ELSE 0 END) as latency_mismatch_blocks
-					 FROM turnstile_validations`
+					 FROM turnstile_validations`,
 				)
 				.first<{
 					total: number;
@@ -634,7 +675,7 @@ export async function getValidationStats(db: D1Database) {
 						SUM(CASE WHEN email_ood_detected = 1 THEN 1 ELSE 0 END) as ood_detected,
 						AVG(email_risk_score) as avg_email_risk_score
 					 FROM submissions
-					 WHERE email_risk_score IS NOT NULL`
+					 WHERE email_risk_score IS NOT NULL`,
 				)
 				.first<{
 					total_with_email_check: number;
@@ -646,7 +687,7 @@ export async function getValidationStats(db: D1Database) {
 				.prepare(
 					`SELECT COUNT(*) as active_blacklist
 					 FROM fraud_blacklist
-					 WHERE expires_at > datetime('now')`
+					 WHERE expires_at > datetime('now')`,
 				)
 				.first<{ active_blacklist: number }>(),
 			db
@@ -659,7 +700,7 @@ export async function getValidationStats(db: D1Database) {
 						AVG(risk_score) as avg_risk_score,
 						AVG(bot_score) as avg_bot_score
 					 FROM turnstile_validations
-					 GROUP BY success, allowed, testing_bypass`
+					 GROUP BY success, allowed, testing_bypass`,
 				)
 				.all(),
 			db
@@ -669,7 +710,7 @@ export async function getValidationStats(db: D1Database) {
 						SUM(CASE WHEN risk_score >= 30 AND risk_score < 60 THEN 1 ELSE 0 END) as medium,
 						SUM(CASE WHEN risk_score >= 60 AND risk_score < 80 THEN 1 ELSE 0 END) as high,
 						SUM(CASE WHEN risk_score >= 80 THEN 1 ELSE 0 END) as critical
-					 FROM turnstile_validations`
+					 FROM turnstile_validations`,
 				)
 				.first<{
 					low: number;
@@ -702,7 +743,7 @@ export async function getValidationStats(db: D1Database) {
 						SUM(CASE WHEN ua_variants > 1 OR platform_variants > 1 THEN 1 ELSE 0 END) as unstable_ips,
 						AVG(ua_variants) as avg_ua_variants,
 						AVG(platform_variants) as avg_platform_variants
-					FROM aggregated`
+					FROM aggregated`,
 				)
 				.first<{
 					tracked_ips: number;
@@ -734,7 +775,7 @@ export async function getValidationStats(db: D1Database) {
 								AND created_at >= datetime('now', '-24 hours')
 							GROUP BY ephemeral_id
 						)) as avg_submissions_per_ephemeral_day,
-						(SELECT COUNT(*) FROM fraud_blacklist WHERE blocked_at >= datetime('now', '-24 hours')) as progressive_timeouts_24h`
+						(SELECT COUNT(*) FROM fraud_blacklist WHERE blocked_at >= datetime('now', '-24 hours')) as progressive_timeouts_24h`,
 				)
 				.first<{
 					ja4_peak_last_hour: number;
@@ -771,12 +812,9 @@ export async function getValidationStats(db: D1Database) {
 		};
 
 		const fingerprintTotalBlocks =
-			(stats?.header_fingerprint_blocks || 0) +
-			(stats?.tls_anomaly_blocks || 0) +
-			(stats?.latency_mismatch_blocks || 0);
+			(stats?.header_fingerprint_blocks || 0) + (stats?.tls_anomaly_blocks || 0) + (stats?.latency_mismatch_blocks || 0);
 
-		const fingerprintBlockRate =
-			stats && stats.total > 0 ? (fingerprintTotalBlocks / stats.total) * 100 : 0;
+		const fingerprintBlockRate = stats && stats.total > 0 ? (fingerprintTotalBlocks / stats.total) * 100 : 0;
 
 		return {
 			...baseStats,
@@ -822,7 +860,7 @@ export async function getSubmissionsByCountry(db: D1Database) {
 				 WHERE country IS NOT NULL
 				 GROUP BY country
 				 ORDER BY count DESC
-				 LIMIT 20`
+				 LIMIT 20`,
 			)
 			.all();
 
@@ -852,7 +890,7 @@ export async function getBotScoreDistribution(db: D1Database) {
 				 FROM submissions
 				 WHERE bot_score IS NOT NULL
 				 GROUP BY score_range
-				 ORDER BY score_range DESC`
+				 ORDER BY score_range DESC`,
 			)
 			.all();
 
@@ -875,7 +913,7 @@ export async function getAsnDistribution(db: D1Database) {
 				 WHERE asn IS NOT NULL
 				 GROUP BY asn, as_organization
 				 ORDER BY count DESC
-				 LIMIT 10`
+				 LIMIT 10`,
 			)
 			.all();
 
@@ -898,7 +936,7 @@ export async function getTlsVersionDistribution(db: D1Database) {
 				 WHERE tls_version IS NOT NULL
 				 GROUP BY tls_version, tls_cipher
 				 ORDER BY count DESC
-				 LIMIT 10`
+				 LIMIT 10`,
 			)
 			.all();
 
@@ -921,7 +959,7 @@ export async function getJa3Distribution(db: D1Database) {
 				 WHERE ja3_hash IS NOT NULL
 				 GROUP BY ja3_hash
 				 ORDER BY count DESC
-				 LIMIT 10`
+				 LIMIT 10`,
 			)
 			.all();
 
@@ -944,7 +982,7 @@ export async function getJa4Distribution(db: D1Database) {
 				 WHERE ja4 IS NOT NULL
 				 GROUP BY ja4
 				 ORDER BY count DESC
-				 LIMIT 10`
+				 LIMIT 10`,
 			)
 			.all();
 
@@ -971,7 +1009,7 @@ export async function getEmailPatternDistribution(db: D1Database) {
 				 WHERE email_pattern_type IS NOT NULL
 				 GROUP BY email_pattern_type
 				 ORDER BY count DESC
-				 LIMIT 10`
+				 LIMIT 10`,
 			)
 			.all();
 
@@ -988,12 +1026,14 @@ export async function getEmailPatternDistribution(db: D1Database) {
 export async function getSubmissionById(db: D1Database, id: number) {
 	try {
 		const submission = await db
-			.prepare(`
+			.prepare(
+				`
 				SELECT s.*, tv.risk_score, tv.risk_score_breakdown
 				FROM submissions s
 				LEFT JOIN turnstile_validations tv ON s.id = tv.submission_id
 				WHERE s.id = ?
-			`)
+			`,
+			)
 			.bind(id)
 			.first();
 
@@ -1012,13 +1052,7 @@ export async function getSubmissionById(db: D1Database, id: number) {
  * @param start Start date (ISO8601)
  * @param end End date (ISO8601)
  */
-export async function getTimeSeriesData(
-	db: D1Database,
-	metric: string,
-	interval: string,
-	start?: string,
-	end?: string
-) {
+export async function getTimeSeriesData(db: D1Database, metric: string, interval: string, start?: string, end?: string) {
 	try {
 		// Default to last 30 days if not specified
 		const startDate = start || toSQLiteDateTime(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
@@ -1211,19 +1245,51 @@ function getDateFormatString(interval: string): string | null {
 export async function detectFraudPatterns(db: D1Database): Promise<any> {
 	try {
 		// Pattern 1: Blacklisted Ephemeral IDs (currently blocked)
+		// Uses the same LEFT JOIN enrichment as getActiveBlacklistEntries() so
+		// BlacklistDetailDialog gets full data (location, JA4 signals, offense count)
 		const blacklistedQuery = `
 			SELECT
-				ephemeral_id,
-				block_reason,
-				detection_confidence as confidence,
-				submission_count,
-				blocked_at as created_at,
-				expires_at,
-				detection_metadata
-			FROM fraud_blacklist
-			WHERE expires_at > datetime('now')
-				AND ephemeral_id IS NOT NULL
-			ORDER BY blocked_at DESC
+				fb.id,
+				fb.ephemeral_id,
+				COALESCE(fb.ip_address, tv.remote_ip) as ip_address,
+				COALESCE(fb.ja4, tv.ja4) as ja4,
+				fb.block_reason,
+				fb.detection_type,
+				fb.detection_confidence,
+				fb.erfid,
+				REPLACE(fb.blocked_at, ' ', 'T') || 'Z' AS blocked_at,
+				REPLACE(fb.expires_at, ' ', 'T') || 'Z' AS expires_at,
+				fb.submission_count,
+				REPLACE(fb.last_seen_at, ' ', 'T') || 'Z' AS last_seen_at,
+				fb.detection_metadata,
+				fb.risk_score_breakdown,
+				tv.ja4_signals,
+				tv.country,
+				tv.city,
+				(SELECT COUNT(*)
+				 FROM fraud_blacklist
+				 WHERE (ephemeral_id = fb.ephemeral_id OR ip_address = fb.ip_address)
+				 AND blocked_at > datetime('now', '-24 hours')) as offense_count,
+				COALESCE(
+					fb.risk_score,
+					CASE fb.detection_confidence
+						WHEN 'high' THEN 100
+						WHEN 'medium' THEN 80
+						WHEN 'low' THEN 70
+						ELSE 50
+					END
+				) as risk_score
+			FROM fraud_blacklist fb
+			LEFT JOIN turnstile_validations tv ON tv.id = (
+				SELECT id FROM turnstile_validations
+				WHERE (fb.ephemeral_id IS NOT NULL AND ephemeral_id = fb.ephemeral_id)
+				   OR (fb.ip_address IS NOT NULL AND remote_ip = fb.ip_address)
+				ORDER BY created_at DESC
+				LIMIT 1
+			)
+			WHERE fb.expires_at > datetime('now')
+				AND fb.ephemeral_id IS NOT NULL
+			ORDER BY fb.blocked_at DESC
 			LIMIT 20
 		`;
 
@@ -1302,7 +1368,7 @@ export async function detectFraudPatterns(db: D1Database): Promise<any> {
 				proxy_rotation: proxyRotation.results.length,
 				high_frequency: highFrequency.results.length,
 			},
-			'Ephemeral ID fraud patterns detected'
+			'Ephemeral ID fraud patterns detected',
 		);
 
 		return {
@@ -1331,7 +1397,7 @@ export async function getBlockedValidationStats(db: D1Database) {
 					COUNT(DISTINCT remote_ip) as unique_ips,
 					AVG(risk_score) as avg_risk_score
 				 FROM turnstile_validations
-				 WHERE allowed = 0`
+				 WHERE allowed = 0`,
 			)
 			.first<{
 				total_blocked: number;
@@ -1347,7 +1413,7 @@ export async function getBlockedValidationStats(db: D1Database) {
 					COUNT(*) as total_blocked,
 					COUNT(DISTINCT remote_ip) as unique_ips,
 					AVG(risk_score) as avg_risk_score
-				 FROM fraud_blocks`
+				 FROM fraud_blocks`,
 			)
 			.first<{
 				total_blocked: number;
@@ -1362,8 +1428,8 @@ export async function getBlockedValidationStats(db: D1Database) {
 			unique_ips: (validationStats?.unique_ips || 0) + (fraudStats?.unique_ips || 0),
 			avg_risk_score:
 				((validationStats?.avg_risk_score || 0) * (validationStats?.total_blocked || 0) +
-				 (fraudStats?.avg_risk_score || 0) * (fraudStats?.total_blocked || 0)) /
-				((validationStats?.total_blocked || 0) + (fraudStats?.total_blocked || 0)) || 0,
+					(fraudStats?.avg_risk_score || 0) * (fraudStats?.total_blocked || 0)) /
+					((validationStats?.total_blocked || 0) + (fraudStats?.total_blocked || 0)) || 0,
 			unique_block_reasons: 0, // Calculated separately in getBlockReasonDistribution
 			// Phase 1: Additional breakdown
 			validation_blocks: validationStats?.total_blocked || 0,
@@ -1418,7 +1484,7 @@ export async function getBlockReasonDistribution(db: D1Database) {
 					GROUP BY block_reason
 				)
 				GROUP BY block_reason, source
-				ORDER BY count DESC`
+				ORDER BY count DESC`,
 			)
 			.all();
 
@@ -1545,7 +1611,7 @@ export async function getBlacklistStats(db: D1Database) {
 					COUNT(CASE WHEN ephemeral_id IS NOT NULL THEN 1 END) as ephemeral_id_blocks,
 					COUNT(CASE WHEN ip_address IS NOT NULL THEN 1 END) as ip_blocks
 				 FROM fraud_blacklist
-				 WHERE expires_at > datetime('now')`
+				 WHERE expires_at > datetime('now')`,
 			)
 			.first<{
 				total_active: number;
@@ -1634,7 +1700,7 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 					FROM fraud_blocks
 				)
 				ORDER BY created_at DESC
-				LIMIT ?`
+				LIMIT ?`,
 			)
 			.bind(limit)
 			.all();
@@ -1652,11 +1718,13 @@ export async function getRecentBlockedValidations(db: D1Database, limit: number 
 export async function getValidationById(db: D1Database, id: number) {
 	try {
 		const validation = await db
-			.prepare(`
+			.prepare(
+				`
 				SELECT *
 				FROM turnstile_validations
 				WHERE id = ?
-			`)
+			`,
+			)
 			.bind(id)
 			.first();
 
@@ -1670,13 +1738,15 @@ export async function getValidationById(db: D1Database, id: number) {
 export async function getValidationByErfid(db: D1Database, erfid: string) {
 	try {
 		const validation = await db
-			.prepare(`
+			.prepare(
+				`
 				SELECT *
 				FROM turnstile_validations
 				WHERE erfid = ?
 				ORDER BY created_at DESC
 				LIMIT 1
-			`)
+			`,
+			)
 			.bind(erfid)
 			.first();
 
@@ -1702,13 +1772,7 @@ export interface ValidationExportFilters {
 }
 
 export async function exportSecurityEvents(db: D1Database, filters: SecurityEventExportFilters) {
-	const {
-		startDate,
-		endDate,
-		status = 'all',
-		riskLevel,
-		limit = 1000,
-	} = filters;
+	const { startDate, endDate, status = 'all', riskLevel, limit = 1000 } = filters;
 
 	const normalizedLimit = Math.min(Math.max(limit, 1), 5000);
 	const start = normalizeISODate(startDate);
@@ -1753,10 +1817,7 @@ export async function exportValidations(db: D1Database, filters: ValidationExpor
 	return result.results;
 }
 
-async function exportActiveBlocks(
-	db: D1Database,
-	params: { start?: string; end?: string; riskLevel?: RiskLevelFilter; limit: number }
-) {
+async function exportActiveBlocks(db: D1Database, params: { start?: string; end?: string; riskLevel?: RiskLevelFilter; limit: number }) {
 	const { start, end, riskLevel, limit } = params;
 	const { clause: dateClause, bindings: dateBindings } = buildDateClause('fb.blocked_at', start, end);
 	const { clause: riskClause, bindings: riskBindings } = buildRiskLevelClause('risk_score_resolved', riskLevel);
@@ -1863,10 +1924,7 @@ async function exportActiveBlocks(
 	return result.results;
 }
 
-async function exportDetectionEvents(
-	db: D1Database,
-	params: { start?: string; end?: string; riskLevel?: RiskLevelFilter; limit: number }
-) {
+async function exportDetectionEvents(db: D1Database, params: { start?: string; end?: string; riskLevel?: RiskLevelFilter; limit: number }) {
 	const { start, end, riskLevel, limit } = params;
 
 	const validationDate = buildDateClause('created_at', start, end);
@@ -1927,14 +1985,11 @@ async function exportDetectionEvents(
 		LIMIT ?
 	`;
 
-	const bindings = [
-		...validationDate.bindings,
-		...validationRisk.bindings,
-		...fraudBlockDate.bindings,
-		...fraudBlockRisk.bindings,
-		limit,
-	];
+	const bindings = [...validationDate.bindings, ...validationRisk.bindings, ...fraudBlockDate.bindings, ...fraudBlockRisk.bindings, limit];
 
-	const result = await db.prepare(query).bind(...bindings).all();
+	const result = await db
+		.prepare(query)
+		.bind(...bindings)
+		.all();
 	return result.results;
 }
