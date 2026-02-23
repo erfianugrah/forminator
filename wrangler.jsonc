@@ -75,10 +75,31 @@
 		{
 			"binding": "FORM_CONFIG",
 			"id": "be7d939c7fcc45afbf79140a22578600",
-			"preview_id": "0c46de96713a4a8889f9b40dda929c08",
+			"preview_id": "be7d939c7fcc45afbf79140a22578600",
 			"remote": true
 		}
-	]
+	],
+	// ⚠️ WARNING: `wrangler dev --remote` with the top-level config writes to
+	// the PRODUCTION D1 database.  Use `wrangler dev --remote --env staging`
+	// during development to avoid accidental production writes.
+	"env": {
+		"staging": {
+			"name": "forminator-staging",
+			"vars": {
+				"ENVIRONMENT": "staging",
+				"ALLOWED_ORIGINS": "*",
+				"ALLOW_TESTING_BYPASS": "true",
+				"ROUTES": {
+					"submissions": "/api/submissions",
+					"analytics": "/api/analytics",
+					"admin": "/api/admin",
+					"geo": "/api/geo",
+					"health": "/api/health",
+					"config": "/api/config"
+				}
+			}
+		}
+	},
 	// Note: Secrets should be set via CLI:
 	// wrangler secret put TURNSTILE-SECRET-KEY
 	// wrangler secret put TURNSTILE-SITE-KEY

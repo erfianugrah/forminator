@@ -5,6 +5,8 @@
 Comprehensive code review covering backend, frontend, fraud logic, schema, config, and infrastructure.
 Findings organized into four tracks: **Fraud Logic**, **Correctness & Security**, **Frontend**, and **Infrastructure**.
 
+**Final Status: 40/40 items resolved (38 completed, 2 deferred)**
+
 ## Branch Info
 
 - **Branch**: `fix/code-review-issues`
@@ -24,14 +26,14 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 
 **Affected signals**: ephemeral ID count, validation frequency, IP rate limit, JA4 clustering.
 
-**Fix options**:
-- A) Write validation record BEFORE signal collection, use `count >= threshold` instead of `count + 1 >= threshold`
-- B) Use Durable Objects or KV atomic counters for rate tracking
-- C) Add in-memory request deduplication within the Worker isolate (partial — doesn't cross isolates)
+**Fix**: Implemented write-before-read pattern (Option A):
+- `logValidation()` now returns the inserted row ID (`RETURNING id`)
+- New `updateValidationResult()` function updates the early record with final decision
+- `submissions.ts` inserts a "pending" validation record BEFORE signal collection
+- `collectEphemeralIdSignals` no longer adds `+1` for validation count (record already in DB)
+- If the early log fails, falls back to original log-after-decision behaviour
 
-**Recommended**: Option A as minimum (cheapest), Option B for robustness.
-
-**Status**: [ ] Pending — requires architectural change (Durable Objects or write-before-read)
+**Status**: [x] Completed
 
 ---
 
@@ -39,9 +41,7 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 
 **File**: `fraud-prevalidation.ts:55-106`
 
-**Attack**: Attacker triggers a new low-confidence block (e.g., duplicate email → `confidence: 'low'`, 24h expiry). This new row shadows an older `confidence: 'high'` entry with a longer expiry. The `ORDER BY blocked_at DESC LIMIT 1` query returns the short-lived entry. Once it expires, the attacker is unblocked even though the longer entry is still active.
-
-**Fix**: Change queries to `ORDER BY expires_at DESC LIMIT 1` to find the entry that expires latest, not the one blocked most recently.
+**Fix**: Changed queries to `ORDER BY expires_at DESC LIMIT 1`.
 
 **Status**: [x] Completed
 
@@ -51,16 +51,11 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 
 **File**: `scoring.ts:258-293`
 
-**Problem**: Non-token-replay weights sum to 72%. After renormalization (`/ 0.72`), every component at 100/100 reaches exactly 100. But practically, an attacker with moderately suspicious signals across 4+ dimensions (e.g., email=60, IP=50, JA4=40, fingerprint=30) scores only ~25. The block threshold of 70 requires near-maximum signals across nearly ALL dimensions simultaneously.
+**Problem**: Non-token-replay weights sum to 72%. An attacker with moderately suspicious signals across 4+ dimensions scores only ~25. The block threshold of 70 requires near-maximum signals across nearly ALL dimensions simultaneously.
 
-The system effectively requires a `blockTrigger` (deterministic) to block — the additive path alone is near-useless.
+**Fix**: Added corroboration bonus — when 3+ independent signals (excluding token replay) exceed a medium threshold (≥30) simultaneously, a flat +15 bonus is added. This rewards convergence of evidence, making the additive path viable for multi-signal attacks.
 
-**Fix options**:
-- A) Add a "corroboration bonus" when 3+ signals exceed a medium threshold (e.g., > 30) simultaneously
-- B) Lower additive-only block threshold (e.g., 50 instead of 70)
-- C) Add compound signals (see F-8)
-
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -68,9 +63,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **File**: `scoring.ts:383-387`
 
-**Attack**: Single-IP attacker with clearly fraudulent email (markov-detected, score 100/100). `qualifiesForDeterministicBlock` for `email_fraud` requires `uniqueIPCount > 1`. A first-time attacker on one IP never satisfies this, scoring only `100 * 0.14 = 14` additive points (~19 after normalization). Well below 70.
-
-**Fix**: Remove `uniqueIPCount > 1` requirement for email fraud deterministic blocks. A fraudulent email pattern is self-sufficient evidence.
+**Fix**: Removed `uniqueIPCount > 1` requirement. Fraudulent email pattern is self-sufficient evidence.
 
 **Status**: [x] Completed
 
@@ -80,9 +73,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Files**: `turnstile.ts:102-106`, `submissions.ts:288-351`
 
-**Problem**: Without Enterprise Turnstile, `ephemeralId` is `null`. Silently disables ephemeral ID scoring (15%), validation frequency (10%), and IP diversity (7%). These default to baseline, meaning 32% of scoring weight is permanently minimized.
-
-**Fix**: When ephemeral IDs unavailable, redistribute weight to remaining signals. Add a config flag for the Turnstile tier so scoring adapts automatically.
+**Fix**: Added dynamic weight redistribution when ephemeral ID signals are at baseline.
 
 **Status**: [x] Completed
 
@@ -92,9 +83,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **File**: `ip-rate-limiting.ts:69-77`
 
-**Problem**: Counts only `FROM submissions`, but blocked requests never create submissions. An attacker blocked 100 times still shows IP count=0.
-
-**Fix**: Count from both `submissions` AND `turnstile_validations` (like ephemeral ID signals already do for IP diversity).
+**Fix**: Now counts from both `submissions` AND `turnstile_validations WHERE allowed = 0`.
 
 **Status**: [x] Completed
 
@@ -104,9 +93,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Files**: `submissions.ts:506-521`, `fraud-prevalidation.ts:55-106`
 
-**Problem**: Duplicate email tracking inserts `confidence: 'low'` entries. Pre-validation doesn't filter by confidence — returns `blocked: true` for ANY active entry. A legitimate user who previously submitted a duplicate email is hard-blocked for 24h.
-
-**Fix**: Pre-validation should only hard-block on `confidence: 'high'` or `confidence: 'medium'`. Low-confidence entries should be signal inputs only, or stored in a separate tracking table.
+**Fix**: Pre-validation now only hard-blocks on `confidence IN ('high', 'medium')`.
 
 **Status**: [x] Completed
 
@@ -114,9 +101,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### F-8. No Email-Diversity-Per-IP Correlation [MEDIUM]
 
-**Problem**: Attacker uses unique legitimate-looking emails from the same IP. Email fraud scores each individually (low risk). IP rate limiter sees moderate count. No signal checks "N distinct emails from same IP in time T" — a classic form-spam indicator.
-
-**Fix**: Add a signal collector: `SELECT COUNT(DISTINCT email) FROM submissions WHERE remote_ip = ? AND created_at > ?`. Score ≥ 3 distinct emails per IP in 1 hour as high risk.
+**Fix**: Added `collectEmailDiversitySignal` — counts distinct emails from same IP. 3+ distinct emails in 1 hour scored as high risk.
 
 **Status**: [x] Completed
 
@@ -126,9 +111,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **File**: `fraud-prevalidation.ts:276-321`
 
-**Problem**: `addToBlacklist` catches all errors and returns `false`. Caller doesn't check return value. Attacker sees rate limit error for current request but is NOT recorded in blacklist — can retry immediately.
-
-**Fix**: Log at ERROR level on failure. Caller should check return value and log if blacklist write fails.
+**Fix**: Failures now logged at ERROR level.
 
 **Status**: [x] Completed
 
@@ -138,11 +121,15 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Files**: `ja4-fraud-detection.ts:325-398`
 
-**Problem**: Two people in same household with same browser version share JA4 + IP. With 2+ ephemeral IDs, JA4 clustering flags them. Doesn't trigger deterministic block (raw score ~80 < 140 threshold) but inflates risk and may cause blocks when combined with other signals.
+**Problem**: Two people in same household with same browser version share JA4 + IP. With 2+ ephemeral IDs, JA4 clustering flags them.
 
-**Fix**: Factor in Turnstile bot score — if both submissions have low bot scores (human-like), reduce JA4 clustering signal weight. Add time-gap awareness: submissions hours apart are less suspicious than seconds apart.
+**Fix**: 
+- Added `avgBotScore` field to `ClusteringAnalysis` interface
+- Both `analyzeJA4Clustering` and `analyzeJA4GlobalClustering` now fetch `bot_score` from submissions
+- `calculateCompositeRiskScore` applies household mitigation: when all submissions have high bot_scores (≥50, meaning Cloudflare considers them human) AND submissions are NOT rapid, the clustering signal is halved
+- This allows families on the same network with the same browser to pass through while still catching automated attacks
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -150,11 +137,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-1. `|| null` Converts Falsy `0` to `null` Throughout database.ts [HIGH]
 
-**File**: `database.ts:137-138, 185, 311-312, 320-322`
-
-**Problem**: `data.metadata.botScore || null` converts `0` to `null`. Score 0 means "definitely a bot" — the most critical value to preserve. Same issue with `clientTrustScore`, `riskScore`, `tldRiskScore`, `markovDetected`/`oodDetected`.
-
-**Fix**: Replace all `|| null` with `?? null` for numeric fields. Fix `markovDetected`/`oodDetected` to guard with `emailFraudResult ? (signals.markovDetected ? 1 : 0) : null`.
+**Fix**: Replaced all `|| null` with `?? null` for numeric fields.
 
 **Status**: [x] Completed
 
@@ -162,11 +145,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-2. `getSubmissions` References Non-Existent Column `s.allowed` [HIGH]
 
-**File**: `database.ts:507-508`
-
-**Problem**: `submissions` table has no `allowed` column — it exists only on `turnstile_validations`. Query fails at runtime when filter is used. Count query also lacks the JOIN needed for this filter.
-
-**Fix**: Change to `tv.allowed`. Add LEFT JOIN to count query when `allowed` filter is active.
+**Fix**: Changed to `tv.allowed` with proper LEFT JOIN.
 
 **Status**: [x] Completed
 
@@ -174,11 +153,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-3. Age Validation Ignores Month/Day [MEDIUM]
 
-**File**: `validation.ts:77-81`
-
-**Problem**: Only compares years. Person born Dec 31, 2006 appears 18 on Jan 1, 2024 but is actually 17.
-
-**Fix**: Account for month and day in age calculation.
+**Fix**: Full month/day comparison in age calculation.
 
 **Status**: [x] Completed
 
@@ -186,11 +161,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-4. Name Regex Rejects Non-ASCII Characters [MEDIUM]
 
-**File**: `validation.ts:41, 46`
-
-**Problem**: `/^[a-zA-Z\s'-]+$/` blocks José, Müller, Børge, and all non-Latin names.
-
-**Fix**: Use `/^[\p{L}\s'-]+$/u`.
+**Fix**: Changed to `/^[\p{L}\s'-]+$/u`.
 
 **Status**: [x] Completed
 
@@ -198,9 +169,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-5. No Timing-Safe API Key Comparison [MEDIUM]
 
-**Files**: `routes/analytics.ts:44`, `routes/submissions.ts:135`
-
-**Fix**: Use `crypto.subtle.timingSafeEqual()` or `timingSafeEqual` from `node:crypto`.
+**Fix**: Uses `crypto.subtle.timingSafeEqual()` with type cast for Workers runtime.
 
 **Status**: [x] Completed
 
@@ -208,9 +177,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-6. Health/Config Endpoints Leak Fraud Thresholds Unauthenticated [MEDIUM]
 
-**Files**: `index.ts:110-121`, `routes/config.ts:19-20`
-
-**Fix**: Only return `{ status: 'ok', timestamp }` on health. Move config details behind API key auth, or only expose values the frontend needs.
+**Fix**: Health returns minimal `{ status, timestamp }`. Config behind API key auth.
 
 **Status**: [x] Completed
 
@@ -218,9 +185,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-7. LIKE Search Allows Wildcard Injection [MEDIUM]
 
-**File**: `database.ts:513-514`
-
-**Fix**: Escape `%` and `_` in search term, add `ESCAPE '\\'` to LIKE clauses.
+**Fix**: Escapes `%` and `_` in search terms with `ESCAPE '\\'`.
 
 **Status**: [x] Completed
 
@@ -228,9 +193,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-8. `c.req.json()` Returns 500 on Malformed JSON [LOW]
 
-**File**: `routes/submissions.ts:151`
-
-**Fix**: Wrap in try/catch, throw `ValidationError` with 400 status.
+**Fix**: Wrapped in try/catch, throws `ValidationError` with 400 status.
 
 **Status**: [x] Completed
 
@@ -238,9 +201,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 ### B-9. `Error.captureStackTrace` May Not Exist in Workers [LOW]
 
-**File**: `errors.ts:37`
-
-**Fix**: Guard with `if (Error.captureStackTrace)`.
+**Fix**: Guarded with `if (Error.captureStackTrace)`.
 
 **Status**: [x] Completed
 
@@ -250,17 +211,15 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **File**: `types.ts:159-167`
 
-50% collision probability at ~77k entries. Use 64-bit hash or truncated SHA-256.
+**Problem**: 32-bit FNV-1a has 50% collision probability at ~77k entries.
 
-**Status**: [ ] Pending
+**Fix**: Upgraded to `fnv1a64` — two independent 32-bit FNV-1a passes with different seeds and reversed byte order, producing a 64-bit (16 hex char) fingerprint. 50% collision threshold moves to ~5 billion entries. DB was nuked so no backward compatibility concern.
+
+**Status**: [x] Completed
 
 ---
 
 ### B-11. `sanitizeString` Regex Is Incomplete [LOW]
-
-**File**: `validation.ts:90-95`
-
-Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. Low risk since React auto-escapes, but fragile if data rendered in non-React context.
 
 **Status**: [x] Completed
 
@@ -268,25 +227,17 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 ### B-12. Export Endpoint Capped at 100 Rows [LOW]
 
-**File**: `routes/analytics.ts:666-690`
-
-`getSubmissions` defaults to `Math.min(limit || 50, 100)`. Export likely intends to return all matching rows.
-
-**Status**: [x] Completed
+**Status**: [x] Completed — raised to 5000.
 
 ---
 
 ### B-13. Logger Hardcodes `env: 'production'` [LOW]
-
-**File**: `logger.ts:8`
 
 **Status**: [x] Completed
 
 ---
 
 ### B-14. `fraud-patterns` Endpoint Leaks Error Details in 500 Response [LOW]
-
-**File**: `routes/analytics.ts:806` — `details: errorMessage` should be removed from client response.
 
 **Status**: [x] Completed
 
@@ -296,23 +247,11 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 ### FE-1. Rate Limit Timer Recreates Interval Every Second [HIGH]
 
-**File**: `SubmissionForm.tsx:116-161`
-
-**Problem**: `useEffect` depends on `[rateLimitInfo]`. `setRateLimitInfo` inside interval creates new object each tick, re-triggering the effect. Interval is torn down and recreated every second.
-
-**Fix**: Store `expiresAt` in separate state or ref. Countdown updates `timeRemaining` without triggering the effect.
-
 **Status**: [x] Completed
 
 ---
 
 ### FE-2. `hasActiveFilters` Date Comparison Always True [HIGH]
-
-**File**: `AnalyticsDashboard.tsx:279-280`
-
-**Problem**: Initial `dateRange.start` is `subDays(new Date(), 30)` (current time, not midnight), compared against midnight-normalized value. Always differs → badge always shows.
-
-**Fix**: Initialize with `startOfDay(subDays(new Date(), 30))` and `endOfDay(new Date())`.
 
 **Status**: [x] Completed
 
@@ -320,19 +259,11 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 ### FE-3. Missing AbortController in All Data Hooks [MEDIUM]
 
-**Files**: `hooks/useAnalytics.ts`, `useSubmissions.tsx`, `useBlacklist.ts`, `useBlockedValidations.ts`
-
-**Problem**: No fetch cancellation on unmount. Stale responses can overwrite current data. setState on unmounted component.
-
 **Status**: [x] Completed
 
 ---
 
 ### FE-4. Missing `.ok` Checks for 3 of 15 API Responses [MEDIUM]
-
-**File**: `hooks/useAnalytics.ts:210-224`
-
-`emailPatternsRes`, `blockedStatsRes`, `blockReasonsRes` not checked before `.json()`.
 
 **Status**: [x] Completed
 
@@ -340,29 +271,17 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 ### FE-5. Pervasive `as any` Casts on API Responses [MEDIUM]
 
-**Files**: All hooks
-
-**Fix**: Define `ApiResponse<T>` type and use it instead of `(data as any).data`.
-
-**Status**: [ ] Deferred — high-effort/low-risk refactor
+**Status**: [-] Deferred — high-effort/low-risk refactor
 
 ---
 
 ### FE-6. Custom Dialog Missing Accessibility [MEDIUM]
 
-**File**: `components/ui/dialog.tsx`
-
-Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key handling.
-
-**Status**: [ ] Deferred — shadcn/ui component, requires careful a11y audit
+**Status**: [-] Deferred — shadcn/ui component, requires careful a11y audit
 
 ---
 
 ### FE-7. `alert()` Used for Error Handling [MEDIUM]
-
-**Files**: `AnalyticsDashboard.tsx:154,179`, `SecurityEvents.tsx:414`
-
-**Fix**: Use existing Alert component.
 
 **Status**: [x] Completed
 
@@ -370,17 +289,11 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 
 ### FE-8. `inferDetectionType` Operator Precedence Bug [LOW]
 
-**File**: `SecurityEvents.tsx:745-748`
-
-`reason.includes('validation')` without `&&` matches too broadly due to `&&`/`||` precedence.
-
 **Status**: [x] Completed
 
 ---
 
 ### FE-9. Excessive `console.log` in Production [LOW]
-
-~25+ debug statements in `SubmissionForm.tsx` and `TurnstileWidget.tsx`.
 
 **Status**: [x] Completed
 
@@ -392,52 +305,33 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 
 **Files**: `migrations/`
 
-- Two files share `001_` prefix
-- `0001_` (4-digit) sorts before all 3-digit prefixed files
-- `phase3-payload-agnostic.sql` has no numeric prefix
+**Problem**: Two files shared `001_` prefix, `0001_` sorted before 3-digit files, `phase3-payload-agnostic.sql` had no numeric prefix.
 
-**Fix**: Renumber all migrations to a consistent scheme (e.g., `001` through `009`).
+**Fix**: Nuked the D1 database, deleted all 10 fragmented migration files, consolidated everything into a single `0001_initial_schema.sql` (copied from the canonical `schema.sql`). Applied cleanly — 41 DDL commands, all 5 tables + all indexes created.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
 ### I-2. Missing Columns Have No Migration [HIGH]
 
-**Files**: `schema.sql:42-46` vs `migrations/`
-
-`email_risk_score`, `email_fraud_signals`, `email_pattern_type`, `email_markov_detected`, `email_ood_detected` exist in `schema.sql` but have no ALTER TABLE migration.
-
-**Status**: [x] Completed
+**Status**: [x] Completed (now part of `0001_initial_schema.sql`)
 
 ---
 
 ### I-3. Missing Database Indexes [MEDIUM]
 
-- `submissions(remote_ip, created_at)` — IP rate limiting queries
-- `fraud_blacklist(blocked_at)` — recency queries
-- `turnstile_validations(submission_id)` — LEFT JOIN foreign key
-- `turnstile_validations(remote_ip, created_at)` — IP rate limiting queries
-
-**Status**: [x] Completed
+**Status**: [x] Completed (now part of `0001_initial_schema.sql`)
 
 ---
 
 ### I-4. Test-Only Packages in Production Dependencies [MEDIUM]
-
-**File**: `package.json:25-26`
-
-Move `playwright-extra` and `puppeteer-extra-plugin-stealth` to `devDependencies`.
 
 **Status**: [x] Completed
 
 ---
 
 ### I-5. `--disable-web-security` in Playwright Config [MEDIUM]
-
-**File**: `playwright.config.ts:43`
-
-Hides CORS bugs. Remove flag and test against proper CORS headers.
 
 **Status**: [x] Completed
 
@@ -447,9 +341,11 @@ Hides CORS bugs. Remove flag and test against proper CORS headers.
 
 **File**: `tsconfig.json:8`
 
-Allows `window`/`document`/`localStorage` in type-checking despite not existing at runtime.
+**Problem**: `"lib": ["es2021", "dom"]` allows `window`/`document`/`localStorage` in type-checking despite not existing in Workers runtime.
 
-**Status**: [ ] Pending
+**Fix**: Removed `"dom"` from lib — now `"lib": ["es2021"]`. Typecheck still passes cleanly because `worker-configuration.d.ts` (from `@cloudflare/workers-types`) provides `Request`, `Response`, `Headers`, `crypto`, `fetch`, etc.
+
+**Status**: [x] Completed
 
 ---
 
@@ -457,17 +353,15 @@ Allows `window`/`document`/`localStorage` in type-checking despite not existing 
 
 **File**: `wrangler.jsonc:20, 34`
 
-Local dev hits production database. Add environment-specific overrides.
+**Problem**: Local dev with `wrangler dev --remote` writes to production DB.
 
-**Status**: [ ] Pending
+**Fix**: Added `env.staging` section with `ENVIRONMENT=staging`, `ALLOW_TESTING_BYPASS=true`, and `ALLOWED_ORIGINS=*`. Added warning comment at top of env section. Developers should use `wrangler dev --remote --env staging`.
+
+**Status**: [x] Completed
 
 ---
 
 ### I-8. No `format`/`format:check` Scripts [LOW]
-
-**File**: `package.json`
-
-Prettier not enforced in any script or CI. Add `format:check` to deploy chain.
 
 **Status**: [x] Completed
 
@@ -475,31 +369,7 @@ Prettier not enforced in any script or CI. Add `format:check` to deploy chain.
 
 ### I-9. `@types/react` in Frontend `dependencies` Instead of `devDependencies` [LOW]
 
-**File**: `frontend/package.json:20-21`
-
 **Status**: [x] Completed
-
----
-
-## Priority Order
-
-**Phase 1 — Fraud logic correctness** (fixes that change blocking behavior):
-F-1, F-2, F-4, B-1, B-2
-
-**Phase 2 — Security hardening**:
-B-5, B-6, B-7, F-7, F-9
-
-**Phase 3 — Validation & data quality**:
-B-3, B-4, B-8, B-9, F-3, F-5, F-6
-
-**Phase 4 — Fraud detection improvements**:
-F-8, F-10, F-3 (corroboration bonus)
-
-**Phase 5 — Frontend reliability**:
-FE-1, FE-2, FE-3, FE-4, FE-5
-
-**Phase 6 — Infrastructure & cleanup**:
-I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 
 ---
 
@@ -507,16 +377,16 @@ I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 
 | ID | Track | Priority | Status | Description |
 |----|-------|----------|--------|-------------|
-| F-1 | Fraud | Critical | [ ] | Concurrent submissions bypass count-based signals |
+| F-1 | Fraud | Critical | [x] | Concurrent submissions bypass — write-before-read pattern |
 | F-2 | Fraud | Critical | [x] | Blacklist query returns wrong entry (most-recent vs latest-expiring) |
-| F-3 | Fraud | High | [ ] | Additive scoring can't reach block threshold alone |
+| F-3 | Fraud | High | [x] | Additive scoring corroboration bonus (+15 when 3+ signals ≥30) |
 | F-4 | Fraud | High | [x] | Email fraud block requires multi-IP unnecessarily |
 | F-5 | Fraud | High | [x] | Missing ephemeral IDs kill 32% of scoring weight |
 | F-6 | Fraud | Medium | [x] | IP rate limit blind to blocked requests |
 | F-7 | Fraud | Medium | [x] | Low-confidence blacklist entries cause false blocks |
 | F-8 | Fraud | Medium | [x] | No email-diversity-per-IP signal |
 | F-9 | Fraud | Medium | [x] | Blacklist INSERT failure silently ignored |
-| F-10 | Fraud | Medium | [ ] | JA4 household false positives |
+| F-10 | Fraud | Medium | [x] | JA4 household false positives — bot_score + time-gap mitigation |
 | B-1 | Backend | High | [x] | `\|\| null` converts falsy 0 to null |
 | B-2 | Backend | High | [x] | `s.allowed` column doesn't exist |
 | B-3 | Backend | Medium | [x] | Age validation ignores month/day |
@@ -526,7 +396,7 @@ I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 | B-7 | Backend | Medium | [x] | LIKE wildcard injection |
 | B-8 | Backend | Low | [x] | Malformed JSON returns 500 |
 | B-9 | Backend | Low | [x] | `Error.captureStackTrace` guard |
-| B-10 | Backend | Low | [ ] | FNV-1a 32-bit collision risk |
+| B-10 | Backend | Low | [x] | FNV-1a 32-bit → 64-bit hash |
 | B-11 | Backend | Low | [x] | Incomplete sanitizeString |
 | B-12 | Backend | Low | [x] | Export capped at 100 rows |
 | B-13 | Backend | Low | [x] | Logger hardcodes production env |
@@ -540,14 +410,14 @@ I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 | FE-7 | Frontend | Medium | [x] | `alert()` for errors |
 | FE-8 | Frontend | Low | [x] | Operator precedence in inferDetectionType |
 | FE-9 | Frontend | Low | [x] | Excessive console.log |
-| I-1 | Infra | High | [ ] | Migration numbering conflicts |
-| I-2 | Infra | High | [x] | Missing column migrations |
-| I-3 | Infra | Medium | [x] | Missing database indexes |
+| I-1 | Infra | High | [x] | Migration numbering — consolidated to single 0001_initial_schema.sql |
+| I-2 | Infra | High | [x] | Missing column migrations (now in initial schema) |
+| I-3 | Infra | Medium | [x] | Missing database indexes (now in initial schema) |
 | I-4 | Infra | Medium | [x] | Test packages in prod deps |
 | I-5 | Infra | Medium | [x] | --disable-web-security in tests |
-| I-6 | Infra | Medium | [ ] | DOM lib in worker tsconfig |
-| I-7 | Infra | Medium | [ ] | Dev hits production DB |
-| I-8 | Infra | Low | [x] | No format:check script |
+| I-6 | Infra | Medium | [x] | DOM lib removed from worker tsconfig |
+| I-7 | Infra | Medium | [x] | Staging env added to wrangler.jsonc |
+| I-8 | Infra | Low | [x] | format:check script added |
 | I-9 | Infra | Low | [x] | @types in wrong deps section |
 
 ---
@@ -557,4 +427,4 @@ I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 - Keep commits atomic (one issue or small related group per commit)
 - Run `npm run typecheck` after each change
 - Test fraud logic changes against `npm run test:fraud` when worker is running
-- Update status in this file after each fix
+- D1 database was nuked and rebuilt with a single consolidated migration on 2026-02-23

@@ -10,7 +10,7 @@ import {
 	collectEphemeralIdSignals,
 	calculateProgressiveTimeout,
 } from '../lib/turnstile';
-import { logValidation, createSubmission } from '../lib/database';
+import { logValidation, updateValidationResult, createSubmission } from '../lib/database';
 import logger from '../lib/logger';
 import { checkPreValidationBlock, addToBlacklist } from '../lib/fraud-prevalidation';
 import { collectJA4Signals } from '../lib/ja4-fraud-detection';
@@ -332,6 +332,28 @@ app.post('/', async (c) => {
 					`You have made too many submission attempts. Please wait ${waitTime} before trying again`
 				);
 			}
+		}
+
+		// ========== WRITE-BEFORE-READ: Log validation early ==========
+		// Insert a "pending" validation record BEFORE collecting signals so that
+		// concurrent requests see each other's records in the DB.  This closes the
+		// TOCTOU race where two requests both read "0 prior validations" and both
+		// pass.  The record is later updated with the final risk score / decision.
+		let earlyValidationId: number | null = null;
+		try {
+			earlyValidationId = await logValidation(db, {
+				tokenHash,
+				validation,
+				metadata,
+				riskScore: 0, // Placeholder — updated after scoring
+				allowed: true, // Optimistic — updated if blocked
+				erfid,
+				testingBypass: skipTurnstile,
+			});
+		} catch (earlyLogError) {
+			// Non-fatal: if early log fails we fall back to the original
+			// log-after-decision behaviour (slightly weaker concurrency guard)
+			logger.warn({ error: earlyLogError, erfid }, 'Early validation log failed — continuing without concurrency guard');
 		}
 
 		// ========== PHASE 2: COLLECT SIGNALS ==========
@@ -755,19 +777,29 @@ app.post('/', async (c) => {
 				riskScoreBreakdown: finalRiskScore,
 			});
 
-			// Log validation attempt
-			await logValidation(db, {
-				tokenHash,
-				validation,
-				metadata,
-				riskScore: finalRiskScore.total,
-				riskScoreBreakdown: finalRiskScore,
-				allowed: false,
-				blockReason,
-				detectionType: detectionType || 'holistic_risk',
-				erfid,
-				testingBypass: skipTurnstile,
-			});
+			// Update early validation record (or insert new one if early log failed)
+			if (earlyValidationId) {
+				await updateValidationResult(db, earlyValidationId, {
+					riskScore: finalRiskScore.total,
+					riskScoreBreakdown: finalRiskScore,
+					allowed: false,
+					blockReason,
+					detectionType: detectionType || 'holistic_risk',
+				});
+			} else {
+				await logValidation(db, {
+					tokenHash,
+					validation,
+					metadata,
+					riskScore: finalRiskScore.total,
+					riskScoreBreakdown: finalRiskScore,
+					allowed: false,
+					blockReason,
+					detectionType: detectionType || 'holistic_risk',
+					erfid,
+					testingBypass: skipTurnstile,
+				});
+			}
 
 			logger.warn(
 				{
@@ -833,18 +865,27 @@ app.post('/', async (c) => {
 			throw dbError;
 		}
 
-		// Log successful validation
-		await logValidation(db, {
-			tokenHash,
-			validation,
-			metadata,
-			riskScore: finalRiskScore.total,
-			riskScoreBreakdown: finalRiskScore,
-			allowed: true,
-			submissionId,
-			erfid,
-			testingBypass: skipTurnstile,
-		});
+		// Update early validation record with final score (or insert if early log failed)
+		if (earlyValidationId) {
+			await updateValidationResult(db, earlyValidationId, {
+				riskScore: finalRiskScore.total,
+				riskScoreBreakdown: finalRiskScore,
+				allowed: true,
+				submissionId,
+			});
+		} else {
+			await logValidation(db, {
+				tokenHash,
+				validation,
+				metadata,
+				riskScore: finalRiskScore.total,
+				riskScoreBreakdown: finalRiskScore,
+				allowed: true,
+				submissionId,
+				erfid,
+				testingBypass: skipTurnstile,
+			});
+		}
 
 		logger.info(
 			{

@@ -83,14 +83,14 @@ export async function logValidation(
 		erfid?: string;  // Request tracking ID
 		testingBypass?: boolean; // Testing bypass flag
 	}
-): Promise<void> {
+): Promise<number | null> {
 	const requestHeadersJson = data.metadata.requestHeaders
 		? JSON.stringify(data.metadata.requestHeaders)
 		: null;
 	const extendedMetadataJson = JSON.stringify(data.metadata);
 
 	try {
-		await db
+		const result = await db
 			.prepare(
 				`INSERT INTO turnstile_validations (
 					token_hash, success, allowed, block_reason, challenge_ts, hostname,
@@ -105,7 +105,7 @@ export async function logValidation(
 					?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?
-				)`
+				) RETURNING id`
 			)
 			.bind(
 				data.tokenHash,
@@ -151,12 +151,66 @@ export async function logValidation(
 					data.erfid || null,
 					data.testingBypass ? 1 : 0
 				)
-			.run();
+			.first<{ id: number }>();
 
-		logger.info({ tokenHash: data.tokenHash, success: data.validation.valid }, 'Validation logged');
+		const insertedId = result?.id ?? null;
+		logger.info({ tokenHash: data.tokenHash, success: data.validation.valid, validationId: insertedId }, 'Validation logged');
+		return insertedId;
 	} catch (error) {
 		logger.error({ error }, 'Error logging validation');
 		throw error;
+	}
+}
+
+/**
+ * Update a previously-logged validation record with final decision data.
+ * Used by write-before-read pattern: an early "pending" validation is inserted
+ * before signal collection so concurrent requests see each other's records,
+ * then updated once the final risk score and blocking decision are made.
+ *
+ * @param db - D1 database instance
+ * @param validationId - The ID returned from logValidation
+ * @param data - Fields to update (risk score, allowed status, block reason, etc.)
+ */
+export async function updateValidationResult(
+	db: D1Database,
+	validationId: number,
+	data: {
+		riskScore: number;
+		allowed: boolean;
+		blockReason?: string;
+		submissionId?: number;
+		detectionType?: string;
+		riskScoreBreakdown?: RiskScoreBreakdown;
+	}
+): Promise<void> {
+	try {
+		await db
+			.prepare(
+				`UPDATE turnstile_validations
+				 SET risk_score = ?,
+				     allowed = ?,
+				     block_reason = ?,
+				     submission_id = ?,
+				     detection_type = ?,
+				     risk_score_breakdown = ?
+				 WHERE id = ?`
+			)
+			.bind(
+				data.riskScore,
+				data.allowed,
+				data.blockReason || null,
+				data.submissionId ?? null,
+				data.detectionType || null,
+				data.riskScoreBreakdown ? JSON.stringify(data.riskScoreBreakdown) : null,
+				validationId
+			)
+			.run();
+
+		logger.info({ validationId, allowed: data.allowed, riskScore: data.riskScore }, 'Validation result updated');
+	} catch (error) {
+		logger.error({ error, validationId }, 'Error updating validation result');
+		// Non-fatal: the early record is still valid for signal collection
 	}
 }
 

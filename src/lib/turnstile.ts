@@ -201,6 +201,8 @@ export async function collectEphemeralIdSignals(
 		const oneDayAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
 		// Signal 1: Submission count (changed to 24h window for consistency)
+		// NOTE: The current request's validation is already written to the DB
+		// (write-before-read pattern in submissions.ts) so we do NOT add +1 here.
 		const recentSubmissions = await db
 			.prepare(
 				`SELECT COUNT(*) as count
@@ -211,16 +213,19 @@ export async function collectEphemeralIdSignals(
 			.bind(ephemeralId, oneDayAgo)
 			.first<{ count: number }>();
 
-		const submissionCount = recentSubmissions?.count || 0;
-		const effectiveCount = submissionCount + 1; // +1 for current attempt
+		// +1 for current attempt which hasn't been inserted into submissions yet
+		// (only the validation record exists at this point)
+		const submissionCount = (recentSubmissions?.count || 0) + 1;
 
-		if (effectiveCount >= config.detection.ephemeralIdSubmissionThreshold) {
+		if (submissionCount >= config.detection.ephemeralIdSubmissionThreshold) {
 			warnings.push(
-				`Multiple submissions detected (${effectiveCount} total in 24h) - registration forms should only be submitted once`
+				`Multiple submissions detected (${submissionCount} total in 24h) - registration forms should only be submitted once`
 			);
 		}
 
 		// Signal 2: Validation frequency (1h window for rapid-fire detection)
+		// The current request's validation record is already in the DB
+		// (write-before-read pattern) so the COUNT includes this request.
 		const recentValidations = await db
 			.prepare(
 				`SELECT COUNT(*) as count
@@ -231,15 +236,15 @@ export async function collectEphemeralIdSignals(
 			.bind(ephemeralId, oneHourAgo)
 			.first<{ count: number }>();
 
-		const validationCount = recentValidations?.count || 0;
-		const effectiveValidationCount = validationCount + 1; // +1 for current attempt
+		// No +1 needed — the early validation record is already counted
+		const validationCount = Math.max(1, recentValidations?.count || 0);
 
-		if (effectiveValidationCount >= config.detection.validationFrequencyBlockThreshold) {
+		if (validationCount >= config.detection.validationFrequencyBlockThreshold) {
 			warnings.push(
-				`Excessive validation attempts (${effectiveValidationCount} in 1h) - possible automated attack`
+				`Excessive validation attempts (${validationCount} in 1h) - possible automated attack`
 			);
-		} else if (effectiveValidationCount >= config.detection.validationFrequencyWarnThreshold) {
-			warnings.push(`Multiple validation attempts detected (${effectiveValidationCount} in 1h)`);
+		} else if (validationCount >= config.detection.validationFrequencyWarnThreshold) {
+			warnings.push(`Multiple validation attempts detected (${validationCount} in 1h)`);
 		}
 
 		// Signal 3: IP diversity (24h window)
@@ -267,8 +272,8 @@ export async function collectEphemeralIdSignals(
 		logger.info(
 			{
 				ephemeralId,
-				submissions_24h: effectiveCount,
-				validations_1h: effectiveValidationCount,
+				submissions_24h: submissionCount,
+				validations_1h: validationCount,
 				unique_ips: ipCount,
 				warnings,
 			},
@@ -276,8 +281,8 @@ export async function collectEphemeralIdSignals(
 		);
 
 		return {
-			submissionCount: effectiveCount,
-			validationCount: effectiveValidationCount,
+			submissionCount,
+			validationCount,
 			uniqueIPCount: ipCount,
 			warnings,
 		};

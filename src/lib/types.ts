@@ -152,18 +152,38 @@ function buildHeaderSnapshot(headers: Headers): {
 
 	return {
 		record,
-		fingerprint: fnv1a(fingerprintSource),
+		fingerprint: fnv1a64(fingerprintSource),
 	};
 }
 
-function fnv1a(input: string): string {
-	let hash = 0x811c9dc5;
+/**
+ * FNV-1a hash producing a 64-bit (16 hex char) fingerprint.
+ *
+ * Uses two independent 32-bit FNV-1a passes with different seeds to avoid the
+ * birthday-problem weakness of a single 32-bit hash (50 % collision at ~77 k
+ * entries).  With 64 bits the 50 % collision threshold is ~5 billion entries.
+ *
+ * The second pass uses the FNV-0 seed (0) and processes bytes in reverse order
+ * so the two halves are genuinely independent for typical inputs.
+ */
+function fnv1a64(input: string): string {
+	// Pass 1 — standard FNV-1a (offset basis 0x811c9dc5)
+	let h1 = 0x811c9dc5;
 	for (let i = 0; i < input.length; i += 1) {
-		hash ^= input.charCodeAt(i);
-		hash = (hash >>> 0) * 0x01000193;
-		hash >>>= 0;
+		h1 ^= input.charCodeAt(i);
+		h1 = (h1 >>> 0) * 0x01000193;
+		h1 >>>= 0;
 	}
-	return hash.toString(16).padStart(8, '0');
+
+	// Pass 2 — FNV-1a with alternate seed, reversed byte order
+	let h2 = 0x050c5d1f; // Different offset basis (xor-folded FNV-1 constant)
+	for (let i = input.length - 1; i >= 0; i -= 1) {
+		h2 ^= input.charCodeAt(i);
+		h2 = (h2 >>> 0) * 0x01000193;
+		h2 >>>= 0;
+	}
+
+	return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
 }
 
 // Helper function to extract metadata from Request

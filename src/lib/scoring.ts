@@ -284,15 +284,31 @@ export function calculateNormalizedRiskScore(
 		const normalizationFactor = inactiveWeight < 1.0 ? 1.0 / (1.0 - inactiveWeight) : 1.0;
 		const normalizedScore = baseScore * normalizationFactor;
 
+		// Corroboration bonus: when 3+ independent signals exceed a medium threshold
+		// simultaneously, the convergence of evidence is itself a strong signal.
+		// Without this, purely additive scoring can rarely reach the block threshold
+		// because each weighted component is too small on its own.
+		const CORROBORATION_THRESHOLD = 30; // Component score considered "medium"
+		const CORROBORATION_MIN_SIGNALS = 3; // How many must fire simultaneously
+		const CORROBORATION_BONUS = 15;      // Flat bonus points for convergence
+		const corroboratingSignals = Object.entries(components)
+			.filter(([key]) => key !== 'tokenReplay') // Exclude token replay (handled separately)
+			.filter(([, comp]) => comp.score >= CORROBORATION_THRESHOLD);
+		const corroborationBonus = corroboratingSignals.length >= CORROBORATION_MIN_SIGNALS
+			? CORROBORATION_BONUS
+			: 0;
+
+		const adjustedScore = normalizedScore + corroborationBonus;
+
 		if (isForceBlockTrigger) {
 			// Only definitive triggers (token replay / Turnstile failure) may override totals
 			const blockThreshold = config.risk.blockThreshold;
 			switch (checks.blockTrigger) {
 				case 'turnstile_failed':
-					total = Math.max(normalizedScore, blockThreshold);
+					total = Math.max(adjustedScore, blockThreshold);
 					break;
 				default:
-					total = Math.max(normalizedScore, blockThreshold);
+					total = Math.max(adjustedScore, blockThreshold);
 			}
 			total = Math.min(100, Math.round(total * 10) / 10);
 		} else if (
@@ -301,10 +317,10 @@ export function calculateNormalizedRiskScore(
 			qualifiesForDeterministicBlock(checks.blockTrigger!, checks, components, config)
 		) {
 			const blockThreshold = config.risk.blockThreshold;
-			total = Math.max(blockThreshold, normalizedScore);
+			total = Math.max(blockThreshold, adjustedScore);
 			total = Math.min(100, Math.round(total * 10) / 10);
 		} else {
-			total = Math.min(100, Math.round(normalizedScore * 10) / 10);
+			total = Math.min(100, Math.round(adjustedScore * 10) / 10);
 		}
 	}
 

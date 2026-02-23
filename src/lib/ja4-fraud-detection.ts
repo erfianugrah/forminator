@@ -68,6 +68,8 @@ export interface ClusteringAnalysis {
 	timeSpanMinutes: number;
 	/** Average JA4 signals from Cloudflare (null if no signals available) */
 	ja4SignalsAvg: JA4Signals | null;
+	/** Average Turnstile bot_score of clustered submissions (0=bot, 99=human) */
+	avgBotScore: number | null;
 }
 
 /**
@@ -339,7 +341,8 @@ async function analyzeJA4Clustering(
 					ephemeral_id,
 					remote_ip,
 					created_at,
-					ja4_signals
+					ja4_signals,
+					bot_score
 				FROM submissions
 				WHERE ja4 = ?
 				AND created_at > ?
@@ -351,6 +354,7 @@ async function analyzeJA4Clustering(
 				remote_ip: string;
 				created_at: string;
 				ja4_signals: string | null;
+				bot_score: number | null;
 			}>();
 
 		if (!results.results || results.results.length === 0) {
@@ -388,12 +392,21 @@ async function analyzeJA4Clustering(
 		// Parse JA4 signals from first result (they should be consistent)
 		const ja4SignalsAvg = parseJA4Signals(sameNetwork[0].ja4_signals);
 
+		// Calculate average bot_score (0=bot, 99=human)
+		const botScores = sameNetwork
+			.map(r => r.bot_score)
+			.filter((s): s is number => s !== null);
+		const avgBotScore = botScores.length > 0
+			? Math.round(botScores.reduce((a, b) => a + b, 0) / botScores.length)
+			: null;
+
 		return {
 			ja4,
 			ephemeralCount,
 			submissionCount: sameNetwork.length + 1, // +1 for current
 			timeSpanMinutes,
 			ja4SignalsAvg,
+			avgBotScore,
 		};
 	} catch (error) {
 		logger.error({ error, remoteIp, ja4 }, 'Error analyzing JA4 clustering');
@@ -429,7 +442,8 @@ async function analyzeJA4GlobalClustering(
 					ephemeral_id,
 					remote_ip,
 					created_at,
-					ja4_signals
+					ja4_signals,
+					bot_score
 				FROM submissions
 				WHERE ja4 = ?
 				AND created_at > ?
@@ -441,6 +455,7 @@ async function analyzeJA4GlobalClustering(
 				remote_ip: string;
 				created_at: string;
 				ja4_signals: string | null;
+				bot_score: number | null;
 			}>();
 
 		if (!results.results || results.results.length === 0) {
@@ -471,12 +486,21 @@ async function analyzeJA4GlobalClustering(
 		// Parse JA4 signals
 		const ja4SignalsAvg = parseJA4Signals(results.results[0].ja4_signals);
 
+		// Calculate average bot_score
+		const botScores = results.results
+			.map(r => r.bot_score)
+			.filter((s): s is number => s !== null);
+		const avgBotScore = botScores.length > 0
+			? Math.round(botScores.reduce((a, b) => a + b, 0) / botScores.length)
+			: null;
+
 		return {
 			ja4,
 			ephemeralCount,
 			submissionCount: results.results.length + 1,
 			timeSpanMinutes,
 			ja4SignalsAvg,
+			avgBotScore,
 		};
 	} catch (error) {
 		logger.error({ error, ja4, timeWindowMinutes }, 'Error analyzing JA4 global clustering');
@@ -524,6 +548,14 @@ function compareGlobalSignals(clustering: ClusteringAnalysis, config: FraudDetec
 /**
  * Calculate composite risk score from all signals
  *
+ * Includes household false-positive mitigation (F-10):
+ * - When all submissions have high bot_scores (human confidence ≥ 50),
+ *   the clustering signal is reduced by 50%.  Families sharing a network
+ *   will all have high human-confidence scores.
+ * - When submissions are spaced far apart (≥ velocity threshold), the
+ *   velocity signal is not applied — slow, spread-out submissions are
+ *   consistent with household usage, not automated attacks.
+ *
  * @param clustering Clustering analysis
  * @param velocity Velocity analysis
  * @param signals Global signal analysis
@@ -538,14 +570,26 @@ function calculateCompositeRiskScore(
 	let score = 0;
 	const increments = config.ja4.riskScoreIncrements;
 
+	// Household mitigation: if all submissions have high bot_scores (strong
+	// human confidence), reduce the clustering signal.  Bot_score 50+ means
+	// Cloudflare considers the client likely human.  A household with 2 human
+	// users on the same browser will have high bot_scores for both.
+	const HIGH_HUMAN_CONFIDENCE = 50;
+	const allLikelyHuman = clustering.avgBotScore !== null && clustering.avgBotScore >= HIGH_HUMAN_CONFIDENCE;
+
 	// Signal 1: JA4 clustering (primary signal)
 	// Same JA4 with 2+ different ephemeral IDs = session multiplication
 	if (clustering.ephemeralCount >= 2) {
-		score += increments.clustering;
+		if (allLikelyHuman && !velocity.isRapid) {
+			// Household pattern: human users, not rapid — halve the clustering score
+			score += Math.round(increments.clustering * 0.5);
+		} else {
+			score += increments.clustering;
+		}
 	}
 
 	// Signal 2: Rapid velocity
-	// Multiple submissions in <60 minutes = rapid-fire testing
+	// Multiple submissions in <velocity threshold minutes = rapid-fire testing
 	if (velocity.isRapid && clustering.ephemeralCount >= 2) {
 		score += increments.velocity;
 	}
