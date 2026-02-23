@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
+import type { DetectionType } from './useBlockedValidations';
 
 export interface Submission {
 	id: number;
@@ -18,7 +19,7 @@ export interface Submission {
 	ephemeral_id?: string | null;
 	risk_score?: number | null;
 	risk_score_breakdown?: string | null;
-	detection_type?: string | null;
+	detection_type?: DetectionType | null;
 	fingerprint_header_score?: number;
 	fingerprint_tls_score?: number;
 	fingerprint_latency_score?: number;

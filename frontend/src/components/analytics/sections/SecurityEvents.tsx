@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { subDays } from 'date-fns';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import type { BlacklistEntry } from '../../../hooks/useBlacklist';
-import type { BlockedValidation } from '../../../hooks/useBlockedValidations';
+import type { BlockedValidation, DetectionType } from '../../../hooks/useBlockedValidations';
 import { getRelativeTime, getTimeAgo, getTimeUrgency, getUrgencyClasses } from '../../../lib/time-utils';
 import { downloadJson } from '../../../lib/download';
 import { SingleSelect } from '../filters/SingleSelect';
@@ -40,21 +40,7 @@ type SecurityEvent = {
 	blockReason: string;
 	riskScore: number;
 	riskBreakdown?: string | null;
-	detectionType:
-		| 'email_fraud_detection'
-		| 'ephemeral_id_tracking'
-		| 'ja4_fingerprinting'
-		| 'token_replay_protection'
-		| 'turnstile_validation'
-		| 'pre_validation_blacklist'
-		| 'duplicate_email'
-		| 'holistic_risk'
-		| 'header_fingerprint_reuse'
-		| 'tls_fingerprint_anomaly'
-		| 'latency_mismatch'
-		| 'fingerprint_anomaly'
-		| 'other'
-		| null;
+	detectionType: DetectionType | null;
 	country?: string | null;
 	city?: string | null;
 	ja4?: string | null;
@@ -722,17 +708,7 @@ export function SecurityEvents({ activeBlocks, recentDetections, onLoadDetail, o
 	);
 }
 
-function inferDetectionType(
-	blockReason: string,
-):
-	| 'email_fraud_detection'
-	| 'ephemeral_id_tracking'
-	| 'ja4_fingerprinting'
-	| 'token_replay_protection'
-	| 'turnstile_validation'
-	| 'pre_validation_blacklist'
-	| 'duplicate_email'
-	| 'other' {
+function inferDetectionType(blockReason: string): DetectionType {
 	const reason = blockReason.toLowerCase();
 
 	// Token replay protection

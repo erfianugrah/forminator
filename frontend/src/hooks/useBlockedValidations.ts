@@ -1,5 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 
+export type DetectionType =
+	| 'email_fraud_detection'
+	| 'ephemeral_id_tracking'
+	| 'ja4_fingerprinting'
+	| 'token_replay_protection'
+	| 'turnstile_validation'
+	| 'pre_validation_blacklist'
+	| 'duplicate_email'
+	| 'holistic_risk'
+	| 'header_fingerprint_reuse'
+	| 'tls_fingerprint_anomaly'
+	| 'latency_mismatch'
+	| 'fingerprint_anomaly'
+	| 'other';
+
 export interface BlockedValidation {
 	id: number;
 	ephemeral_id: string | null;
@@ -11,17 +26,10 @@ export interface BlockedValidation {
 	challenge_ts: string;
 	ja4: string | null;
 	risk_score_breakdown?: string | null;
-	detection_type:
-		| 'email_fraud_detection'
-		| 'ephemeral_id_tracking'
-		| 'ja4_fingerprinting'
-		| 'token_replay_protection'
-		| 'turnstile_validation'
-		| 'pre_validation_blacklist'
-		| 'duplicate_email'
-		| 'holistic_risk'
-		| 'other'
-		| null;
+	detection_type: DetectionType | null;
+	bot_score?: number | null;
+	user_agent?: string | null;
+	erfid?: string | null;
 	source?: 'validation' | 'fraud_block';
 	fraud_signals_json?: string | null;
 }

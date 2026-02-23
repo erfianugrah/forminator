@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import type { DetectionType } from './useBlockedValidations';
 
 export interface BlacklistEntry {
 	id: number;
@@ -7,7 +8,7 @@ export interface BlacklistEntry {
 	ja4: string | null;
 	country: string | null;
 	city: string | null;
-	detection_type?: string | null;
+	detection_type?: DetectionType | null;
 	detection_confidence?: 'high' | 'medium' | 'low' | null;
 	block_reason: string;
 	risk_score: number;

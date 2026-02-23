@@ -79,8 +79,9 @@ const componentDetails: Array<{
 	},
 ];
 
-export function RiskScoreInfo({ apiKey }: { apiKey?: string }) {
-	const { config } = useConfig(apiKey);
+export function RiskScoreInfo({ apiKey, config: configProp }: { apiKey?: string; config?: FraudDetectionConfig }) {
+	const { config: fetchedConfig } = useConfig(configProp ? undefined : apiKey);
+	const config = configProp ?? fetchedConfig;
 	const weights = config.risk.weights;
 
 	const formatWeight = (key: WeightKey) => `${Number((weights[key] * 100).toFixed(0))}%`;

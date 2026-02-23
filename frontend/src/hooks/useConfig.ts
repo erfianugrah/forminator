@@ -32,6 +32,16 @@ export interface FraudDetectionConfig {
 		browserRatioThreshold: number;
 		h2h3RatioThreshold: number;
 		cacheRatioThreshold: number;
+		scoreThresholds: {
+			browserHopping: number;
+			suspiciousClustering: number;
+		};
+		riskScoreIncrements: {
+			clustering: number;
+			velocity: number;
+			globalAnomaly: number;
+			botPattern: number;
+		};
 	};
 	detection: {
 		ephemeralIdSubmissionThreshold: number;
@@ -46,6 +56,8 @@ export interface FraudDetectionConfig {
 			rapidGlobalWindowMinutes: number;
 			extendedGlobalThreshold: number;
 			extendedGlobalWindowMinutes: number;
+			velocityThresholdMinutes: number;
+			useRiskScoreThreshold: boolean;
 		};
 	};
 	fingerprint: {
@@ -104,6 +116,16 @@ const DEFAULT_CONFIG: FraudDetectionConfig = {
 		browserRatioThreshold: 0.2,
 		h2h3RatioThreshold: 0.9,
 		cacheRatioThreshold: 0.5,
+		scoreThresholds: {
+			browserHopping: 140,
+			suspiciousClustering: 80,
+		},
+		riskScoreIncrements: {
+			clustering: 80,
+			velocity: 60,
+			globalAnomaly: 50,
+			botPattern: 40,
+		},
 	},
 	detection: {
 		ephemeralIdSubmissionThreshold: 2,
@@ -118,6 +140,8 @@ const DEFAULT_CONFIG: FraudDetectionConfig = {
 			rapidGlobalWindowMinutes: 5,
 			extendedGlobalThreshold: 5,
 			extendedGlobalWindowMinutes: 60,
+			velocityThresholdMinutes: 10,
+			useRiskScoreThreshold: true,
 		},
 	},
 	fingerprint: {

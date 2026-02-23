@@ -12,6 +12,7 @@ import { subDays } from 'date-fns';
 import type { CountryData } from '../../../hooks/useAnalytics';
 import type { Submission } from '../../../hooks/useSubmissions';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
+import type { FraudDetectionConfig } from '../../../hooks/useConfig';
 import { downloadJson } from '../../../lib/download';
 
 interface RecentSubmissionsSectionProps {
@@ -43,6 +44,7 @@ interface RecentSubmissionsSectionProps {
 	sorting: SortingState;
 	onSortingChange: (updater: SortingState | ((old: SortingState) => SortingState)) => void;
 	apiKey: string;
+	config?: FraudDetectionConfig;
 }
 
 export function RecentSubmissionsSection({
@@ -68,6 +70,7 @@ export function RecentSubmissionsSection({
 	sorting,
 	onSortingChange,
 	apiKey,
+	config,
 }: RecentSubmissionsSectionProps) {
 	const [exportingAll, setExportingAll] = useState(false);
 	const [exportingSubmissionId, setExportingSubmissionId] = useState<number | null>(null);
@@ -175,7 +178,7 @@ export function RecentSubmissionsSection({
 			</CardHeader>
 			<CardContent className="space-y-6">
 				{/* Risk Score Info */}
-				<RiskScoreInfo apiKey={apiKey} />
+				<RiskScoreInfo apiKey={apiKey} config={config} />
 
 				{/* Filters */}
 				<div className="space-y-5">

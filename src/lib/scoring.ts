@@ -103,6 +103,16 @@ export interface RiskScoreBreakdown {
 }
 
 const FORCE_BLOCK_TRIGGERS = new Set(['token_replay', 'turnstile_failed']);
+
+/**
+ * Deterministic triggers that can force the score to the block threshold in defensive mode
+ * when their qualification check passes (see `qualifiesForDeterministicBlock`).
+ *
+ * Note: 'repeat_offender' is a planned extension point — the qualification logic exists
+ * but no route handler currently passes `recentRepeatOffender: true` or
+ * `blockTrigger: 'repeat_offender'`. Wire it up when repeat-offender detection
+ * is added to the submission flow.
+ */
 const DETERMINISTIC_TRIGGERS = new Set([
 	'ephemeral_id_fraud',
 	'validation_frequency',
@@ -124,6 +134,7 @@ export function calculateNormalizedRiskScore(
 		headerFingerprintScore?: number; // 0-100
 		tlsAnomalyScore?: number; // 0-100
 		latencyMismatchScore?: number; // 0-100
+		/** Planned: set to true when the submitter is a known repeat offender (not yet wired up) */
 		recentRepeatOffender?: boolean;
 		blockTrigger?:
 			| 'token_replay'

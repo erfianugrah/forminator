@@ -379,30 +379,31 @@ export default function AnalyticsDashboard() {
 					<FraudAlert data={analyticsData.fraudPatterns} loading={analyticsData.loading} config={config} />
 
 					<Suspense fallback={<SectionSkeleton title="Recent submissions" />}>
-						<RecentSubmissionsSection
-							submissions={submissionsData.submissions}
-							totalCount={submissionsData.totalCount}
-							countries={analyticsData.countries}
-							loading={submissionsData.loading}
-							onLoadDetail={loadSubmissionDetail}
-							searchQuery={searchQuery}
-							onSearchQueryChange={setSearchQuery}
-							selectedCountries={selectedCountries}
-							onSelectedCountriesChange={setSelectedCountries}
-							botScoreRange={botScoreRange}
-							onBotScoreRangeChange={setBotScoreRange}
-							allowedStatus={allowedStatus}
-							onAllowedStatusChange={setAllowedStatus}
-							dateRange={dateRange}
-							onDateRangeChange={setDateRange}
-							fingerprintFlags={fingerprintFlags}
-							onFingerprintFlagsChange={setFingerprintFlags}
-							pagination={pagination}
-							onPaginationChange={setPagination}
-							sorting={sorting}
-							onSortingChange={setSorting}
-							apiKey={apiKey}
-						/>
+					<RecentSubmissionsSection
+						submissions={submissionsData.submissions}
+						totalCount={submissionsData.totalCount}
+						countries={analyticsData.countries}
+						loading={submissionsData.loading}
+						onLoadDetail={loadSubmissionDetail}
+						searchQuery={searchQuery}
+						onSearchQueryChange={setSearchQuery}
+						selectedCountries={selectedCountries}
+						onSelectedCountriesChange={setSelectedCountries}
+						botScoreRange={botScoreRange}
+						onBotScoreRangeChange={setBotScoreRange}
+						allowedStatus={allowedStatus}
+						onAllowedStatusChange={setAllowedStatus}
+						dateRange={dateRange}
+						onDateRangeChange={setDateRange}
+						fingerprintFlags={fingerprintFlags}
+						onFingerprintFlagsChange={setFingerprintFlags}
+						pagination={pagination}
+						onPaginationChange={setPagination}
+						sorting={sorting}
+						onSortingChange={setSorting}
+						apiKey={apiKey}
+						config={config}
+					/>
 					</Suspense>
 
 					<Suspense fallback={<SectionSkeleton title="Security events" />}>
