@@ -26,11 +26,7 @@ export interface EmailFraudResult {
  * @param request - Optional original request for extracting metadata
  * @returns Email fraud result or null if service unavailable (fail-open)
  */
-export async function checkEmailFraud(
-	email: string,
-	env: Env,
-	request?: Request
-): Promise<EmailFraudResult | null> {
+export async function checkEmailFraud(email: string, env: Env, request?: Request): Promise<EmailFraudResult | null> {
 	try {
 		// Extract request.cf metadata to pass via RPC
 		// This ensures markov-mail has access to all Cloudflare signals

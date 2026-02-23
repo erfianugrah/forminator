@@ -266,11 +266,11 @@ wrangler d1 migrations apply DB --remote
 
 ### API Endpoints
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/analytics/validations/:id` | Full validation record, including `risk_score_breakdown`, `detection_type`, and metadata |
-| `GET /api/analytics/validations/by-erfid/:erfid` | Fetch the latest validation directly by request ID (no numeric ID required) |
-| `GET /api/analytics/blocked-validations` | Mixed feed of recent blocks from both Turnstile validations and `fraud_blocks`, each row tagged with `erfid` |
+| Endpoint                                         | Purpose                                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `GET /api/analytics/validations/:id`             | Full validation record, including `risk_score_breakdown`, `detection_type`, and metadata                     |
+| `GET /api/analytics/validations/by-erfid/:erfid` | Fetch the latest validation directly by request ID (no numeric ID required)                                  |
+| `GET /api/analytics/blocked-validations`         | Mixed feed of recent blocks from both Turnstile validations and `fraud_blocks`, each row tagged with `erfid` |
 
 ### Examples
 

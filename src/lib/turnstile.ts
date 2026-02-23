@@ -5,43 +5,28 @@ import logger from './logger';
 import { addToBlacklist } from './fraud-prevalidation';
 import { calculateNormalizedRiskScore } from './scoring';
 import { toSQLiteDateTime } from './utils/datetime';
-import {
-	getTurnstileError,
-	getUserErrorMessage,
-	getDebugErrorInfo,
-	isConfigurationError,
-} from './turnstile-errors';
+import { getTurnstileError, getUserErrorMessage, getDebugErrorInfo, isConfigurationError } from './turnstile-errors';
 
 /**
  * Validate Turnstile token with Cloudflare's siteverify API
  * @see https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
  */
-export async function validateTurnstileToken(
-	token: string,
-	remoteIp: string,
-	secretKey: string
-): Promise<TurnstileValidationResult> {
+export async function validateTurnstileToken(token: string, remoteIp: string, secretKey: string): Promise<TurnstileValidationResult> {
 	try {
-		const response = await fetch(
-			'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-			{
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					secret: secretKey,
-					response: token,
-					remoteip: remoteIp,
-				}),
-			}
-		);
+		const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				secret: secretKey,
+				response: token,
+				remoteip: remoteIp,
+			}),
+		});
 
 		if (!response.ok) {
-			logger.error(
-				{ status: response.status, statusText: response.statusText },
-				'Turnstile API request failed'
-			);
+			logger.error({ status: response.status, statusText: response.statusText }, 'Turnstile API request failed');
 			return {
 				valid: false,
 				reason: 'api_request_failed',
@@ -78,15 +63,12 @@ export async function validateTurnstileToken(
 					isConfigError: isConfigurationError(errorCodes),
 					ephemeralId,
 				},
-				'Turnstile validation failed'
+				'Turnstile validation failed',
 			);
 
 			// Alert on configuration errors (needs developer attention)
 			if (isConfigurationError(errorCodes)) {
-				logger.error(
-					{ errorCodes, debugInfo },
-					'⚠️ CONFIGURATION ERROR: Turnstile misconfigured - immediate attention required'
-				);
+				logger.error({ errorCodes, debugInfo }, '⚠️ CONFIGURATION ERROR: Turnstile misconfigured - immediate attention required');
 			}
 
 			return {
@@ -130,10 +112,7 @@ export function hashToken(token: string): string {
 /**
  * Check if token has been used before (replay attack prevention)
  */
-export async function checkTokenReuse(
-	tokenHash: string,
-	db: D1Database
-): Promise<boolean> {
+export async function checkTokenReuse(tokenHash: string, db: D1Database): Promise<boolean> {
 	try {
 		const result = await db
 			.prepare('SELECT id FROM turnstile_validations WHERE token_hash = ? LIMIT 1')
@@ -156,10 +135,7 @@ export async function checkTokenReuse(
  * @param config - Fraud detection configuration containing timeout schedule
  * @returns Timeout duration in seconds
  */
-export function calculateProgressiveTimeout(
-	offenseCount: number,
-	config: FraudDetectionConfig
-): number {
+export function calculateProgressiveTimeout(offenseCount: number, config: FraudDetectionConfig): number {
 	const timeWindows = config.timeouts.schedule;
 	const maximum = config.timeouts.maximum;
 
@@ -187,7 +163,7 @@ export function calculateProgressiveTimeout(
 export async function collectEphemeralIdSignals(
 	ephemeralId: string,
 	db: D1Database,
-	config: FraudDetectionConfig
+	config: FraudDetectionConfig,
 ): Promise<{
 	submissionCount: number;
 	validationCount: number;
@@ -208,7 +184,7 @@ export async function collectEphemeralIdSignals(
 				`SELECT COUNT(*) as count
 				 FROM submissions
 				 WHERE ephemeral_id = ?
-				 AND created_at > ?`
+				 AND created_at > ?`,
 			)
 			.bind(ephemeralId, oneDayAgo)
 			.first<{ count: number }>();
@@ -218,9 +194,7 @@ export async function collectEphemeralIdSignals(
 		const submissionCount = (recentSubmissions?.count || 0) + 1;
 
 		if (submissionCount >= config.detection.ephemeralIdSubmissionThreshold) {
-			warnings.push(
-				`Multiple submissions detected (${submissionCount} total in 24h) - registration forms should only be submitted once`
-			);
+			warnings.push(`Multiple submissions detected (${submissionCount} total in 24h) - registration forms should only be submitted once`);
 		}
 
 		// Signal 2: Validation frequency (1h window for rapid-fire detection)
@@ -231,7 +205,7 @@ export async function collectEphemeralIdSignals(
 				`SELECT COUNT(*) as count
 				 FROM turnstile_validations
 				 WHERE ephemeral_id = ?
-				 AND created_at > ?`
+				 AND created_at > ?`,
 			)
 			.bind(ephemeralId, oneHourAgo)
 			.first<{ count: number }>();
@@ -240,9 +214,7 @@ export async function collectEphemeralIdSignals(
 		const validationCount = Math.max(1, recentValidations?.count || 0);
 
 		if (validationCount >= config.detection.validationFrequencyBlockThreshold) {
-			warnings.push(
-				`Excessive validation attempts (${validationCount} in 1h) - possible automated attack`
-			);
+			warnings.push(`Excessive validation attempts (${validationCount} in 1h) - possible automated attack`);
 		} else if (validationCount >= config.detection.validationFrequencyWarnThreshold) {
 			warnings.push(`Multiple validation attempts detected (${validationCount} in 1h)`);
 		}
@@ -258,7 +230,7 @@ export async function collectEphemeralIdSignals(
 					UNION
 					SELECT remote_ip FROM turnstile_validations
 					WHERE ephemeral_id = ? AND created_at > ?
-				)`
+				)`,
 			)
 			.bind(ephemeralId, oneDayAgo, ephemeralId, oneDayAgo)
 			.first<{ count: number }>();
@@ -277,7 +249,7 @@ export async function collectEphemeralIdSignals(
 				unique_ips: ipCount,
 				warnings,
 			},
-			'Ephemeral ID signals collected'
+			'Ephemeral ID signals collected',
 		);
 
 		return {
@@ -305,10 +277,7 @@ export async function collectEphemeralIdSignals(
  * This allows automated testing without solving Turnstile CAPTCHA
  * while still running all fraud detection layers
  */
-export function createMockValidation(
-	ip: string,
-	hostname: string = 'test'
-): TurnstileValidationResult {
+export function createMockValidation(ip: string, hostname: string = 'test'): TurnstileValidationResult {
 	// Generate unique ephemeral ID for each test
 	const mockEphemeralId = `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -321,9 +290,9 @@ export function createMockValidation(
 			action: 'test',
 			cdata: 'test',
 			metadata: {
-				ephemeral_id: mockEphemeralId
-			}
+				ephemeral_id: mockEphemeralId,
+			},
 		},
-		ephemeralId: mockEphemeralId
+		ephemeralId: mockEphemeralId,
 	};
 }

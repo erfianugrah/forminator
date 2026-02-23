@@ -1,8 +1,10 @@
 /**
  * Configuration API Endpoint
  *
- * Exposes fraud detection configuration to the frontend
- * Allows UI to dynamically adapt to threshold changes
+ * Exposes fraud detection configuration to the frontend.
+ * The unauthenticated path returns only safe display hints (risk levels).
+ * The authenticated path (X-API-KEY) returns the full configuration for
+ * the analytics dashboard — weights, thresholds, detection params, etc.
  */
 
 import { Hono } from 'hono';
@@ -14,15 +16,36 @@ const config = new Hono<{ Bindings: Env }>();
 /**
  * GET /api/config
  *
- * Returns public-facing fraud detection configuration.
- * Only exposes risk level ranges needed by the frontend for UI display.
- * Internal thresholds, weights, and detection params are NOT exposed
- * to prevent attackers from crafting evasion strategies.
+ * Without API key: returns only risk levels (safe for public form page).
+ * With valid API key: returns the full fraud detection configuration
+ * so the analytics dashboard has complete observability.
  */
 config.get('/', (c) => {
 	try {
 		const configuration = getConfig(c.env);
 
+		// Check if caller provided a valid API key
+		const apiKey = c.req.header('X-API-KEY') ?? '';
+		const expectedKey = c.env['X-API-KEY'] ?? '';
+		const encoder = new TextEncoder();
+		const a = encoder.encode(apiKey);
+		const b = encoder.encode(expectedKey);
+		const isAuthenticated =
+			apiKey.length > 0 &&
+			expectedKey.length > 0 &&
+			a.byteLength === b.byteLength &&
+			(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean }).timingSafeEqual(a, b);
+
+		if (isAuthenticated) {
+			// Full config for authenticated analytics dashboard
+			return c.json({
+				success: true,
+				data: configuration,
+				version: '2.0.0',
+			});
+		}
+
+		// Public: only risk level ranges for UI display
 		return c.json({
 			success: true,
 			data: {
@@ -40,7 +63,7 @@ config.get('/', (c) => {
 				success: false,
 				error: 'Failed to retrieve configuration',
 			},
-			500
+			500,
 		);
 	}
 });

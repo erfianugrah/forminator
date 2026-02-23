@@ -16,7 +16,7 @@ const DEFAULT_CONFIG = {
 	/**
 	 * Risk Score Configuration
 	 */
-		risk: {
+	risk: {
 		mode: 'defensive' as 'defensive' | 'additive',
 		/** Block threshold - submissions with risk >= this value are blocked */
 		blockThreshold: 70,
@@ -34,16 +34,16 @@ const DEFAULT_CONFIG = {
 		 * Adjusted to include IP rate limiting as behavioral signal
 		 */
 		weights: {
-			tokenReplay: 0.28,          // 28% (still the highest priority)
-			emailFraud: 0.14,           // 14%
-			ephemeralId: 0.15,          // 15%
-			validationFrequency: 0.10,  // 10%
-			ipDiversity: 0.07,          // 7%
-			ja4SessionHopping: 0.06,    // 6%
-			ipRateLimit: 0.07,          // 7%
-			headerFingerprint: 0.07,    // 7% (new - shared header signature reuse)
-			tlsAnomaly: 0.04,           // 4% (new - spoofed TLS fingerprints)
-			latencyMismatch: 0.02,      // 2% (new - impossible RTT/platform combos)
+			tokenReplay: 0.28, // 28% (still the highest priority)
+			emailFraud: 0.14, // 14%
+			ephemeralId: 0.15, // 15%
+			validationFrequency: 0.1, // 10%
+			ipDiversity: 0.07, // 7%
+			ja4SessionHopping: 0.06, // 6%
+			ipRateLimit: 0.07, // 7%
+			headerFingerprint: 0.07, // 7% (new - shared header signature reuse)
+			tlsAnomaly: 0.04, // 4% (new - spoofed TLS fingerprints)
+			latencyMismatch: 0.02, // 2% (new - impossible RTT/platform combos)
 		},
 	},
 
@@ -123,26 +123,27 @@ const DEFAULT_CONFIG = {
 	 */
 	fingerprint: {
 		headerReuse: {
-			windowMinutes: 60,        // Look back 60 minutes for reuse analysis
-			minRequests: 3,           // Require at least 3 matching requests
-			minDistinctIps: 2,        // ...coming from 2+ IPs
-			minDistinctJa4: 2,        // ...and 2+ JA4 fingerprints
+			windowMinutes: 60, // Look back 60 minutes for reuse analysis
+			minRequests: 3, // Require at least 3 matching requests
+			minDistinctIps: 2, // ...coming from 2+ IPs
+			minDistinctJa4: 2, // ...and 2+ JA4 fingerprints
 		},
 		tlsAnomaly: {
-			baselineHours: 24,        // Compare against last 24h of traffic
-			minJa4Observations: 5,    // Only flag when we have 5+ legit samples for that JA4
+			baselineHours: 24, // Compare against last 24h of traffic
+			minJa4Observations: 5, // Only flag when we have 5+ legit samples for that JA4
 		},
 		latency: {
-			mobileRttThresholdMs: 6,  // Mobile claims with RTT < 6ms are suspicious
+			mobileRttThresholdMs: 6, // Mobile claims with RTT < 6ms are suspicious
 			inspectPlatforms: ['Android', 'iOS'],
 		},
-		datacenterAsns: [           // Common hosting providers for quick heuristics
+		datacenterAsns: [
+			// Common hosting providers for quick heuristics
 			16509, // AWS
 			14618, // AWS
-			8075,  // Microsoft
+			8075, // Microsoft
 			15169, // Google Cloud
 			13335, // Cloudflare
-			9009,  // M247
+			9009, // M247
 			61317, // Leaseweb NL
 			49544, // OVH
 		],
@@ -338,9 +339,7 @@ export function getConfig(env?: Env): FraudDetectionConfig {
 
 	try {
 		// Parse FRAUD_CONFIG if it's a string
-		const customConfig = typeof env.FRAUD_CONFIG === 'string'
-			? JSON.parse(env.FRAUD_CONFIG)
-			: env.FRAUD_CONFIG;
+		const customConfig = typeof env.FRAUD_CONFIG === 'string' ? JSON.parse(env.FRAUD_CONFIG) : env.FRAUD_CONFIG;
 
 		// Deep merge with defaults
 		return mergeConfig(DEFAULT_CONFIG, customConfig);
@@ -354,10 +353,7 @@ export function getConfig(env?: Env): FraudDetectionConfig {
  * Deep merge configuration objects
  * Custom values override defaults at all levels
  */
-function mergeConfig(
-	defaults: FraudDetectionConfig,
-	custom: Partial<FraudDetectionConfig>
-): FraudDetectionConfig {
+function mergeConfig(defaults: FraudDetectionConfig, custom: Partial<FraudDetectionConfig>): FraudDetectionConfig {
 	const merged = { ...defaults };
 
 	if (custom.risk) {
@@ -441,10 +437,7 @@ export function shouldBlock(riskScore: number, config: FraudDetectionConfig): bo
 /**
  * Get risk level classification
  */
-export function getRiskLevel(
-	riskScore: number,
-	config: FraudDetectionConfig
-): 'low' | 'medium' | 'high' {
+export function getRiskLevel(riskScore: number, config: FraudDetectionConfig): 'low' | 'medium' | 'high' {
 	const { levels } = config.risk;
 
 	if (riskScore >= levels.high.min) return 'high';

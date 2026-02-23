@@ -170,3 +170,7 @@ cf-docs
 *claude*
 *CODE_REVIEW*
 .dev.vars
+
+# Playwright
+playwright-report/
+test-results/

@@ -45,24 +45,27 @@ app.use('*', async (c, next) => {
 	const encoder = new TextEncoder();
 	const apiKeyBytes = encoder.encode(apiKey || '');
 	const expectedKeyBytes = encoder.encode(expectedKey);
-	const keysMatch = apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
-		(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean })
-			.timingSafeEqual(apiKeyBytes, expectedKeyBytes);
+	const keysMatch =
+		apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
+		(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean }).timingSafeEqual(
+			apiKeyBytes,
+			expectedKeyBytes,
+		);
 
 	if (!apiKey || !keysMatch) {
 		logger.warn(
 			{
 				hasKey: !!apiKey,
-				ip: c.req.header('CF-Connecting-IP')
+				ip: c.req.header('CF-Connecting-IP'),
 			},
-			'Unauthorized analytics access attempt'
+			'Unauthorized analytics access attempt',
 		);
 		return c.json(
 			{
 				success: false,
 				error: 'Unauthorized - Invalid or missing X-API-KEY header',
 			},
-			401
+			401,
 		);
 	}
 
@@ -89,7 +92,7 @@ app.get('/stats', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch validation statistics',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -115,37 +118,25 @@ app.get('/submissions', async (c) => {
 					error: 'Invalid parameter',
 					message: 'sortOrder must be either "asc" or "desc"',
 				},
-				400
+				400,
 			);
 		}
 
 		// Parse filter params
 		const countries = c.req.query('countries')?.split(',').filter(Boolean);
-		const botScoreMin = c.req.query('botScoreMin')
-			? parseInt(c.req.query('botScoreMin')!, 10)
-			: undefined;
-		const botScoreMax = c.req.query('botScoreMax')
-			? parseInt(c.req.query('botScoreMax')!, 10)
-			: undefined;
+		const botScoreMin = c.req.query('botScoreMin') ? parseInt(c.req.query('botScoreMin')!, 10) : undefined;
+		const botScoreMax = c.req.query('botScoreMax') ? parseInt(c.req.query('botScoreMax')!, 10) : undefined;
 		const startDate = c.req.query('startDate');
 		const endDate = c.req.query('endDate');
 		const verifiedBotStr = c.req.query('verifiedBot');
-		const verifiedBot =
-			verifiedBotStr !== undefined ? verifiedBotStr === 'true' : undefined;
+		const verifiedBot = verifiedBotStr !== undefined ? verifiedBotStr === 'true' : undefined;
 		const hasJa3Str = c.req.query('hasJa3');
 		const hasJa3 = hasJa3Str !== undefined ? hasJa3Str === 'true' : undefined;
 		const hasJa4Str = c.req.query('hasJa4');
 		const hasJa4 = hasJa4Str !== undefined ? hasJa4Str === 'true' : undefined;
 		const search = c.req.query('search');
 		const allowedParam = c.req.query('allowed');
-		const allowed =
-			allowedParam === 'true'
-				? true
-				: allowedParam === 'false'
-					? false
-					: allowedParam === 'all'
-						? 'all'
-						: undefined;
+		const allowed = allowedParam === 'true' ? true : allowedParam === 'false' ? false : allowedParam === 'all' ? 'all' : undefined;
 		const fingerprintHeader = c.req.query('fingerprintHeader') === 'true';
 		const fingerprintTls = c.req.query('fingerprintTls') === 'true';
 		const fingerprintLatency = c.req.query('fingerprintLatency') === 'true';
@@ -158,7 +149,7 @@ app.get('/submissions', async (c) => {
 					error: 'Invalid parameter',
 					message: 'botScoreMin must be between 0 and 100',
 				},
-				400
+				400,
 			);
 		}
 		if (botScoreMax !== undefined && (botScoreMax < 0 || botScoreMax > 100)) {
@@ -168,7 +159,7 @@ app.get('/submissions', async (c) => {
 					error: 'Invalid parameter',
 					message: 'botScoreMax must be between 0 and 100',
 				},
-				400
+				400,
 			);
 		}
 
@@ -194,7 +185,7 @@ app.get('/submissions', async (c) => {
 							headerReuse: fingerprintHeader,
 							tlsAnomaly: fingerprintTls,
 							latencyMismatch: fingerprintLatency,
-					  }
+						}
 					: undefined,
 		};
 
@@ -229,7 +220,7 @@ app.get('/submissions', async (c) => {
 				count: result.data.length,
 				total: result.total,
 			},
-			'Submissions retrieved'
+			'Submissions retrieved',
 		);
 
 		return c.json({
@@ -252,7 +243,7 @@ app.get('/submissions', async (c) => {
 					error: 'Invalid parameter',
 					message: error.message,
 				},
-				400
+				400,
 			);
 		}
 
@@ -264,7 +255,7 @@ app.get('/submissions', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch submissions',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -289,7 +280,7 @@ app.get('/countries', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch country statistics',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -314,7 +305,7 @@ app.get('/bot-scores', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch bot score distribution',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -339,7 +330,7 @@ app.get('/asn', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch ASN distribution',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -364,7 +355,7 @@ app.get('/tls', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch TLS distribution',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -389,7 +380,7 @@ app.get('/ja3', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch JA3 distribution',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -414,7 +405,7 @@ app.get('/ja4', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch JA4 distribution',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -439,7 +430,7 @@ app.get('/email-patterns', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch email pattern distribution',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -474,7 +465,7 @@ app.get('/submissions/:id', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch submission details',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -498,7 +489,7 @@ app.get('/time-series', async (c) => {
 					error: 'Missing required parameter',
 					message: 'Parameter "metric" is required',
 				},
-				400
+				400,
 			);
 		}
 
@@ -509,7 +500,7 @@ app.get('/time-series', async (c) => {
 					error: 'Missing required parameter',
 					message: 'Parameter "interval" is required',
 				},
-				400
+				400,
 			);
 		}
 
@@ -533,7 +524,7 @@ app.get('/time-series', async (c) => {
 					error: 'Invalid metric',
 					message: `Metric must be one of: ${validMetrics.join(', ')}`,
 				},
-				400
+				400,
 			);
 		}
 
@@ -546,7 +537,7 @@ app.get('/time-series', async (c) => {
 					error: 'Invalid interval',
 					message: `Interval must be one of: ${validIntervals.join(', ')}`,
 				},
-				400
+				400,
 			);
 		}
 
@@ -579,7 +570,7 @@ app.get('/time-series', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch time-series data',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -598,7 +589,7 @@ app.get('/export', async (c) => {
 					error: 'Invalid format',
 					message: 'Format must be either "csv" or "json"',
 				},
-				400
+				400,
 			);
 		}
 
@@ -613,22 +604,17 @@ app.get('/export', async (c) => {
 					error: 'Invalid parameter',
 					message: 'sortOrder must be either "asc" or "desc"',
 				},
-				400
+				400,
 			);
 		}
 
 		const countries = c.req.query('countries')?.split(',').filter(Boolean);
-		const botScoreMin = c.req.query('botScoreMin')
-			? parseInt(c.req.query('botScoreMin')!, 10)
-			: undefined;
-		const botScoreMax = c.req.query('botScoreMax')
-			? parseInt(c.req.query('botScoreMax')!, 10)
-			: undefined;
+		const botScoreMin = c.req.query('botScoreMin') ? parseInt(c.req.query('botScoreMin')!, 10) : undefined;
+		const botScoreMax = c.req.query('botScoreMax') ? parseInt(c.req.query('botScoreMax')!, 10) : undefined;
 		const startDate = c.req.query('startDate');
 		const endDate = c.req.query('endDate');
 		const verifiedBotStr = c.req.query('verifiedBot');
-		const verifiedBot =
-			verifiedBotStr !== undefined ? verifiedBotStr === 'true' : undefined;
+		const verifiedBot = verifiedBotStr !== undefined ? verifiedBotStr === 'true' : undefined;
 		const hasJa3Str = c.req.query('hasJa3');
 		const hasJa3 = hasJa3Str !== undefined ? hasJa3Str === 'true' : undefined;
 		const hasJa4Str = c.req.query('hasJa4');
@@ -643,7 +629,7 @@ app.get('/export', async (c) => {
 					error: 'Invalid parameter',
 					message: 'botScoreMin must be between 0 and 100',
 				},
-				400
+				400,
 			);
 		}
 		if (botScoreMax !== undefined && (botScoreMax < 0 || botScoreMax > 100)) {
@@ -653,19 +639,12 @@ app.get('/export', async (c) => {
 					error: 'Invalid parameter',
 					message: 'botScoreMax must be between 0 and 100',
 				},
-				400
+				400,
 			);
 		}
 
 		const allowedParam = c.req.query('allowed');
-		const allowed =
-			allowedParam === 'true'
-				? true
-				: allowedParam === 'false'
-					? false
-					: allowedParam === 'all'
-						? 'all'
-						: undefined;
+		const allowed = allowedParam === 'true' ? true : allowedParam === 'false' ? false : allowedParam === 'all' ? 'all' : undefined;
 		const fingerprintHeader = c.req.query('fingerprintHeader') === 'true';
 		const fingerprintTls = c.req.query('fingerprintTls') === 'true';
 		const fingerprintLatency = c.req.query('fingerprintLatency') === 'true';
@@ -692,7 +671,7 @@ app.get('/export', async (c) => {
 							headerReuse: fingerprintHeader,
 							tlsAnomaly: fingerprintTls,
 							latencyMismatch: fingerprintLatency,
-					  }
+						}
 					: undefined,
 		};
 
@@ -732,10 +711,7 @@ app.get('/export', async (c) => {
 
 			const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
-			logger.info(
-				{ format, count: result.data.length, filters },
-				'Data exported'
-			);
+			logger.info({ format, count: result.data.length, filters }, 'Data exported');
 
 			return new Response(csvContent, {
 				headers: {
@@ -747,10 +723,7 @@ app.get('/export', async (c) => {
 			// JSON format
 			const jsonContent = JSON.stringify(result.data, null, 2);
 
-			logger.info(
-				{ format, count: result.data.length, filters },
-				'Data exported'
-			);
+			logger.info({ format, count: result.data.length, filters }, 'Data exported');
 
 			return new Response(jsonContent, {
 				headers: {
@@ -768,7 +741,7 @@ app.get('/export', async (c) => {
 					error: 'Invalid parameter',
 					message: error.message,
 				},
-				400
+				400,
 			);
 		}
 
@@ -780,7 +753,7 @@ app.get('/export', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to export data',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -802,11 +775,14 @@ app.get('/fraud-patterns', async (c) => {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 		const errorStack = error instanceof Error ? error.stack : undefined;
 
-		logger.error({
-			error,
-			message: errorMessage,
-			stack: errorStack
-		}, 'Error detecting fraud patterns');
+		logger.error(
+			{
+				error,
+				message: errorMessage,
+				stack: errorStack,
+			},
+			'Error detecting fraud patterns',
+		);
 
 		return c.json(
 			{
@@ -815,7 +791,7 @@ app.get('/fraud-patterns', async (c) => {
 				message: 'Failed to detect fraud patterns',
 				// Error details logged server-side — don't expose to client
 			},
-			500
+			500,
 		);
 	}
 });
@@ -841,7 +817,7 @@ app.get('/blocked-stats', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch blocked validation statistics',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -867,7 +843,7 @@ app.get('/block-reasons', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch block reason distribution',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -893,7 +869,7 @@ app.get('/blacklist', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch blacklist entries',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -919,7 +895,7 @@ app.get('/blacklist-stats', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch blacklist statistics',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -938,7 +914,7 @@ app.get('/blocked-validations', async (c) => {
 					error: 'Invalid parameter',
 					message: 'limit must be between 1 and 500',
 				},
-				400
+				400,
 			);
 		}
 
@@ -959,7 +935,7 @@ app.get('/blocked-validations', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch blocked validations',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -974,9 +950,10 @@ app.get('/exports/security-events', async (c) => {
 		const status = statusParam === 'active' || statusParam === 'detection' ? statusParam : 'all';
 		const riskLevelParam = c.req.query('riskLevel');
 		const allowedRiskLevels = { low: true, medium: true, high: true, critical: true } as const;
-		const riskLevel = riskLevelParam && allowedRiskLevels[riskLevelParam as keyof typeof allowedRiskLevels]
-			? (riskLevelParam as keyof typeof allowedRiskLevels)
-			: undefined;
+		const riskLevel =
+			riskLevelParam && allowedRiskLevels[riskLevelParam as keyof typeof allowedRiskLevels]
+				? (riskLevelParam as keyof typeof allowedRiskLevels)
+				: undefined;
 		const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : 1000;
 
 		const data = await exportSecurityEvents(db, {
@@ -1005,7 +982,7 @@ app.get('/exports/security-events', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to export security events',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -1039,7 +1016,7 @@ app.get('/exports/validations', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to export validations',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -1075,7 +1052,7 @@ app.get('/validations/:id', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch validation details',
 			},
-			500
+			500,
 		);
 	}
 });
@@ -1111,7 +1088,7 @@ app.get('/validations/by-erfid/:erfid', async (c) => {
 				error: 'Internal server error',
 				message: 'Failed to fetch validation by erfid',
 			},
-			500
+			500,
 		);
 	}
 });

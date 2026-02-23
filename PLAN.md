@@ -7,6 +7,28 @@ Findings organized into four tracks: **Fraud Logic**, **Correctness & Security**
 
 **Final Status: 40/40 items resolved (38 completed, 2 deferred)**
 
+### Post-Review Improvements (2026-02-23)
+
+After the 40-item code review, additional observability and correctness improvements were made:
+
+1. **Full config endpoint** (`src/routes/config.ts`): Authenticated requests (with `X-API-KEY` header) now receive the complete fraud detection configuration (weights, thresholds, detection params, JA4 config, fingerprint config, timeouts). Unauthenticated requests still receive only risk levels + mode. Uses `crypto.subtle.timingSafeEqual`.
+
+2. **Scoring decision trail** (`src/lib/scoring.ts`): The `RiskScoreBreakdown` now includes a `decision` object that records the full scoring pipeline: base weighted sum → weight redistribution (with inactive weight and normalization factor) → corroboration bonus (which signals, whether applied) → deterministic/force-block triggers. This enables the frontend to show exactly why each score was calculated.
+
+3. **FraudAssessment decision trail** (`frontend/src/components/analytics/FraudAssessment.tsx`): New "Decision Trail" section renders the scoring pipeline step-by-step: weighted sum, weight redistribution (with explanation), corroboration bonus (with signal names), and deterministic/force-block triggers.
+
+4. **BlacklistDetailDialog** (`frontend/src/components/analytics/sections/BlacklistDetailDialog.tsx`): Now renders the full `FraudAssessment` component when `risk_score_breakdown` JSON is available, bringing it to parity with SubmissionDetailDialog and ValidationDetailDialog. Raw detection metadata is now collapsible.
+
+5. **Config deep-merge** (`frontend/src/hooks/useConfig.ts`): `useConfig(apiKey?)` now deep-merges the server response into client-side defaults instead of replacing them. This prevents crashes when the backend omits fields (e.g. unauthenticated path doesn't return weights).
+
+6. **Block reason parsing** (`SecurityEvents.tsx`, `FraudAlert.tsx`): `parseBlockReason` now properly separates "Triggers:" from "Top components:" in the block reason string. FraudAlert card shows parsed risk score, trigger pills, and component scores instead of raw text.
+
+7. **RiskScoreInfo** (`frontend/src/components/analytics/RiskScoreInfo.tsx`): Updated descriptions to document weight redistribution, corroboration bonus, and defensive mode behavior.
+
+8. **Prettier**: Ran `npx prettier --write .` fixing 123 files across the entire codebase.
+
+9. **D1 migration reset**: Dropped `d1_migrations` table and re-applied `0001_initial_schema.sql` after table nuke left migration tracker stale.
+
 ## Branch Info
 
 - **Branch**: `fix/code-review-issues`
@@ -27,6 +49,7 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 **Affected signals**: ephemeral ID count, validation frequency, IP rate limit, JA4 clustering.
 
 **Fix**: Implemented write-before-read pattern (Option A):
+
 - `logValidation()` now returns the inserted row ID (`RETURNING id`)
 - New `updateValidationResult()` function updates the early record with final decision
 - `submissions.ts` inserts a "pending" validation record BEFORE signal collection
@@ -123,7 +146,8 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 
 **Problem**: Two people in same household with same browser version share JA4 + IP. With 2+ ephemeral IDs, JA4 clustering flags them.
 
-**Fix**: 
+**Fix**:
+
 - Added `avgBotScore` field to `ClusteringAnalysis` interface
 - Both `analyzeJA4Clustering` and `analyzeJA4GlobalClustering` now fetch `bot_score` from submissions
 - `calculateCompositeRiskScore` applies household mitigation: when all submissions have high bot_scores (≥50, meaning Cloudflare considers them human) AND submissions are NOT rapid, the clustering signal is halved
@@ -375,50 +399,50 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 
 ## Progress Tracking
 
-| ID | Track | Priority | Status | Description |
-|----|-------|----------|--------|-------------|
-| F-1 | Fraud | Critical | [x] | Concurrent submissions bypass — write-before-read pattern |
-| F-2 | Fraud | Critical | [x] | Blacklist query returns wrong entry (most-recent vs latest-expiring) |
-| F-3 | Fraud | High | [x] | Additive scoring corroboration bonus (+15 when 3+ signals ≥30) |
-| F-4 | Fraud | High | [x] | Email fraud block requires multi-IP unnecessarily |
-| F-5 | Fraud | High | [x] | Missing ephemeral IDs kill 32% of scoring weight |
-| F-6 | Fraud | Medium | [x] | IP rate limit blind to blocked requests |
-| F-7 | Fraud | Medium | [x] | Low-confidence blacklist entries cause false blocks |
-| F-8 | Fraud | Medium | [x] | No email-diversity-per-IP signal |
-| F-9 | Fraud | Medium | [x] | Blacklist INSERT failure silently ignored |
-| F-10 | Fraud | Medium | [x] | JA4 household false positives — bot_score + time-gap mitigation |
-| B-1 | Backend | High | [x] | `\|\| null` converts falsy 0 to null |
-| B-2 | Backend | High | [x] | `s.allowed` column doesn't exist |
-| B-3 | Backend | Medium | [x] | Age validation ignores month/day |
-| B-4 | Backend | Medium | [x] | Name regex rejects non-ASCII |
-| B-5 | Backend | Medium | [x] | No timing-safe API key comparison |
-| B-6 | Backend | Medium | [x] | Config/health leak fraud thresholds |
-| B-7 | Backend | Medium | [x] | LIKE wildcard injection |
-| B-8 | Backend | Low | [x] | Malformed JSON returns 500 |
-| B-9 | Backend | Low | [x] | `Error.captureStackTrace` guard |
-| B-10 | Backend | Low | [x] | FNV-1a 32-bit → 64-bit hash |
-| B-11 | Backend | Low | [x] | Incomplete sanitizeString |
-| B-12 | Backend | Low | [x] | Export capped at 100 rows |
-| B-13 | Backend | Low | [x] | Logger hardcodes production env |
-| B-14 | Backend | Low | [x] | Error details leaked in 500 |
-| FE-1 | Frontend | High | [x] | Timer recreates interval every second |
-| FE-2 | Frontend | High | [x] | hasActiveFilters always true |
-| FE-3 | Frontend | Medium | [x] | Missing AbortController in hooks |
-| FE-4 | Frontend | Medium | [x] | Missing .ok checks on 3 responses |
-| FE-5 | Frontend | Medium | [-] | `as any` casts on API responses (deferred) |
-| FE-6 | Frontend | Medium | [-] | Dialog missing accessibility (deferred) |
-| FE-7 | Frontend | Medium | [x] | `alert()` for errors |
-| FE-8 | Frontend | Low | [x] | Operator precedence in inferDetectionType |
-| FE-9 | Frontend | Low | [x] | Excessive console.log |
-| I-1 | Infra | High | [x] | Migration numbering — consolidated to single 0001_initial_schema.sql |
-| I-2 | Infra | High | [x] | Missing column migrations (now in initial schema) |
-| I-3 | Infra | Medium | [x] | Missing database indexes (now in initial schema) |
-| I-4 | Infra | Medium | [x] | Test packages in prod deps |
-| I-5 | Infra | Medium | [x] | --disable-web-security in tests |
-| I-6 | Infra | Medium | [x] | DOM lib removed from worker tsconfig |
-| I-7 | Infra | Medium | [x] | Staging env added to wrangler.jsonc |
-| I-8 | Infra | Low | [x] | format:check script added |
-| I-9 | Infra | Low | [x] | @types in wrong deps section |
+| ID   | Track    | Priority | Status | Description                                                          |
+| ---- | -------- | -------- | ------ | -------------------------------------------------------------------- |
+| F-1  | Fraud    | Critical | [x]    | Concurrent submissions bypass — write-before-read pattern            |
+| F-2  | Fraud    | Critical | [x]    | Blacklist query returns wrong entry (most-recent vs latest-expiring) |
+| F-3  | Fraud    | High     | [x]    | Additive scoring corroboration bonus (+15 when 3+ signals ≥30)       |
+| F-4  | Fraud    | High     | [x]    | Email fraud block requires multi-IP unnecessarily                    |
+| F-5  | Fraud    | High     | [x]    | Missing ephemeral IDs kill 32% of scoring weight                     |
+| F-6  | Fraud    | Medium   | [x]    | IP rate limit blind to blocked requests                              |
+| F-7  | Fraud    | Medium   | [x]    | Low-confidence blacklist entries cause false blocks                  |
+| F-8  | Fraud    | Medium   | [x]    | No email-diversity-per-IP signal                                     |
+| F-9  | Fraud    | Medium   | [x]    | Blacklist INSERT failure silently ignored                            |
+| F-10 | Fraud    | Medium   | [x]    | JA4 household false positives — bot_score + time-gap mitigation      |
+| B-1  | Backend  | High     | [x]    | `\|\| null` converts falsy 0 to null                                 |
+| B-2  | Backend  | High     | [x]    | `s.allowed` column doesn't exist                                     |
+| B-3  | Backend  | Medium   | [x]    | Age validation ignores month/day                                     |
+| B-4  | Backend  | Medium   | [x]    | Name regex rejects non-ASCII                                         |
+| B-5  | Backend  | Medium   | [x]    | No timing-safe API key comparison                                    |
+| B-6  | Backend  | Medium   | [x]    | Config/health leak fraud thresholds                                  |
+| B-7  | Backend  | Medium   | [x]    | LIKE wildcard injection                                              |
+| B-8  | Backend  | Low      | [x]    | Malformed JSON returns 500                                           |
+| B-9  | Backend  | Low      | [x]    | `Error.captureStackTrace` guard                                      |
+| B-10 | Backend  | Low      | [x]    | FNV-1a 32-bit → 64-bit hash                                          |
+| B-11 | Backend  | Low      | [x]    | Incomplete sanitizeString                                            |
+| B-12 | Backend  | Low      | [x]    | Export capped at 100 rows                                            |
+| B-13 | Backend  | Low      | [x]    | Logger hardcodes production env                                      |
+| B-14 | Backend  | Low      | [x]    | Error details leaked in 500                                          |
+| FE-1 | Frontend | High     | [x]    | Timer recreates interval every second                                |
+| FE-2 | Frontend | High     | [x]    | hasActiveFilters always true                                         |
+| FE-3 | Frontend | Medium   | [x]    | Missing AbortController in hooks                                     |
+| FE-4 | Frontend | Medium   | [x]    | Missing .ok checks on 3 responses                                    |
+| FE-5 | Frontend | Medium   | [-]    | `as any` casts on API responses (deferred)                           |
+| FE-6 | Frontend | Medium   | [-]    | Dialog missing accessibility (deferred)                              |
+| FE-7 | Frontend | Medium   | [x]    | `alert()` for errors                                                 |
+| FE-8 | Frontend | Low      | [x]    | Operator precedence in inferDetectionType                            |
+| FE-9 | Frontend | Low      | [x]    | Excessive console.log                                                |
+| I-1  | Infra    | High     | [x]    | Migration numbering — consolidated to single 0001_initial_schema.sql |
+| I-2  | Infra    | High     | [x]    | Missing column migrations (now in initial schema)                    |
+| I-3  | Infra    | Medium   | [x]    | Missing database indexes (now in initial schema)                     |
+| I-4  | Infra    | Medium   | [x]    | Test packages in prod deps                                           |
+| I-5  | Infra    | Medium   | [x]    | --disable-web-security in tests                                      |
+| I-6  | Infra    | Medium   | [x]    | DOM lib removed from worker tsconfig                                 |
+| I-7  | Infra    | Medium   | [x]    | Staging env added to wrangler.jsonc                                  |
+| I-8  | Infra    | Low      | [x]    | format:check script added                                            |
+| I-9  | Infra    | Low      | [x]    | @types in wrong deps section                                         |
 
 ---
 

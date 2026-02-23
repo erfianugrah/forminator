@@ -11,7 +11,17 @@ export interface BlockedValidation {
 	challenge_ts: string;
 	ja4: string | null;
 	risk_score_breakdown?: string | null;
-	detection_type: 'email_fraud_detection' | 'ephemeral_id_tracking' | 'ja4_fingerprinting' | 'token_replay_protection' | 'turnstile_validation' | 'pre_validation_blacklist' | 'duplicate_email' | 'holistic_risk' | 'other' | null;
+	detection_type:
+		| 'email_fraud_detection'
+		| 'ephemeral_id_tracking'
+		| 'ja4_fingerprinting'
+		| 'token_replay_protection'
+		| 'turnstile_validation'
+		| 'pre_validation_blacklist'
+		| 'duplicate_email'
+		| 'holistic_risk'
+		| 'other'
+		| null;
 	source?: 'validation' | 'fraud_block';
 	fraud_signals_json?: string | null;
 }

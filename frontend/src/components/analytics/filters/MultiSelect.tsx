@@ -19,14 +19,7 @@ interface MultiSelectProps {
  * MultiSelect component for filtering by multiple values
  * Used for countries, ASNs, TLS versions, etc.
  */
-export function MultiSelect({
-	options,
-	value,
-	onChange,
-	placeholder = 'Select...',
-	label,
-	className = '',
-}: MultiSelectProps) {
+export function MultiSelect({ options, value, onChange, placeholder = 'Select...', label, className = '' }: MultiSelectProps) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [searchTerm, setSearchTerm] = useState('');
 	const dropdownRef = useRef<HTMLDivElement>(null);
@@ -61,19 +54,13 @@ export function MultiSelect({
 		onChange([]);
 	};
 
-	const filteredOptions = options.filter((option) =>
-		option.label.toLowerCase().includes(searchTerm.toLowerCase())
-	);
+	const filteredOptions = options.filter((option) => option.label.toLowerCase().includes(searchTerm.toLowerCase()));
 
-	const selectedLabels = value
-		.map((v) => options.find((o) => o.value === v)?.label)
-		.filter(Boolean);
+	const selectedLabels = value.map((v) => options.find((o) => o.value === v)?.label).filter(Boolean);
 
 	return (
 		<div className={`relative ${className}`} ref={dropdownRef}>
-			{label && (
-				<label className="block text-sm font-medium text-foreground mb-1">{label}</label>
-			)}
+			{label && <label className="block text-sm font-medium text-foreground mb-1">{label}</label>}
 			<button
 				onClick={() => setIsOpen(!isOpen)}
 				className="flex items-center justify-between w-full px-4 py-2 border border-border rounded-md bg-background text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -84,24 +71,14 @@ export function MultiSelect({
 					) : (
 						<div className="flex items-center gap-1 flex-wrap">
 							{selectedLabels.slice(0, 2).map((label, idx) => (
-								<span
-									key={idx}
-									className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs"
-								>
+								<span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
 									{label}
-									<button
-										onClick={(e) => removeValue(value[idx], e)}
-										className="hover:text-primary/70"
-									>
+									<button onClick={(e) => removeValue(value[idx], e)} className="hover:text-primary/70">
 										<X size={12} />
 									</button>
 								</span>
 							))}
-							{value.length > 2 && (
-								<span className="text-xs text-muted-foreground">
-									+{value.length - 2} more
-								</span>
-							)}
+							{value.length > 2 && <span className="text-xs text-muted-foreground">+{value.length - 2} more</span>}
 						</div>
 					)}
 				</div>
@@ -111,10 +88,7 @@ export function MultiSelect({
 							<X size={16} />
 						</button>
 					)}
-					<ChevronDown
-						size={16}
-						className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
-					/>
+					<ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
 				</div>
 			</button>
 
@@ -132,9 +106,7 @@ export function MultiSelect({
 					</div>
 					<div className="overflow-y-auto p-2">
 						{filteredOptions.length === 0 ? (
-							<div className="px-3 py-2 text-sm text-muted-foreground">
-								No options found
-							</div>
+							<div className="px-3 py-2 text-sm text-muted-foreground">No options found</div>
 						) : (
 							filteredOptions.map((option) => {
 								const isSelected = value.includes(option.value);
@@ -145,9 +117,7 @@ export function MultiSelect({
 										className="w-full flex items-center justify-between px-3 py-2 text-sm rounded text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
 									>
 										<span>{option.label}</span>
-										{isSelected && (
-											<Check size={16} className="text-primary" />
-										)}
+										{isSelected && <Check size={16} className="text-primary" />}
 									</button>
 								);
 							})

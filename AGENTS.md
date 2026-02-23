@@ -60,6 +60,7 @@ Test config: 90s timeout, chromium-stealth project, `fullyParallel: true`, baseU
 No ESLint. Formatting enforced by Prettier + EditorConfig.
 
 **Prettier** (`.prettierrc`):
+
 - Tabs for indentation (not spaces)
 - Single quotes
 - Semicolons always
@@ -82,18 +83,18 @@ Use `import type` for type-only imports — never mix value and type imports in 
 
 ### Naming Conventions
 
-| Context | Convention | Examples |
-|---------|-----------|----------|
-| Variables, functions | camelCase | `tokenHash`, `calculateProgressiveTimeout` |
-| Types, interfaces | PascalCase | `RequestMetadata`, `FraudCheckResult` |
-| React components | PascalCase | `SubmissionForm`, `AnalyticsDashboard` |
-| Constants | UPPER_SNAKE_CASE | `DEFAULT_CONFIG`, `FORCE_BLOCK_TRIGGERS` |
-| DB columns, API responses | snake_case | `risk_score`, `bot_score` |
-| TS interface fields | camelCase | `riskScore`, `botScore` |
-| Environment vars | UPPER_SNAKE or UPPER-KEBAB | `ENVIRONMENT`, `X-API-KEY` |
-| Backend files | kebab-case | `fraud-prevalidation.ts` |
-| React component files | PascalCase | `SubmissionForm.tsx` |
-| Hook files | camelCase | `useAnalytics.ts` |
+| Context                   | Convention                 | Examples                                   |
+| ------------------------- | -------------------------- | ------------------------------------------ |
+| Variables, functions      | camelCase                  | `tokenHash`, `calculateProgressiveTimeout` |
+| Types, interfaces         | PascalCase                 | `RequestMetadata`, `FraudCheckResult`      |
+| React components          | PascalCase                 | `SubmissionForm`, `AnalyticsDashboard`     |
+| Constants                 | UPPER_SNAKE_CASE           | `DEFAULT_CONFIG`, `FORCE_BLOCK_TRIGGERS`   |
+| DB columns, API responses | snake_case                 | `risk_score`, `bot_score`                  |
+| TS interface fields       | camelCase                  | `riskScore`, `botScore`                    |
+| Environment vars          | UPPER_SNAKE or UPPER-KEBAB | `ENVIRONMENT`, `X-API-KEY`                 |
+| Backend files             | kebab-case                 | `fraud-prevalidation.ts`                   |
+| React component files     | PascalCase                 | `SubmissionForm.tsx`                       |
+| Hook files                | camelCase                  | `useAnalytics.ts`                          |
 
 ### TypeScript
 
@@ -108,6 +109,7 @@ Use `import type` for type-only imports — never mix value and type imports in 
 ### Error Handling
 
 Custom error hierarchy in `src/lib/errors.ts`:
+
 - `AppError` (500) → `ValidationError` (400), `AuthError` (403), `RateLimitError` (429), `NotFoundError` (404), `ConflictError` (409), `ExternalServiceError` (503), `DatabaseError` (500)
 - Route handlers: single `try/catch` wrapping entire handler, errors caught by `handleError(error, c)`.
 - `throw` typed errors — never return raw status codes manually.
@@ -118,6 +120,7 @@ Custom error hierarchy in `src/lib/errors.ts`:
 ### Logging
 
 Pino logger (`src/lib/logger.ts`). Always use structured format:
+
 ```typescript
 logger.info({ submissionId, email, riskScore }, 'Submission created');
 logger.warn({ reason, retryAfter }, 'Blacklist block triggered');

@@ -12,12 +12,7 @@ interface SearchBarProps {
  * SearchBar component for text search across submissions
  * Searches: email, first_name, last_name, remote_ip
  */
-export function SearchBar({
-	value,
-	onChange,
-	placeholder = 'Search by email, name, or IP...',
-	className = '',
-}: SearchBarProps) {
+export function SearchBar({ value, onChange, placeholder = 'Search by email, name, or IP...', className = '' }: SearchBarProps) {
 	const [localValue, setLocalValue] = useState(value);
 	const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -46,7 +41,7 @@ export function SearchBar({
 				onChange(newValue);
 			}, 300);
 		},
-		[onChange]
+		[onChange],
 	);
 
 	const handleClear = useCallback(() => {

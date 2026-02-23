@@ -2,14 +2,11 @@
 	"name": "forminator",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-11-12",
-	"compatibility_flags": [
-		"nodejs_compat",
-		"global_fetch_strictly_public"
-	],
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 	// Static assets from Astro build
 	"assets": {
 		"binding": "ASSETS",
-		"directory": "./frontend/dist"
+		"directory": "./frontend/dist",
 	},
 	// D1 Database binding
 	"d1_databases": [
@@ -18,16 +15,16 @@
 			"database_name": "DB",
 			"database_id": "cc13ec07-ddb3-4081-b2e4-98a6f638042e",
 			"remote": true,
-			"migrations_dir": "migrations"
-		}
+			"migrations_dir": "migrations",
+		},
 	],
 	// Service bindings (Worker-to-Worker RPC)
 	"services": [
 		{
 			"binding": "FRAUD_DETECTOR",
 			"service": "markov-mail",
-			"entrypoint": "FraudDetectionService"
-		}
+			"entrypoint": "FraudDetectionService",
+		},
 	],
 	// Environment variables
 	"vars": {
@@ -41,8 +38,8 @@
 			"admin": "/api/admin",
 			"geo": "/api/geo",
 			"health": "/api/health",
-			"config": "/api/config"
-		}
+			"config": "/api/config",
+		},
 		// Fraud detection configuration (optional - overrides sane defaults)
 		// See src/lib/config.ts for full list of options and default values
 		// Example: Increase block threshold to 80 for stricter enforcement
@@ -63,21 +60,21 @@
 	},
 	// Observability
 	"observability": {
-		"enabled": true
+		"enabled": true,
 	},
 	"routes": [
 		{
 			"pattern": "form.erfi.dev",
-			"custom_domain": true
-		}
+			"custom_domain": true,
+		},
 	],
 	"kv_namespaces": [
 		{
 			"binding": "FORM_CONFIG",
 			"id": "be7d939c7fcc45afbf79140a22578600",
 			"preview_id": "be7d939c7fcc45afbf79140a22578600",
-			"remote": true
-		}
+			"remote": true,
+		},
 	],
 	// ⚠️ WARNING: `wrangler dev --remote` with the top-level config writes to
 	// the PRODUCTION D1 database.  Use `wrangler dev --remote --env staging`
@@ -95,10 +92,10 @@
 					"admin": "/api/admin",
 					"geo": "/api/geo",
 					"health": "/api/health",
-					"config": "/api/config"
-				}
-			}
-		}
+					"config": "/api/config",
+				},
+			},
+		},
 	},
 	// Note: Secrets should be set via CLI:
 	// wrangler secret put TURNSTILE-SECRET-KEY

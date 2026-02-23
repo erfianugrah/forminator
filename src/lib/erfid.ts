@@ -44,12 +44,7 @@ export interface ErfidConfig {
  * ```
  */
 export function generateErfid(config?: ErfidConfig): string {
-	const {
-		prefix = 'erf',
-		format = 'uuid',
-		generator,
-		includeTimestamp = false
-	} = config || {};
+	const { prefix = 'erf', format = 'uuid', generator, includeTimestamp = false } = config || {};
 
 	let baseId: string;
 
@@ -179,13 +174,13 @@ export function parseErfid(erfid: string): {
 			return {
 				timestamp: parseInt(first, 10),
 				baseId: parts[1],
-				full: erfid
+				full: erfid,
 			};
 		} else {
 			return {
 				prefix: first,
 				baseId: parts[1],
-				full: erfid
+				full: erfid,
 			};
 		}
 	}
@@ -195,7 +190,7 @@ export function parseErfid(erfid: string): {
 		prefix: parts[0],
 		timestamp: parseInt(parts[1], 10),
 		baseId: parts[2],
-		full: erfid
+		full: erfid,
 	};
 }
 

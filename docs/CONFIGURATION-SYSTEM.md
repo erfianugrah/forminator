@@ -12,20 +12,22 @@ Comprehensive configuration system for fraud detection thresholds and risk scori
 ## Current Defaults (source: `src/lib/config.ts`, as of 2025-12-11)
 
 ### Risk weights (sum = 1.0)
-| Component | Weight |
-|-----------|--------|
-| tokenReplay | 0.28 |
-| emailFraud | 0.14 |
-| ephemeralId | 0.15 |
-| validationFrequency | 0.10 |
-| ipDiversity | 0.07 |
-| ja4SessionHopping | 0.06 |
-| ipRateLimit | 0.07 |
-| headerFingerprint | 0.07 |
-| tlsAnomaly | 0.04 |
-| latencyMismatch | 0.02 |
+
+| Component           | Weight |
+| ------------------- | ------ |
+| tokenReplay         | 0.28   |
+| emailFraud          | 0.14   |
+| ephemeralId         | 0.15   |
+| validationFrequency | 0.10   |
+| ipDiversity         | 0.07   |
+| ja4SessionHopping   | 0.06   |
+| ipRateLimit         | 0.07   |
+| headerFingerprint   | 0.07   |
+| tlsAnomaly          | 0.04   |
+| latencyMismatch     | 0.02   |
 
 ### Key thresholds
+
 - `risk.blockThreshold`: **70**
 - `risk.mode`: **"defensive"** (deterministic triggers can floor the score); set to `"additive"` to disable floors.
 - Ephemeral submissions (`detection.ephemeralIdSubmissionThreshold`): **2** per 24h
@@ -66,10 +68,10 @@ Controls overall risk scoring and blocking behavior.
 
 #### `risk.mode` (default: `defensive`)
 
-| Mode | Description |
-|------|-------------|
+| Mode        | Description                                                                                                                                                                                                                                                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `defensive` | Deterministic triggers (token replay, duplicate email, Layer 2/3 thresholds, JA4 session hopping, repeat offenders) can force the normalized score up to `blockThreshold` once their paired condition is also met (e.g., high JA4 score **and** elevated IP velocity). Keeps the “multi-signal” promise while still blocking obvious abuse instantly. |
-| `additive` | All ten components remain purely additive. Even if a deterministic layer spikes, the request is only blocked when the weighted total ≥ `blockThreshold`. Use this for QA or load tests when you want to observe risk without hard blocks. |
+| `additive`  | All ten components remain purely additive. Even if a deterministic layer spikes, the request is only blocked when the weighted total ≥ `blockThreshold`. Use this for QA or load tests when you want to observe risk without hard blocks.                                                                                                             |
 
 > **Tip:** Flip staging to `additive` while testing a new detector, then switch back to `defensive` before deploying so production re-enables the deterministic guardrails.
 
@@ -470,7 +472,7 @@ Increase email fraud detection weight:
 	"risk": {
 		"weights": {
 			"emailFraud": 0.3, // Increase from 0.14 (default)
-			"tokenReplay": 0.20 // Reduce token replay from 0.28 so the weights still sum to 1.0
+			"tokenReplay": 0.2 // Reduce token replay from 0.28 so the weights still sum to 1.0
 		}
 	}
 }

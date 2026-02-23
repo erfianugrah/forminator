@@ -194,10 +194,8 @@ export function extractRequestMetadata(request: Request): RequestMetadata {
 	const headerSnapshot = buildHeaderSnapshot(headers);
 
 	// Get IP from cf-connecting-ip header (most reliable) or fallback to CF property
-	const remoteIp = headers.get('cf-connecting-ip') ||
-	                 headers.get('x-real-ip') ||
-	                 headers.get('x-forwarded-for')?.split(',')[0] ||
-	                 '0.0.0.0';
+	const remoteIp =
+		headers.get('cf-connecting-ip') || headers.get('x-real-ip') || headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
 
 	const userAgent = headers.get('user-agent') || 'unknown';
 	const trueClientIp = headers.get('true-client-ip') || undefined;
@@ -242,8 +240,7 @@ export function extractRequestMetadata(request: Request): RequestMetadata {
 		tlsClientAuth: cfAny?.tlsClientAuth || null,
 
 		// Bot detection (prefer cf.botManagement over headers)
-		botScore: cf?.botManagement?.score ||
-		         (headers.get('cf-bot-score') ? parseInt(headers.get('cf-bot-score')!, 10) : undefined),
+		botScore: cf?.botManagement?.score || (headers.get('cf-bot-score') ? parseInt(headers.get('cf-bot-score')!, 10) : undefined),
 		clientTrustScore: cfAny?.clientTrustScore,
 		verifiedBot: cf?.botManagement?.verifiedBot || headers.get('cf-verified-bot') === 'true',
 		jsDetectionPassed: (cf?.botManagement as any)?.jsDetection?.passed,

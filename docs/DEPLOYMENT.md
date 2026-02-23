@@ -18,11 +18,13 @@ Complete guide for deploying Forminator to production on Cloudflare Workers.
 ## Overview
 
 Forminator is deployed as a Cloudflare Worker with:
+
 - **Frontend**: Astro static site served via Workers Assets
 - **Backend**: Hono API with D1 database
 - **Custom Domain**: Configure in wrangler.jsonc routes section
 
 **Deployment Architecture:**
+
 ```
 Developer
     ↓ (npm run deploy)
@@ -71,6 +73,7 @@ Obtain the following secrets before deployment:
 - [ ] **X-API-KEY** - Generate secure random key for analytics API authentication
 
 Generate secure API key:
+
 ```bash
 # Generate random 32-character API key
 openssl rand -hex 16
@@ -126,6 +129,7 @@ Complete this checklist before deploying:
 ### Database
 
 - [ ] Initialize D1 schema:
+
   ```bash
   wrangler d1 execute DB --file=./schema.sql --remote
   ```
@@ -138,11 +142,13 @@ Complete this checklist before deploying:
 ### Build & Deploy
 
 - [ ] Build frontend locally to verify:
+
   ```bash
   npm run build
   ```
 
 - [ ] Type-check TypeScript:
+
   ```bash
   npx tsc --noEmit
   ```
@@ -158,6 +164,7 @@ Complete this checklist before deploying:
 - [ ] Verify CSP headers allow Turnstile iframe
 - [ ] Test form submission end-to-end
 - [ ] Monitor logs for errors:
+
   ```bash
   npm run tail
   ```
@@ -175,49 +182,49 @@ Edit `wrangler.jsonc` with production values:
 
 ```jsonc
 {
-  "name": "forminator",
-  "main": "src/index.ts",
-  "compatibility_date": "2024-11-01",
+	"name": "forminator",
+	"main": "src/index.ts",
+	"compatibility_date": "2024-11-01",
 
-  // Update with your D1 database ID
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "DB",
-      "database_id": "YOUR_DATABASE_ID_HERE",
-      "remote": true
-    }
-  ],
+	// Update with your D1 database ID
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "DB",
+			"database_id": "YOUR_DATABASE_ID_HERE",
+			"remote": true,
+		},
+	],
 
-  // Configure custom domain
-  "routes": [
-    {
-      "pattern": "form.yourdomain.com/*",
-      "custom_domain": true
-    }
-  ],
+	// Configure custom domain
+	"routes": [
+		{
+			"pattern": "form.yourdomain.com/*",
+			"custom_domain": true,
+		},
+	],
 
-  // Production environment variables
-  "vars": {
-    "ENVIRONMENT": "production",
-    "ALLOWED_ORIGINS": "https://form.yourdomain.com",
-    "ALLOW_TESTING_BYPASS": "false"
-  },
+	// Production environment variables
+	"vars": {
+		"ENVIRONMENT": "production",
+		"ALLOWED_ORIGINS": "https://form.yourdomain.com",
+		"ALLOW_TESTING_BYPASS": "false",
+	},
 
-  // Service binding for markov-mail (optional)
-  "services": [
-    {
-      "binding": "FRAUD_DETECTOR",
-      "service": "markov-mail",
-      "entrypoint": "FraudDetectionService"
-    }
-  ],
+	// Service binding for markov-mail (optional)
+	"services": [
+		{
+			"binding": "FRAUD_DETECTOR",
+			"service": "markov-mail",
+			"entrypoint": "FraudDetectionService",
+		},
+	],
 
-  // Assets binding for frontend
-  "assets": {
-    "directory": "./frontend/dist",
-    "binding": "ASSETS"
-  }
+	// Assets binding for frontend
+	"assets": {
+		"directory": "./frontend/dist",
+		"binding": "ASSETS",
+	},
 }
 ```
 
@@ -348,6 +355,7 @@ Main worker configuration file.
 **Key Sections:**
 
 #### D1 Database Binding
+
 ```jsonc
 "d1_databases": [
   {
@@ -360,6 +368,7 @@ Main worker configuration file.
 ```
 
 #### Assets Binding (Frontend)
+
 ```jsonc
 "assets": {
   "directory": "./frontend/dist", // Built Astro site
@@ -368,6 +377,7 @@ Main worker configuration file.
 ```
 
 #### Custom Domain Configuration
+
 ```jsonc
 "routes": [
   {
@@ -378,6 +388,7 @@ Main worker configuration file.
 ```
 
 #### Environment Variables
+
 ```jsonc
 "vars": {
   "ENVIRONMENT": "production",              // Environment identifier
@@ -394,6 +405,7 @@ Main worker configuration file.
 ```
 
 #### Service Bindings (Optional)
+
 ```jsonc
 "services": [
   {
@@ -439,6 +451,7 @@ https://form.yourdomain.com/
 ```
 
 Test form submission:
+
 1. Fill out form with valid data
 2. Complete Turnstile challenge
 3. Submit form
@@ -473,13 +486,14 @@ curl -H "X-API-KEY: your_api_key" \
 ```
 
 Expected response:
+
 ```json
 {
-  "totalSubmissions": 1,
-  "totalValidations": 1,
-  "allowedRate": 100,
-  "avgRiskScore": 0,
-  "blockedCount": 0
+	"totalSubmissions": 1,
+	"totalValidations": 1,
+	"allowedRate": 100,
+	"avgRiskScore": 0,
+	"blockedCount": 0
 }
 ```
 
@@ -684,6 +698,7 @@ wrangler secret put SECRET_NAME
    - Nameservers pointed to Cloudflare
 
 2. **Check wrangler.jsonc routes:**
+
    ```jsonc
    "routes": [
      {

@@ -7,11 +7,13 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ## Quick Start
 
 **New to the project?** Start here:
+
 1. [../README.md](../README.md) - Project overview and quick start guide
 2. [ARCHITECTURE.md](./ARCHITECTURE.md) - Understand the system architecture
 3. [API-REFERENCE.md](./API-REFERENCE.md) - Learn the API endpoints
 
 **Implementing a feature?** Jump to:
+
 - [FORM-VALIDATION.md](./FORM-VALIDATION.md) - Form validation system
 - [PHONE-INPUT.md](./PHONE-INPUT.md) - International phone input
 - [TURNSTILE.md](./TURNSTILE.md) - Turnstile integration
@@ -20,38 +22,40 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 
 ### System Architecture
 
-| Document | Description |
-|----------|-------------|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Complete system architecture and design decisions |
-| [SECURITY.md](./SECURITY.md) | Security implementation details and best practices |
-| [API-REFERENCE.md](./API-REFERENCE.md) | Exhaustive API documentation for all endpoints |
+| Document                               | Description                                        |
+| -------------------------------------- | -------------------------------------------------- |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)   | Complete system architecture and design decisions  |
+| [SECURITY.md](./SECURITY.md)           | Security implementation details and best practices |
+| [API-REFERENCE.md](./API-REFERENCE.md) | Exhaustive API documentation for all endpoints     |
 
 ### Features & Components
 
-| Document | Description |
-|----------|-------------|
-| [FORM-VALIDATION.md](./FORM-VALIDATION.md) | Exhaustive form validation system guide |
-| [PHONE-INPUT.md](./PHONE-INPUT.md) | Custom phone input implementation |
-| [GEOLOCATION.md](./GEOLOCATION.md) | Country detection via Cloudflare |
-| [TURNSTILE.md](./TURNSTILE.md) | Turnstile integration and verification |
-| [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) | Ephemeral ID fraud detection with progressive timeouts |
-| [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) | Fraud detection configuration and customization guide |
-| [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) | Complete D1 database management guide |
-| [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) | Frontend architecture, UI/UX features, and component structure |
+| Document                                             | Description                                                    |
+| ---------------------------------------------------- | -------------------------------------------------------------- |
+| [FORM-VALIDATION.md](./FORM-VALIDATION.md)           | Exhaustive form validation system guide                        |
+| [PHONE-INPUT.md](./PHONE-INPUT.md)                   | Custom phone input implementation                              |
+| [GEOLOCATION.md](./GEOLOCATION.md)                   | Country detection via Cloudflare                               |
+| [TURNSTILE.md](./TURNSTILE.md)                       | Turnstile integration and verification                         |
+| [FRAUD-DETECTION.md](./FRAUD-DETECTION.md)           | Ephemeral ID fraud detection with progressive timeouts         |
+| [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) | Fraud detection configuration and customization guide          |
+| [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md)   | Complete D1 database management guide                          |
+| [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md)   | Frontend architecture, UI/UX features, and component structure |
 
 ### Development & Operations
 
-| Document | Description |
-|----------|-------------|
-| [COMMANDS.md](./COMMANDS.md) | Complete npm and wrangler commands reference |
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment guide with checklist |
+| Document                         | Description                                  |
+| -------------------------------- | -------------------------------------------- |
+| [COMMANDS.md](./COMMANDS.md)     | Complete npm and wrangler commands reference |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment guide with checklist   |
 
 ## Document Summaries
 
 ### [ARCHITECTURE.md](./ARCHITECTURE.md)
+
 **Complete system architecture and design decisions**
 
 **You'll learn:**
+
 - Project structure (frontend + worker separation)
 - Tech stack rationale (Astro, Hono, D1, React Hook Form)
 - Request flow from form submission to database
@@ -60,6 +64,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Why explicit Turnstile rendering
 
 **Read this if:**
+
 - You want the big picture
 - You're evaluating the tech stack
 - You're making architectural changes
@@ -68,9 +73,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [SECURITY.md](./SECURITY.md)
+
 **Security implementation details and best practices**
 
 **You'll learn:**
+
 - Single-step validation (prevents race conditions)
 - Token replay protection (SHA256 hashing)
 - SQL injection prevention (parameterized queries)
@@ -80,6 +87,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Threat model and mitigations
 
 **Read this if:**
+
 - You're performing a security audit
 - You're implementing security features
 - You need to document security compliance
@@ -88,9 +96,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [API-REFERENCE.md](./API-REFERENCE.md)
+
 **Exhaustive API documentation for all endpoints**
 
 **You'll learn:**
+
 - Every endpoint with complete request/response formats
 - Error handling and status codes
 - CORS configuration
@@ -100,6 +110,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Rate limiting approach
 
 **Endpoints documented:**
+
 - `POST /api/submissions` - Submit form with Turnstile
 - `GET /api/geo` - Get user's country code
 - `GET /api/analytics/stats` - Get statistics
@@ -109,6 +120,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - `GET /api/health` - Health check
 
 **Read this if:**
+
 - You're integrating with the API
 - You need to understand error responses
 - You're writing tests
@@ -118,9 +130,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [FORM-VALIDATION.md](./FORM-VALIDATION.md)
+
 **Exhaustive guide to the form validation system**
 
 **You'll learn:**
+
 - React Hook Form integration (step-by-step)
 - Zod schema validation (client + server)
 - Client-side validation (onBlur timing explained)
@@ -136,11 +150,13 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Troubleshooting guide
 
 **Visual aids:**
+
 - Complete validation flow diagram (10 steps)
 - Error handling flowchart
 - Field validation examples table
 
 **Read this if:**
+
 - You're adding new form fields
 - You're debugging validation issues
 - You want to understand client/server validation
@@ -151,9 +167,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [PHONE-INPUT.md](./PHONE-INPUT.md)
+
 **Complete guide to the international phone input system**
 
 **You'll learn:**
+
 - Custom phone input component implementation
 - Automatic country detection via geolocation API
 - 200+ country support with flags and dial codes
@@ -168,12 +186,14 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Troubleshooting guide
 
 **Visual aids:**
+
 - Component structure diagram
 - Country detection flow (with timing)
 - Phone normalization examples table
 - Dark mode CSS explanation
 
 **Read this if:**
+
 - Phone input not detecting country correctly
 - Dark mode styling issues (black on black)
 - Phone validation failing on server
@@ -185,9 +205,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [GEOLOCATION.md](./GEOLOCATION.md)
+
 **Comprehensive guide to the geolocation system**
 
 **You'll learn:**
+
 - How Cloudflare geolocation works (data sources)
 - CF-IPCountry header (with special values)
 - request.cf object (40+ available fields)
@@ -203,12 +225,14 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Performance analysis
 
 **Use cases covered:**
+
 - Phone input country detection
 - Analytics country distribution
 - Geographic fraud detection
 - Content localization
 
 **Read this if:**
+
 - Country detection not working
 - Want to collect more geo metadata
 - Need to understand geolocation accuracy
@@ -220,9 +244,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [TURNSTILE.md](./TURNSTILE.md)
+
 **Turnstile integration and verification guide**
 
 **You'll learn:**
+
 - Widget configuration (explicit vs auto-render)
 - Interaction-only appearance (hidden until needed)
 - Manual execution flow (execute mode)
@@ -234,6 +260,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Error handling
 
 **Read this if:**
+
 - You're integrating Turnstile
 - Widget not loading/rendering
 - Verification failing
@@ -244,9 +271,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [FRAUD-DETECTION.md](./FRAUD-DETECTION.md)
+
 **Ephemeral ID-based fraud detection with progressive timeouts**
 
 **You'll learn:**
+
 - Why ephemeral IDs (not strict rate limiting)
 - What ephemeral IDs are (Enterprise Bot Management)
 - Detection window rationale (ephemeral ID lasts a few days)
@@ -262,6 +291,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - When to use Durable Objects (strict limits)
 
 **Read this if:**
+
 - You're implementing fraud detection
 - Want to understand ephemeral IDs
 - Need to adjust risk thresholds or timeout durations
@@ -272,15 +302,18 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md)
+
 **Full fraud configuration reference + API exposure**
 
 **You'll learn:**
+
 - Default values for every risk weight, threshold, timeout schedule, and JA4 signal
 - How to override values via `FRAUD_CONFIG` (deep-merge behavior)
 - Using `/api/config` + `getConfig()` to keep the UI in sync with Worker settings
 - Safe rollout strategies (feature flags, staged overrides)
 
 **Read this if:**
+
 - You need to change the block threshold or adjust weightings
 - Product wants different rules per environment
 - You plan to surface live config values in the frontend
@@ -288,15 +321,18 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [SCORING-ANALYSIS.md](./SCORING-ANALYSIS.md)
+
 **Breakdown of the normalized 10-component scoring model**
 
 **You'll learn:**
+
 - Why weights were rebalanced to sum to 100%
 - Scenario-by-scenario impact analysis (token replay vs. email fraud vs. JA4)
 - How blockTrigger enforcement ensures blocked requests always score ≥ threshold
 - Residual edge cases and why they're acceptable
 
 **Read this if:**
+
 - You're validating the math behind `calculateNormalizedRiskScore`
 - Need to explain the scoring model to stakeholders
 - Want to tweak weights intelligently without reintroducing overflows
@@ -304,15 +340,18 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [ERFID-TRACKING.md](./ERFID-TRACKING.md)
+
 **End-to-end request tracing via `erfid` + `X-Request-Id`**
 
 **You'll learn:**
+
 - How `generateErfid` works (prefixes, nanoid option, timestamp encoding)
 - Schema changes that add `erfid` to submissions, validations, blacklist, and fraud logs
 - How analytics endpoints expose `erfid` + `validation_erfid`
 - Operational runbook for correlating logs, API responses, and D1 records
 
 **Read this if:**
+
 - You need deterministic tracing for support tickets
 - Want to debug CI test failures by `erfid`
 - Planning to federate tracing across multiple Workers (Forminator ↔ Markov-Mail)
@@ -320,9 +359,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md)
+
 **Complete D1 database management guide**
 
 **You'll learn:**
+
 - Database configuration and connection
 - Common viewing operations (count, recent, filtered)
 - Data cleanup commands (delete all, delete old, delete specific)
@@ -334,6 +375,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Performance tips and best practices
 
 **Commands documented:**
+
 - View submissions, validations, blacklist entries
 - Count records and check database status
 - Delete data (all, old, or specific entries)
@@ -342,6 +384,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Export and import data
 
 **Read this if:**
+
 - You need to manage the D1 database
 - Want to clear test data
 - Need to view or export submissions
@@ -353,15 +396,18 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [SCHEMA-INITIALIZATION.md](./SCHEMA-INITIALIZATION.md)
+
 **Bootstrapping and migrating the D1 schema**
 
 **You'll learn:**
+
 - How `schema.sql` and the `migrations/` directory stay in sync
 - The exact `wrangler d1 execute` commands for remote vs. local environments
 - Zero-downtime migration tips (adding columns, backfilling JSON)
 - Verification steps to ensure indexes exist (token, ja3, ja4, blacklist, etc.)
 
 **Read this if:**
+
 - You're provisioning a brand new environment
 - Need to apply pending migrations safely
 - Want a checklist before/after running schema changes
@@ -369,9 +415,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md)
+
 **Frontend architecture, UI/UX features, and component structure**
 
 **You'll learn:**
+
 - Technology stack (Astro, React, Tailwind v4, shadcn/ui)
 - CSS custom properties theming system
 - Dark/light mode with specific HSL values
@@ -384,6 +432,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - SVG flags and searchable dropdowns
 
 **Read this if:**
+
 - You're working on frontend components
 - Want to understand analytics dashboard structure
 - Need to customize UI/UX
@@ -394,15 +443,18 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [RPC-INTEGRATION.md](./RPC-INTEGRATION.md)
+
 **Worker-to-Worker integration with Markov-Mail**
 
 **You'll learn:**
+
 - How the `FRAUD_DETECTOR` service binding is configured in `wrangler.jsonc`
 - Payload shape sent over RPC (headers, cf metadata, consumer/flow tags)
 - Fail-open behaviors when the remote Worker is unavailable
 - Observability tips (logging, retry strategy, feature flags)
 
 **Read this if:**
+
 - You're updating the Markov-Mail contract or adding new RPC consumers
 - Need to debug Worker-to-Worker failures in production
 - Want to add guardrails around external service dependencies
@@ -410,9 +462,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [COMMANDS.md](./COMMANDS.md)
+
 **Complete npm and wrangler commands reference**
 
 **You'll learn:**
+
 - All development commands (npm install, wrangler dev)
 - Testing commands (7 test variations with Playwright)
 - Building commands (frontend build, worker deploy)
@@ -424,6 +478,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Wrangler CLI reference
 
 **Read this if:**
+
 - You need command examples
 - Setting up development environment
 - Running tests or deployments
@@ -434,9 +489,11 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [DEPLOYMENT.md](./DEPLOYMENT.md)
+
 **Production deployment guide with checklist**
 
 **You'll learn:**
+
 - Complete pre-deployment checklist (8 items)
 - Step-by-step deployment process
 - Configuration files explained (wrangler.jsonc, .dev.vars, frontend/.env)
@@ -449,6 +506,7 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 - Development workflow best practices
 
 **Read this if:**
+
 - You're deploying to production for the first time
 - Need deployment checklist
 - Configuring custom domains
@@ -460,14 +518,17 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 ---
 
 ### [MISSING-FEATURES.md](./MISSING-FEATURES.md)
+
 **Backlog + future enhancements**
 
 **You'll learn:**
+
 - Features intentionally deferred (and why)
 - Nice-to-haves vs. stretch goals, each with rationale and rough scope
 - Suggested sequencing for high-impact items
 
 **Read this if:**
+
 - You're planning the next sprint or roadmap
 - Need context before tackling an open TODO
 - Want to understand trade-offs made to hit current milestones
@@ -478,67 +539,67 @@ Comprehensive technical documentation for **Forminator** - I'm collecting all yo
 
 ### By Task
 
-| What you want to do | Where to look |
-|---------------------|---------------|
-| Add a new form field | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Field-by-Field section |
-| Fix phone input not working | [PHONE-INPUT.md](./PHONE-INPUT.md) → Troubleshooting section |
-| Country detection failing | [GEOLOCATION.md](./GEOLOCATION.md) → Troubleshooting section |
-| API returning 400 error | [API-REFERENCE.md](./API-REFERENCE.md) → Error Responses section |
-| Turnstile widget not loading | [TURNSTILE.md](./TURNSTILE.md) → Troubleshooting section |
-| Dark mode text not visible | [PHONE-INPUT.md](./PHONE-INPUT.md) → Dark Mode Styling section |
-| Understand the architecture | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| Security audit required | [SECURITY.md](./SECURITY.md) |
-| Fraud detection too aggressive | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) → Risk Score section |
-| Customize fraud detection thresholds | [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md) |
-| Test API endpoints | [API-REFERENCE.md](./API-REFERENCE.md) → Testing section |
-| Clear database or view data | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Common Operations |
-| Manage fraud blacklist | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Fraud Management |
-| Database query errors | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Troubleshooting |
-| Find command examples | [COMMANDS.md](./COMMANDS.md) → Quick Command Cheatsheet |
-| Deploy to production | [DEPLOYMENT.md](./DEPLOYMENT.md) → Production Checklist |
-| Customize analytics dashboard | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Analytics Dashboard section |
-| Change theme colors | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Color System section |
-| Add dashboard chart | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Quick Reference section |
+| What you want to do                  | Where to look                                                                    |
+| ------------------------------------ | -------------------------------------------------------------------------------- |
+| Add a new form field                 | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Field-by-Field section              |
+| Fix phone input not working          | [PHONE-INPUT.md](./PHONE-INPUT.md) → Troubleshooting section                     |
+| Country detection failing            | [GEOLOCATION.md](./GEOLOCATION.md) → Troubleshooting section                     |
+| API returning 400 error              | [API-REFERENCE.md](./API-REFERENCE.md) → Error Responses section                 |
+| Turnstile widget not loading         | [TURNSTILE.md](./TURNSTILE.md) → Troubleshooting section                         |
+| Dark mode text not visible           | [PHONE-INPUT.md](./PHONE-INPUT.md) → Dark Mode Styling section                   |
+| Understand the architecture          | [ARCHITECTURE.md](./ARCHITECTURE.md)                                             |
+| Security audit required              | [SECURITY.md](./SECURITY.md)                                                     |
+| Fraud detection too aggressive       | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) → Risk Score section                  |
+| Customize fraud detection thresholds | [CONFIGURATION-SYSTEM.md](./CONFIGURATION-SYSTEM.md)                             |
+| Test API endpoints                   | [API-REFERENCE.md](./API-REFERENCE.md) → Testing section                         |
+| Clear database or view data          | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Common Operations           |
+| Manage fraud blacklist               | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Fraud Management            |
+| Database query errors                | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) → Troubleshooting             |
+| Find command examples                | [COMMANDS.md](./COMMANDS.md) → Quick Command Cheatsheet                          |
+| Deploy to production                 | [DEPLOYMENT.md](./DEPLOYMENT.md) → Production Checklist                          |
+| Customize analytics dashboard        | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Analytics Dashboard section |
+| Change theme colors                  | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Color System section        |
+| Add dashboard chart                  | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Quick Reference section     |
 
 ### By System Component
 
-| Component | Documentation |
-|-----------|---------------|
-| **Frontend** | |
-| React components | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Component Structure |
-| Analytics dashboard | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Analytics Dashboard |
-| Form validation (client) | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Client-Side section |
-| Phone input component | [PHONE-INPUT.md](./PHONE-INPUT.md) → Component Structure |
-| Dark mode | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Color System |
-| Custom hooks | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Custom Hooks |
-| **Backend** | |
-| API endpoints | [API-REFERENCE.md](./API-REFERENCE.md) |
-| Form validation (server) | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Server-Side section |
-| Geolocation API | [GEOLOCATION.md](./GEOLOCATION.md) → Backend API |
-| Turnstile verification | [TURNSTILE.md](./TURNSTILE.md) → Server-Side section |
-| Fraud detection | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) |
-| **Database** | |
-| Schema | [../schema.sql](../schema.sql) + [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| D1 Operations | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md) |
-| Metadata fields | [SECURITY.md](./SECURITY.md) → Request Metadata |
-| **Cloudflare** | |
-| Geolocation headers | [GEOLOCATION.md](./GEOLOCATION.md) → Cloudflare Geolocation |
-| Turnstile integration | [TURNSTILE.md](./TURNSTILE.md) |
-| Bot Management | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) → Ephemeral IDs |
-| **Development** | |
-| Commands reference | [COMMANDS.md](./COMMANDS.md) |
-| Deployment guide | [DEPLOYMENT.md](./DEPLOYMENT.md) |
+| Component                | Documentation                                                            |
+| ------------------------ | ------------------------------------------------------------------------ |
+| **Frontend**             |                                                                          |
+| React components         | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Component Structure |
+| Analytics dashboard      | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Analytics Dashboard |
+| Form validation (client) | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Client-Side section         |
+| Phone input component    | [PHONE-INPUT.md](./PHONE-INPUT.md) → Component Structure                 |
+| Dark mode                | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Color System        |
+| Custom hooks             | [FRONTEND-COMPONENTS.md](./FRONTEND-COMPONENTS.md) → Custom Hooks        |
+| **Backend**              |                                                                          |
+| API endpoints            | [API-REFERENCE.md](./API-REFERENCE.md)                                   |
+| Form validation (server) | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Server-Side section         |
+| Geolocation API          | [GEOLOCATION.md](./GEOLOCATION.md) → Backend API                         |
+| Turnstile verification   | [TURNSTILE.md](./TURNSTILE.md) → Server-Side section                     |
+| Fraud detection          | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md)                               |
+| **Database**             |                                                                          |
+| Schema                   | [../schema.sql](../schema.sql) + [ARCHITECTURE.md](./ARCHITECTURE.md)    |
+| D1 Operations            | [DATABASE-OPERATIONS.md](./DATABASE-OPERATIONS.md)                       |
+| Metadata fields          | [SECURITY.md](./SECURITY.md) → Request Metadata                          |
+| **Cloudflare**           |                                                                          |
+| Geolocation headers      | [GEOLOCATION.md](./GEOLOCATION.md) → Cloudflare Geolocation              |
+| Turnstile integration    | [TURNSTILE.md](./TURNSTILE.md)                                           |
+| Bot Management           | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) → Ephemeral IDs               |
+| **Development**          |                                                                          |
+| Commands reference       | [COMMANDS.md](./COMMANDS.md)                                             |
+| Deployment guide         | [DEPLOYMENT.md](./DEPLOYMENT.md)                                         |
 
 ### By Error Message
 
-| Error | Documentation |
-|-------|---------------|
-| "Phone must contain 7-15 digits" | [PHONE-INPUT.md](./PHONE-INPUT.md) → Phone Normalization |
-| "Turnstile verification failed" | [TURNSTILE.md](./TURNSTILE.md) → Troubleshooting |
-| "Validation failed" (400) | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Error Handling |
-| "Submission blocked due to suspicious activity" (403) | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) → Risk Score |
-| "Failed to detect country" | [GEOLOCATION.md](./GEOLOCATION.md) → Troubleshooting |
-| Dark mode black on black | [PHONE-INPUT.md](./PHONE-INPUT.md) → Dark Mode Styling |
+| Error                                                 | Documentation                                               |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| "Phone must contain 7-15 digits"                      | [PHONE-INPUT.md](./PHONE-INPUT.md) → Phone Normalization    |
+| "Turnstile verification failed"                       | [TURNSTILE.md](./TURNSTILE.md) → Troubleshooting            |
+| "Validation failed" (400)                             | [FORM-VALIDATION.md](./FORM-VALIDATION.md) → Error Handling |
+| "Submission blocked due to suspicious activity" (403) | [FRAUD-DETECTION.md](./FRAUD-DETECTION.md) → Risk Score     |
+| "Failed to detect country"                            | [GEOLOCATION.md](./GEOLOCATION.md) → Troubleshooting        |
+| Dark mode black on black                              | [PHONE-INPUT.md](./PHONE-INPUT.md) → Dark Mode Styling      |
 
 ## Documentation Standards
 
@@ -609,6 +670,7 @@ Each document follows this structure:
 ### When to Update Docs
 
 Update documentation when:
+
 - ✅ Adding new features
 - ✅ Changing existing behavior
 - ✅ Fixing bugs that affect documented behavior
@@ -632,12 +694,14 @@ When adding/updating a feature:
 ### Writing Style
 
 **Be specific:**
+
 ```
 ❌ "The phone input validates the number"
 ✅ "The phone input validates that the number contains 7-15 digits"
 ```
 
 **Use examples:**
+
 ```
 ❌ "Invalid phone numbers are rejected"
 ✅ "Invalid phone numbers are rejected:
@@ -646,6 +710,7 @@ When adding/updating a feature:
 ```
 
 **Show code:**
+
 ```
 ❌ "Configure the validator"
 ✅ "Configure the validator:
@@ -653,6 +718,7 @@ When adding/updating a feature:
 ```
 
 **Include context:**
+
 ```
 ❌ "Use onBlur validation"
 ✅ "Use onBlur validation (validates when user leaves field)
@@ -670,21 +736,21 @@ When adding/updating a feature:
 
 ### Coverage Status
 
-| System | Documentation | Completeness |
-|--------|--------------|--------------|
-| Form validation | FORM-VALIDATION.md | Exhaustive |
-| Phone input | PHONE-INPUT.md | Exhaustive |
-| Geolocation | GEOLOCATION.md | Exhaustive |
-| API endpoints | API-REFERENCE.md | Complete |
-| Turnstile | TURNSTILE.md | Complete |
-| Fraud detection | FRAUD-DETECTION.md | Complete |
-| Configuration | CONFIGURATION-SYSTEM.md | Complete |
-| Architecture | ARCHITECTURE.md | Complete |
-| Security | SECURITY.md | Complete |
-| Database | DATABASE-OPERATIONS.md | Complete |
-| Frontend/Analytics UI | FRONTEND-COMPONENTS.md | Complete |
-| Commands reference | COMMANDS.md | Complete |
-| Deployment | DEPLOYMENT.md | Complete |
+| System                | Documentation           | Completeness |
+| --------------------- | ----------------------- | ------------ |
+| Form validation       | FORM-VALIDATION.md      | Exhaustive   |
+| Phone input           | PHONE-INPUT.md          | Exhaustive   |
+| Geolocation           | GEOLOCATION.md          | Exhaustive   |
+| API endpoints         | API-REFERENCE.md        | Complete     |
+| Turnstile             | TURNSTILE.md            | Complete     |
+| Fraud detection       | FRAUD-DETECTION.md      | Complete     |
+| Configuration         | CONFIGURATION-SYSTEM.md | Complete     |
+| Architecture          | ARCHITECTURE.md         | Complete     |
+| Security              | SECURITY.md             | Complete     |
+| Database              | DATABASE-OPERATIONS.md  | Complete     |
+| Frontend/Analytics UI | FRONTEND-COMPONENTS.md  | Complete     |
+| Commands reference    | COMMANDS.md             | Complete     |
+| Deployment            | DEPLOYMENT.md           | Complete     |
 
 ---
 

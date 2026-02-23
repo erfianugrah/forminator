@@ -45,10 +45,10 @@ const BlacklistDetailDialog = lazy(async () => {
 	return { default: mod.BlacklistDetailDialog };
 });
 export default function AnalyticsDashboard() {
-	// Fetch fraud detection configuration
-	const { config } = useConfig();
-	// API Key state
+	// API Key state — must be declared before useConfig so we can pass it
 	const [apiKey, setApiKey] = useState<string>('');
+	// Fetch fraud detection configuration (authenticated = full config with weights/thresholds)
+	const { config } = useConfig(apiKey);
 	const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
 	const [apiKeyInput, setApiKeyInput] = useState('');
 	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
@@ -109,7 +109,17 @@ export default function AnalyticsDashboard() {
 	// Reset pagination when filters change
 	useEffect(() => {
 		setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-	}, [searchQuery, selectedCountries.join(','), botScoreRange.join(','), allowedStatus, dateRange.start.toISOString(), dateRange.end.toISOString(), fingerprintFlags.headerReuse, fingerprintFlags.tlsAnomaly, fingerprintFlags.latencyMismatch]);
+	}, [
+		searchQuery,
+		selectedCountries.join(','),
+		botScoreRange.join(','),
+		allowedStatus,
+		dateRange.start.toISOString(),
+		dateRange.end.toISOString(),
+		fingerprintFlags.headerReuse,
+		fingerprintFlags.tlsAnomaly,
+		fingerprintFlags.latencyMismatch,
+	]);
 
 	// Use hooks for data fetching
 	const analyticsData = useAnalytics(apiKey, autoRefresh, refreshInterval);
@@ -295,7 +305,8 @@ export default function AnalyticsDashboard() {
 					<DialogHeader>
 						<DialogTitle>Enter Analytics API Key</DialogTitle>
 						<DialogDescription>
-							Please enter your API key to access the analytics dashboard. This key matches the X-API-KEY secret configured in your Cloudflare Workers.
+							Please enter your API key to access the analytics dashboard. This key matches the X-API-KEY secret configured in your
+							Cloudflare Workers.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-4 py-4">
@@ -312,9 +323,7 @@ export default function AnalyticsDashboard() {
 								}}
 								className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 							/>
-							{apiKeyError && (
-								<p className="text-sm text-destructive">{apiKeyError}</p>
-							)}
+							{apiKeyError && <p className="text-sm text-destructive">{apiKeyError}</p>}
 						</div>
 						<button
 							onClick={handleApiKeySubmit}
@@ -339,122 +348,115 @@ export default function AnalyticsDashboard() {
 				<Alert variant="destructive">
 					<AlertDescription>
 						{analyticsData.error}
-						<button
-							onClick={() => setShowApiKeyDialog(true)}
-							className="ml-2 underline hover:no-underline"
-						>
+						<button onClick={() => setShowApiKeyDialog(true)} className="ml-2 underline hover:no-underline">
 							Update API Key
 						</button>
 					</AlertDescription>
 				</Alert>
 			) : (
-			<div className="space-y-6">
-				<GlobalControlsBar
-					onExportCSV={() => handleExport("csv")}
-				onExportJSON={() => handleExport("json")}
-					onManualRefresh={handleRefresh}
-					autoRefresh={autoRefresh}
-					onAutoRefreshChange={setAutoRefresh}
-					refreshInterval={refreshInterval}
-					onRefreshIntervalChange={setRefreshInterval}
-					hasActiveFilters={hasActiveFilters}
-					onClearFilters={handleClearFilters}
-					isLoading={analyticsData.loading || submissionsData.loading}
-				/>
-
-				{operationError && (
-					<Alert variant="destructive">
-						<AlertDescription>{operationError}</AlertDescription>
-					</Alert>
-				)}
-
-				<OverviewStats stats={analyticsData.stats} />
-
-				<FraudAlert data={analyticsData.fraudPatterns} loading={analyticsData.loading} />
-
-				<Suspense fallback={<SectionSkeleton title="Recent submissions" />}>
-					<RecentSubmissionsSection
-						submissions={submissionsData.submissions}
-						totalCount={submissionsData.totalCount}
-						countries={analyticsData.countries}
-						loading={submissionsData.loading}
-						onLoadDetail={loadSubmissionDetail}
-						searchQuery={searchQuery}
-						onSearchQueryChange={setSearchQuery}
-						selectedCountries={selectedCountries}
-						onSelectedCountriesChange={setSelectedCountries}
-						botScoreRange={botScoreRange}
-						onBotScoreRangeChange={setBotScoreRange}
-						allowedStatus={allowedStatus}
-						onAllowedStatusChange={setAllowedStatus}
-						dateRange={dateRange}
-						onDateRangeChange={setDateRange}
-						fingerprintFlags={fingerprintFlags}
-						onFingerprintFlagsChange={setFingerprintFlags}
-						pagination={pagination}
-						onPaginationChange={setPagination}
-						sorting={sorting}
-						onSortingChange={setSorting}
-						apiKey={apiKey}
+				<div className="space-y-6">
+					<GlobalControlsBar
+						onExportCSV={() => handleExport('csv')}
+						onExportJSON={() => handleExport('json')}
+						onManualRefresh={handleRefresh}
+						autoRefresh={autoRefresh}
+						onAutoRefreshChange={setAutoRefresh}
+						refreshInterval={refreshInterval}
+						onRefreshIntervalChange={setRefreshInterval}
+						hasActiveFilters={hasActiveFilters}
+						onClearFilters={handleClearFilters}
+						isLoading={analyticsData.loading || submissionsData.loading}
 					/>
-				</Suspense>
 
-				<Suspense fallback={<SectionSkeleton title="Security events" />}>
-					<SecurityEvents
-						activeBlocks={blacklistData.entries}
-						recentDetections={blockedValidationsData.validations}
-						onLoadDetail={loadValidationDetail}
-						onLoadBlacklistDetail={setSelectedBlacklistEntry}
-						apiKey={apiKey}
-					/>
-				</Suspense>
-
-				<Suspense fallback={<SectionSkeleton title="Charts & distribution" />}>
-					<ChartsSection
-						timeSeriesData={analyticsData.timeSeriesData}
-						countries={analyticsData.countries}
-						botScores={analyticsData.botScores}
-						asnData={analyticsData.asnData}
-						tlsData={analyticsData.tlsData}
-						ja3Data={analyticsData.ja3Data}
-						ja4Data={analyticsData.ja4Data}
-						fingerprintSeries={analyticsData.fingerprintSeries}
-						testingBypassSeries={analyticsData.testingBypassSeries}
-					/>
-				</Suspense>
-
-				<Suspense fallback={null}>
-					{selectedSubmission && (
-						<SubmissionDetailDialog
-							submission={selectedSubmission}
-							loading={submissionModalLoading}
-							onClose={() => setSelectedSubmission(null)}
-							config={config}
-						/>
+					{operationError && (
+						<Alert variant="destructive">
+							<AlertDescription>{operationError}</AlertDescription>
+						</Alert>
 					)}
-				</Suspense>
 
-				<Suspense fallback={null}>
-					{selectedValidation && (
-						<ValidationDetailDialog
-							validation={selectedValidation}
-							loading={validationModalLoading}
-							onClose={() => setSelectedValidation(null)}
-							config={config}
-						/>
-					)}
-				</Suspense>
+					<OverviewStats stats={analyticsData.stats} />
 
-				<Suspense fallback={null}>
-					{selectedBlacklistEntry && (
-						<BlacklistDetailDialog
-							entry={selectedBlacklistEntry}
-							onClose={() => setSelectedBlacklistEntry(null)}
-							config={config}
+					<FraudAlert data={analyticsData.fraudPatterns} loading={analyticsData.loading} />
+
+					<Suspense fallback={<SectionSkeleton title="Recent submissions" />}>
+						<RecentSubmissionsSection
+							submissions={submissionsData.submissions}
+							totalCount={submissionsData.totalCount}
+							countries={analyticsData.countries}
+							loading={submissionsData.loading}
+							onLoadDetail={loadSubmissionDetail}
+							searchQuery={searchQuery}
+							onSearchQueryChange={setSearchQuery}
+							selectedCountries={selectedCountries}
+							onSelectedCountriesChange={setSelectedCountries}
+							botScoreRange={botScoreRange}
+							onBotScoreRangeChange={setBotScoreRange}
+							allowedStatus={allowedStatus}
+							onAllowedStatusChange={setAllowedStatus}
+							dateRange={dateRange}
+							onDateRangeChange={setDateRange}
+							fingerprintFlags={fingerprintFlags}
+							onFingerprintFlagsChange={setFingerprintFlags}
+							pagination={pagination}
+							onPaginationChange={setPagination}
+							sorting={sorting}
+							onSortingChange={setSorting}
+							apiKey={apiKey}
 						/>
-					)}
-				</Suspense>
-			</div>
+					</Suspense>
+
+					<Suspense fallback={<SectionSkeleton title="Security events" />}>
+						<SecurityEvents
+							activeBlocks={blacklistData.entries}
+							recentDetections={blockedValidationsData.validations}
+							onLoadDetail={loadValidationDetail}
+							onLoadBlacklistDetail={setSelectedBlacklistEntry}
+							apiKey={apiKey}
+						/>
+					</Suspense>
+
+					<Suspense fallback={<SectionSkeleton title="Charts & distribution" />}>
+						<ChartsSection
+							timeSeriesData={analyticsData.timeSeriesData}
+							countries={analyticsData.countries}
+							botScores={analyticsData.botScores}
+							asnData={analyticsData.asnData}
+							tlsData={analyticsData.tlsData}
+							ja3Data={analyticsData.ja3Data}
+							ja4Data={analyticsData.ja4Data}
+							fingerprintSeries={analyticsData.fingerprintSeries}
+							testingBypassSeries={analyticsData.testingBypassSeries}
+						/>
+					</Suspense>
+
+					<Suspense fallback={null}>
+						{selectedSubmission && (
+							<SubmissionDetailDialog
+								submission={selectedSubmission}
+								loading={submissionModalLoading}
+								onClose={() => setSelectedSubmission(null)}
+								config={config}
+							/>
+						)}
+					</Suspense>
+
+					<Suspense fallback={null}>
+						{selectedValidation && (
+							<ValidationDetailDialog
+								validation={selectedValidation}
+								loading={validationModalLoading}
+								onClose={() => setSelectedValidation(null)}
+								config={config}
+							/>
+						)}
+					</Suspense>
+
+					<Suspense fallback={null}>
+						{selectedBlacklistEntry && (
+							<BlacklistDetailDialog entry={selectedBlacklistEntry} onClose={() => setSelectedBlacklistEntry(null)} config={config} />
+						)}
+					</Suspense>
+				</div>
 			)}
 		</>
 	);
@@ -462,8 +464,6 @@ export default function AnalyticsDashboard() {
 
 function SectionSkeleton({ title }: { title: string }) {
 	return (
-		<div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-6 text-sm text-muted-foreground">
-			Loading {title}…
-		</div>
+		<div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-6 text-sm text-muted-foreground">Loading {title}…</div>
 	);
 }

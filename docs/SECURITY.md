@@ -32,11 +32,13 @@ Only requests from configured allowed hostnames are accepted. Hostname validatio
 ### 5-Layer Detection System
 
 **Layer 0 - Pre-Validation Blacklist**:
+
 - Fast D1 lookup before expensive Turnstile API call
 - Significantly reduces API calls for repeat offenders
 - Checks ephemeral_id, ip_address, ja4 against fraud_blacklist table
 
 **Layer 1 - Email Fraud Detection**:
+
 - Worker-to-Worker RPC call to Markov-Mail service
 - Markov Chain pattern analysis (83% accuracy, 0% false positives)
 - Detects sequential, dated, formatted email patterns
@@ -44,26 +46,31 @@ Only requests from configured allowed hostnames are accepted. Hostname validatio
 - Fail-open design (allows submission if service unavailable)
 
 **Layer 2 - Ephemeral ID Fraud Detection** (24h window):
+
 - Blocks 2+ submissions from same ephemeral ID
 - Registration forms typically submitted once per user
 
 **Layer 3 - Validation Frequency Monitoring** (1h window):
+
 - Blocks 3+ validation attempts from same ephemeral ID
 - Catches rapid-fire attacks before database replication
 
 **Layer 4 - JA4 Session Hopping Detection**:
+
 - **4a**: IP Clustering (same subnet + same JA4 + 2+ ephemeral IDs in 1h)
 - **4b**: Rapid Global (same JA4 + 3+ ephemeral IDs in 5 min)
 - **4c**: Extended Global (same JA4 + 5+ ephemeral IDs in 1h)
 - Detects incognito/same-browser session hopping where the JA4 fingerprint stays constant (browser switching is handled by the IP rate-limit behavioral signal)
 
 **Layer 5 - IP Diversity Detection** (24h window):
+
 - Adds weighted risk for 2+ unique IPs on the same ephemeral ID (no hard block to avoid shared-IP false positives)
 - Detects proxy rotation and distributed attacks when combined with other signals
 
 ### Normalized Risk Scoring
 
 All detections contribute to a 0-100 risk score with weighted components:
+
 - **Token Replay**: 28% (instant block)
 - **Email Fraud**: 14%
 - **Ephemeral ID**: 15%
@@ -90,10 +97,12 @@ Repeat offenders receive escalating timeout periods:
 ### Detection Modes
 
 **Ephemeral ID** (Enterprise feature):
+
 - Tracks users across a few days without cookies
 - Device-based fraud detection
 
 **IP-based fallback** (when ephemeral ID unavailable):
+
 - Higher thresholds to account for shared IPs
 - Network-based fraud detection
 
@@ -201,12 +210,14 @@ Analytics endpoints are protected with API key authentication:
 The testing bypass allows automated testing without Turnstile widgets while maintaining security:
 
 **Security Requirements:**
+
 - **Dual-factor authentication**: Requires BOTH environment flag AND valid API key
 - **Environment flag**: `ALLOW_TESTING_BYPASS` must be explicitly set to `"true"`
 - **API key header**: `X-API-KEY` must match configured secret
 - **Production protection**: Flag MUST be `"false"` in production
 
 **What is NOT Bypassed:**
+
 - Email fraud detection (Markov-Mail RPC still runs)
 - Ephemeral ID fraud detection (mock ID generated for testing)
 - Validation frequency monitoring
@@ -215,15 +226,18 @@ The testing bypass allows automated testing without Turnstile widgets while main
 - All normalized risk scoring
 
 **What IS Bypassed:**
+
 - Turnstile site-verify API call only
 - Mock ephemeral ID generated for fraud detection testing
 
 **Security Implications:**
+
 - No security reduction: All fraud detection layers still active
 - Testing surface: Allows testing fraud detection without Turnstile dependency
 - Fail-secure: Missing API key or wrong flag → normal Turnstile validation
 
 **Example Configuration:**
+
 ```jsonc
 // wrangler.jsonc (development)
 "vars": {
@@ -237,18 +251,19 @@ The testing bypass allows automated testing without Turnstile widgets while main
 ```
 
 **Implementation** (`src/routes/submissions.ts:78-87`):
+
 ```typescript
 const apiKey = c.req.header('X-API-KEY');
 
 if (env.ALLOW_TESTING_BYPASS === 'true' && apiKey && apiKey === env['X-API-KEY']) {
-  // Generate mock validation for testing
-  validation = createMockValidation(sanitizedData.email, metadata);
+	// Generate mock validation for testing
+	validation = createMockValidation(sanitizedData.email, metadata);
 } else {
-  // Normal Turnstile validation path
-  if (!data.turnstileToken) {
-    return c.json({ error: 'Turnstile token required' }, 400);
-  }
-  validation = await validateTurnstileToken(/* ... */);
+	// Normal Turnstile validation path
+	if (!data.turnstileToken) {
+		return c.json({ error: 'Turnstile token required' }, 400);
+	}
+	validation = await validateTurnstileToken(/* ... */);
 }
 ```
 

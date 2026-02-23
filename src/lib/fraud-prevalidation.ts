@@ -36,14 +36,14 @@ interface AddToBlacklistParams {
 	ephemeralId?: string | null;
 	ipAddress?: string | null;
 	ja4?: string | null;
-	email?: string | null;  // Phase 2: Email-based blacklisting
+	email?: string | null; // Phase 2: Email-based blacklisting
 	blockReason: string;
 	confidence: 'high' | 'medium' | 'low';
 	expiresIn: number; // seconds
 	submissionCount?: number;
 	detectionMetadata?: Record<string, any>;
-	detectionType?: string;  // Primary detection layer (email_fraud_detection, ephemeral_id_tracking, ja4_fingerprinting, etc.)
-	erfid?: string | null;  // Request tracking ID that triggered this blacklist entry
+	detectionType?: string; // Primary detection layer (email_fraud_detection, ephemeral_id_tracking, ja4_fingerprinting, etc.)
+	erfid?: string | null; // Request tracking ID that triggered this blacklist entry
 	riskScore?: number;
 	riskScoreBreakdown?: RiskScoreBreakdown | null;
 }
@@ -60,8 +60,8 @@ export async function checkPreValidationBlock(
 	ephemeralId: string | null,
 	remoteIp: string,
 	ja4: string | null,
-	email: string | null,  // Phase 2: Check email blacklist
-	db: D1Database
+	email: string | null, // Phase 2: Check email blacklist
+	db: D1Database,
 ): Promise<PreValidationResult> {
 	const now = toSQLiteDateTime(new Date());
 
@@ -77,7 +77,7 @@ export async function checkPreValidationBlock(
 			AND detection_confidence IN ('high', 'medium')
 			ORDER BY expires_at DESC
 			LIMIT 1
-		`
+		`,
 			)
 			.bind(email, now)
 			.first<BlacklistEntry>();
@@ -91,7 +91,7 @@ export async function checkPreValidationBlock(
 				SET last_seen_at = ?,
 					submission_count = submission_count + 1
 				WHERE id = ?
-			`
+			`,
 				)
 				.bind(now, emailBlacklistCheck.id)
 				.run();
@@ -121,7 +121,7 @@ export async function checkPreValidationBlock(
 			AND detection_confidence IN ('high', 'medium')
 			ORDER BY expires_at DESC
 			LIMIT 1
-		`
+		`,
 			)
 			.bind(ephemeralId, now)
 			.first<BlacklistEntry>();
@@ -135,7 +135,7 @@ export async function checkPreValidationBlock(
 				SET last_seen_at = ?,
 					submission_count = submission_count + 1
 				WHERE id = ?
-			`
+			`,
 				)
 				.bind(now, blacklistCheck.id)
 				.run();
@@ -165,7 +165,7 @@ export async function checkPreValidationBlock(
 			AND detection_confidence IN ('high', 'medium')
 			ORDER BY expires_at DESC
 			LIMIT 1
-		`
+		`,
 			)
 			.bind(ja4, now)
 			.first<BlacklistEntry>();
@@ -179,7 +179,7 @@ export async function checkPreValidationBlock(
 				SET last_seen_at = ?,
 					submission_count = submission_count + 1
 				WHERE id = ?
-			`
+			`,
 				)
 				.bind(now, ja4BlacklistCheck.id)
 				.run();
@@ -208,7 +208,7 @@ export async function checkPreValidationBlock(
 		AND detection_confidence IN ('high', 'medium')
 		ORDER BY expires_at DESC
 		LIMIT 1
-	`
+	`,
 		)
 		.bind(remoteIp, now)
 		.first<BlacklistEntry>();
@@ -222,7 +222,7 @@ export async function checkPreValidationBlock(
 			SET last_seen_at = ?,
 				submission_count = submission_count + 1
 			WHERE id = ?
-		`
+		`,
 			)
 			.bind(now, ipBlacklistCheck.id)
 			.run();
@@ -250,10 +250,7 @@ export async function checkPreValidationBlock(
  * Add ephemeral ID, IP, JA4, or email to blacklist
  * Phase 2: Added email-based blacklisting support
  */
-export async function addToBlacklist(
-	db: D1Database,
-	params: AddToBlacklistParams
-): Promise<boolean> {
+export async function addToBlacklist(db: D1Database, params: AddToBlacklistParams): Promise<boolean> {
 	const {
 		ephemeralId,
 		ipAddress,
@@ -301,13 +298,13 @@ export async function addToBlacklist(
 				detection_type,
 				erfid
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`
+		`,
 			)
 			.bind(
 				ephemeralId || null,
 				ipAddress || null,
 				ja4 || null,
-				email || null,  // Phase 2: Email binding
+				email || null, // Phase 2: Email binding
 				blockReason,
 				confidence,
 				riskScoreValue,
@@ -317,7 +314,7 @@ export async function addToBlacklist(
 				toSQLiteDateTime(now),
 				metadata,
 				detectionType || null,
-				erfid || null
+				erfid || null,
 			)
 			.run();
 
@@ -333,7 +330,7 @@ export async function addToBlacklist(
 				email,
 				blockReason,
 			},
-			'CRITICAL: Failed to add to blacklist — attacker can retry immediately'
+			'CRITICAL: Failed to add to blacklist — attacker can retry immediately',
 		);
 		return false;
 	}
@@ -361,7 +358,7 @@ export async function cleanupExpiredBlacklist(db: D1Database): Promise<number> {
 				`
 			DELETE FROM fraud_blacklist
 			WHERE expires_at <= ?
-		`
+		`,
 			)
 			.bind(now)
 			.run();
@@ -399,7 +396,7 @@ export async function getBlacklistStats(db: D1Database): Promise<{
 				SUM(CASE WHEN detection_confidence = 'low' THEN 1 ELSE 0 END) as low_confidence
 			FROM fraud_blacklist
 			WHERE expires_at > ?
-		`
+		`,
 			)
 			.bind(now)
 			.first<{

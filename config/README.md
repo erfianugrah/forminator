@@ -9,9 +9,11 @@ This directory contains configuration examples and templates for the Forminator 
 Complete fraud detection configuration example showing all available options with default values.
 
 **Usage:**
+
 1. Review the example to understand available configuration options
 2. Create a partial override JSON with only the values you want to change
 3. Set via environment variable:
+
    ```bash
    # Using wrangler secret
    echo '{"risk":{"blockThreshold":80}}' | wrangler secret put FRAUD_CONFIG
@@ -35,40 +37,43 @@ Complete fraud detection configuration example showing all available options wit
 ## Example Configurations
 
 ### Lenient (Lower False Positives)
+
 ```json
 {
-  "risk": {
-    "blockThreshold": 80
-  },
-  "detection": {
-    "ephemeralIdSubmissionThreshold": 3,
-    "validationFrequencyBlockThreshold": 5
-  }
+	"risk": {
+		"blockThreshold": 80
+	},
+	"detection": {
+		"ephemeralIdSubmissionThreshold": 3,
+		"validationFrequencyBlockThreshold": 5
+	}
 }
 ```
 
 ### Strict (Higher Security)
+
 ```json
 {
-  "risk": {
-    "blockThreshold": 60
-  },
-  "detection": {
-    "ephemeralIdSubmissionThreshold": 1,
-    "validationFrequencyBlockThreshold": 2
-  }
+	"risk": {
+		"blockThreshold": 60
+	},
+	"detection": {
+		"ephemeralIdSubmissionThreshold": 1,
+		"validationFrequencyBlockThreshold": 2
+	}
 }
 ```
 
 ### Development/Testing
+
 ```json
 {
-  "risk": {
-    "blockThreshold": 90
-  },
-  "detection": {
-    "ephemeralIdSubmissionThreshold": 10,
-    "validationFrequencyBlockThreshold": 10
-  }
+	"risk": {
+		"blockThreshold": 90
+	},
+	"detection": {
+		"ephemeralIdSubmissionThreshold": 10,
+		"validationFrequencyBlockThreshold": 10
+	}
 }
 ```

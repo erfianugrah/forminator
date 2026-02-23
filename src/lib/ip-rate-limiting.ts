@@ -64,7 +64,7 @@ export interface IPRateLimitSignals {
 export async function collectEmailDiversitySignal(
 	remoteIp: string,
 	db: D1Database,
-	config: FraudDetectionConfig
+	config: FraudDetectionConfig,
 ): Promise<{ distinctEmails: number; riskScore: number; warning?: string }> {
 	const timeWindowSeconds = config.detection.ipRateLimitWindow || 3600;
 	const timeAgo = toSQLiteDateTime(new Date(Date.now() - timeWindowSeconds * 1000));
@@ -75,7 +75,7 @@ export async function collectEmailDiversitySignal(
 				`SELECT COUNT(DISTINCT email) as count
 				 FROM submissions
 				 WHERE remote_ip = ?
-				 AND created_at > ?`
+				 AND created_at > ?`,
 			)
 			.bind(remoteIp, timeAgo)
 			.first<{ count: number }>();
@@ -93,9 +93,8 @@ export async function collectEmailDiversitySignal(
 			riskScore = 100; // Definite form spam
 		}
 
-		const warning = distinctEmails >= 3
-			? `${distinctEmails} distinct emails from same IP in ${Math.round(timeWindowSeconds / 60)} minutes`
-			: undefined;
+		const warning =
+			distinctEmails >= 3 ? `${distinctEmails} distinct emails from same IP in ${Math.round(timeWindowSeconds / 60)} minutes` : undefined;
 
 		return { distinctEmails, riskScore, warning };
 	} catch (error) {
@@ -107,7 +106,7 @@ export async function collectEmailDiversitySignal(
 export async function collectIPRateLimitSignals(
 	remoteIp: string,
 	db: D1Database,
-	config: FraudDetectionConfig
+	config: FraudDetectionConfig,
 ): Promise<IPRateLimitSignals> {
 	const timeWindowSeconds = config.detection.ipRateLimitWindow || 3600; // Default 1 hour
 	const threshold = config.detection.ipRateLimitThreshold || 3; // Default 3 for risk calculation
@@ -123,7 +122,7 @@ export async function collectIPRateLimitSignals(
 				`SELECT
 					(SELECT COUNT(*) FROM submissions WHERE remote_ip = ? AND created_at > ?) +
 					(SELECT COUNT(*) FROM turnstile_validations WHERE remote_ip = ? AND allowed = 0 AND created_at > ?)
-				 AS count`
+				 AS count`,
 			)
 			.bind(remoteIp, timeAgo, remoteIp, timeAgo)
 			.first<{ count: number }>();
@@ -150,19 +149,13 @@ export async function collectIPRateLimitSignals(
 
 		if (effectiveCount >= threshold + 1) {
 			// Very high count
-			warnings.push(
-				`${effectiveCount} submissions from same IP in ${Math.round(timeWindowSeconds / 60)} minutes - extreme frequency`
-			);
+			warnings.push(`${effectiveCount} submissions from same IP in ${Math.round(timeWindowSeconds / 60)} minutes - extreme frequency`);
 		} else if (effectiveCount >= threshold) {
 			// At threshold
-			warnings.push(
-				`${effectiveCount} submissions from same IP in ${Math.round(timeWindowSeconds / 60)} minutes`
-			);
+			warnings.push(`${effectiveCount} submissions from same IP in ${Math.round(timeWindowSeconds / 60)} minutes`);
 		} else if (effectiveCount >= 2) {
 			// Multiple submissions
-			warnings.push(
-				`Multiple submissions from same IP (${effectiveCount} in ${Math.round(timeWindowSeconds / 60)} min)`
-			);
+			warnings.push(`Multiple submissions from same IP (${effectiveCount} in ${Math.round(timeWindowSeconds / 60)} min)`);
 		}
 
 		logger.info(
@@ -173,7 +166,7 @@ export async function collectIPRateLimitSignals(
 				risk_score: riskScore,
 				threshold,
 			},
-			'IP rate limit signals collected'
+			'IP rate limit signals collected',
 		);
 
 		return {
@@ -192,4 +185,3 @@ export async function collectIPRateLimitSignals(
 		};
 	}
 }
-

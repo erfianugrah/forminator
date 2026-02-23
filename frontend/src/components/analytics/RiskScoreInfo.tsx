@@ -1,16 +1,5 @@
 import type { ComponentType, SVGProps } from 'react';
-import {
-	AlertCircle,
-	Shield,
-	Mail,
-	Fingerprint,
-	Clock,
-	Network,
-	Info,
-	Layers,
-	Lock,
-	Smartphone,
-} from 'lucide-react';
+import { AlertCircle, Shield, Mail, Fingerprint, Clock, Network, Info, Layers, Lock, Smartphone } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/card';
 import { useConfig } from '../../hooks/useConfig';
 import type { FraudDetectionConfig } from '../../hooks/useConfig';
@@ -90,8 +79,8 @@ const componentDetails: Array<{
 	},
 ];
 
-export function RiskScoreInfo() {
-	const { config } = useConfig();
+export function RiskScoreInfo({ apiKey }: { apiKey?: string }) {
+	const { config } = useConfig(apiKey);
 	const weights = config.risk.weights;
 
 	const formatWeight = (key: WeightKey) => `${Number((weights[key] * 100).toFixed(0))}%`;
@@ -129,10 +118,24 @@ export function RiskScoreInfo() {
 				<div className="pt-2 border-t border-border space-y-2">
 					<div className="flex items-start gap-1.5 text-xs text-muted-foreground">
 						<Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-						<p>
-							Token replay ({tokenWeight}) still triggers instantly via validation logs; submissions reflect the remaining nine
-							behavioral/fingerprint components ({nonTokenPercent} total).
-						</p>
+						<div className="space-y-1">
+							<p>
+								Token replay ({tokenWeight}) triggers instantly via validation logs. Remaining {nonTokenPercent} is split across 9
+								behavioral/fingerprint signals.
+							</p>
+							<p>
+								<strong>Weight redistribution:</strong> When signals are inactive (e.g. no ephemeral ID, no token replay), their weight
+								is redistributed so the remaining signals can still reach 100.
+							</p>
+							<p>
+								<strong>Corroboration bonus:</strong> When 3+ signals fire ≥ 30 simultaneously, +15 flat bonus is added for convergence
+								of evidence.
+							</p>
+							<p>
+								<strong>Defensive mode:</strong> Email fraud, ephemeral ID, validation frequency, JA4, and duplicate email can force the
+								score to the block threshold when their signal pattern qualifies.
+							</p>
+						</div>
 					</div>
 					<div className="flex items-center gap-4 text-xs flex-wrap">
 						<div className="flex items-center gap-1.5">

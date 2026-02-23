@@ -3,6 +3,7 @@
 ## Overview
 
 Forminator is a full-stack Cloudflare Turnstile demonstration showcasing:
+
 - **Frontend**: Astro static site with React components (shadcn/ui) and dark mode
 - **Backend**: Cloudflare Worker with Hono routing framework
 - **Database**: D1 for storing form submissions with rich metadata (40+ fields)
@@ -100,6 +101,7 @@ graph TB
 ```
 
 ### Frontend
+
 - **Astro 5.x**: Static site generation
 - **React 19**: Component framework
 - **shadcn/ui**: Copy-paste component library
@@ -107,6 +109,7 @@ graph TB
 - **Zod**: Client-side validation
 
 ### Backend
+
 - **Hono 4.x**: Lightweight routing framework
 - **Cloudflare Workers**: Edge compute platform
 - **D1**: SQLite at the edge
@@ -114,6 +117,7 @@ graph TB
 - **Zod**: Server-side validation
 
 ### Security
+
 - **Turnstile**: CAPTCHA alternative
 - **Ephemeral IDs**: Enterprise Bot Management feature
 - **Token Replay Protection**: SHA256 hashing
@@ -197,6 +201,7 @@ flowchart TD
 ### Worker at Root Level
 
 The Worker is the main project, with the frontend as a subdirectory:
+
 - `src/` contains Worker code (Hono app, routes, lib)
 - `frontend/` contains Astro static site
 - Worker serves static assets from `frontend/dist` via ASSETS binding
@@ -205,6 +210,7 @@ The Worker is the main project, with the frontend as a subdirectory:
 ### Single-Step Validation
 
 Turnstile tokens are single-use. The implementation uses a single endpoint:
+
 - Client collects form data + Turnstile token
 - Single POST to `/api/submissions` with all data
 - Server validates token, checks fraud, creates submission atomically
@@ -213,6 +219,7 @@ Turnstile tokens are single-use. The implementation uses a single endpoint:
 ### Static Site Generation
 
 Frontend uses Astro SSG:
+
 - `frontend/dist/` contains static HTML, CSS, JS
 - Worker serves these files directly
 - Hydration for React components (client:load)
@@ -275,6 +282,7 @@ flowchart TD
 ```
 
 **Behavioral Signal Architecture**:
+
 - All detection layers collect signals (not hard blocks)
 - Signals combined via weighted risk scoring (10 components total; 9 for submissions, token replay for validations)
 - Fingerprint heuristics (header reuse, TLS anomaly, latency mismatch) sit alongside IP rate limiting to catch single-attempt bots
@@ -282,6 +290,7 @@ flowchart TD
 - Prevents false positives from single signal triggers
 
 **Layer 0.5: IP Rate Limiting**:
+
 - Detects browser-switching attacks (Firefox→Chrome→Safari)
 - 1-hour window, tracks submissions per IP
 - Non-linear risk curve: 1→0%, 2→25%, 3→50%, 4→75%, 5+→100%
@@ -289,6 +298,7 @@ flowchart TD
 - Complements fingerprint-based detection (Layers 2 & 4)
 
 **Ephemeral ID Detection (Layer 2)**:
+
 - Enterprise Bot Management feature
 - 24h window for submissions, 1h for validation frequency
 - Tracks: submission count (≥2), validation attempts (≥3), IP diversity (≥2)
@@ -421,6 +431,7 @@ erDiagram
    - Used to short-circuit anomaly lookups while keeping a trail of when a fingerprint was last seen
 
 **Key Indexes**:
+
 - `token_hash` (unique) - Prevents token reuse
 - `ephemeral_id` - Fast fraud detection queries
 - `created_at` - Time-based analytics
@@ -432,42 +443,42 @@ erDiagram
 
 ```typescript
 export function extractRequestMetadata(request: CloudflareRequest): RequestMetadata {
-  const cf = request.cf;
+	const cf = request.cf;
 
-  return {
-    // Geographic (9 fields)
-    country: cf?.country,
-    region: cf?.region,
-    city: cf?.city,
-    postalCode: cf?.postalCode,
-    latitude: cf?.latitude,
-    longitude: cf?.longitude,
-    timezone: cf?.timezone,
-    continent: cf?.continent,
-    isEUCountry: cf?.isEUCountry,
+	return {
+		// Geographic (9 fields)
+		country: cf?.country,
+		region: cf?.region,
+		city: cf?.city,
+		postalCode: cf?.postalCode,
+		latitude: cf?.latitude,
+		longitude: cf?.longitude,
+		timezone: cf?.timezone,
+		continent: cf?.continent,
+		isEUCountry: cf?.isEUCountry,
 
-    // Network (5 fields)
-    asn: cf?.asn,
-    asOrganization: cf?.asOrganization,
-    colo: cf?.colo,
-    httpProtocol: cf?.httpProtocol,
-    tlsVersion: cf?.tlsVersion,
-    tlsCipher: cf?.tlsCipher,
+		// Network (5 fields)
+		asn: cf?.asn,
+		asOrganization: cf?.asOrganization,
+		colo: cf?.colo,
+		httpProtocol: cf?.httpProtocol,
+		tlsVersion: cf?.tlsVersion,
+		tlsCipher: cf?.tlsCipher,
 
-    // Bot Management (6+ fields - Enterprise only)
-    botScore: cf?.botManagement?.score,
-    clientTrustScore: cf?.botManagement?.clientTrustScore,
-    verifiedBot: cf?.botManagement?.verifiedBot,
-    ja3Hash: cf?.botManagement?.ja3Hash,
-    ja4: cf?.botManagement?.ja4,
-    ja4Signals: cf?.botManagement?.ja4Signals,
-    detectionIds: cf?.botManagement?.detectionIds,
+		// Bot Management (6+ fields - Enterprise only)
+		botScore: cf?.botManagement?.score,
+		clientTrustScore: cf?.botManagement?.clientTrustScore,
+		verifiedBot: cf?.botManagement?.verifiedBot,
+		ja3Hash: cf?.botManagement?.ja3Hash,
+		ja4: cf?.botManagement?.ja4,
+		ja4Signals: cf?.botManagement?.ja4Signals,
+		detectionIds: cf?.botManagement?.detectionIds,
 
-    // Request (3 fields)
-    remoteIp: headers.get('cf-connecting-ip'),
-    userAgent: headers.get('user-agent'),
-    timestamp: new Date().toISOString()
-  };
+		// Request (3 fields)
+		remoteIp: headers.get('cf-connecting-ip'),
+		userAgent: headers.get('user-agent'),
+		timestamp: new Date().toISOString(),
+	};
 }
 ```
 
@@ -493,49 +504,44 @@ Configurable API endpoints via environment variables:
 ```typescript
 // Load routes from environment with in-memory caching
 export function getRouteConfig(env: Env): RouteConfig {
-  if (cachedRoutes !== null) return cachedRoutes;
+	if (cachedRoutes !== null) return cachedRoutes;
 
-  const routes = typeof env.ROUTES === 'string'
-    ? JSON.parse(env.ROUTES)
-    : env.ROUTES;
+	const routes = typeof env.ROUTES === 'string' ? JSON.parse(env.ROUTES) : env.ROUTES;
 
-  const merged = { ...DEFAULT_ROUTES, ...routes };
-  cachedRoutes = merged;
-  return merged;
+	const merged = { ...DEFAULT_ROUTES, ...routes };
+	cachedRoutes = merged;
+	return merged;
 }
 
 // Match incoming path against configured routes (longest-prefix matching)
 export function matchRoute(path: string, routes: RouteConfig): keyof RouteConfig | null {
-  const normalizedPath = path.endsWith('/') && path.length > 1
-    ? path.slice(0, -1)
-    : path;
+	const normalizedPath = path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path;
 
-  // Sort by length (longest first) for correct matching
-  const sortedRoutes = Object.entries(routes).sort(
-    ([, a], [, b]) => b.length - a.length
-  );
+	// Sort by length (longest first) for correct matching
+	const sortedRoutes = Object.entries(routes).sort(([, a], [, b]) => b.length - a.length);
 
-  for (const [name, pattern] of sortedRoutes) {
-    // Exact or prefix match
-    if (normalizedPath === pattern || normalizedPath.startsWith(pattern + '/')) {
-      return name as keyof RouteConfig;
-    }
-  }
+	for (const [name, pattern] of sortedRoutes) {
+		// Exact or prefix match
+		if (normalizedPath === pattern || normalizedPath.startsWith(pattern + '/')) {
+			return name as keyof RouteConfig;
+		}
+	}
 
-  return null;
+	return null;
 }
 
 // Strip route prefix for handler normalization
 export function stripRoutePrefix(path: string, routePattern: string): string {
-  if (path === routePattern) return '/';
-  if (path.startsWith(routePattern + '/')) {
-    return path.slice(routePattern.length);
-  }
-  return path;
+	if (path === routePattern) return '/';
+	if (path.startsWith(routePattern + '/')) {
+		return path.slice(routePattern.length);
+	}
+	return path;
 }
 ```
 
 Features:
+
 - In-memory caching (single parse per worker instance)
 - Longest-prefix matching prevents `/api/sub` matching `/api/submissions`
 - Route configuration visible in wrangler.jsonc
@@ -545,6 +551,7 @@ Features:
 API key-authenticated testing mode for CI/CD and local development:
 
 **Configuration:**
+
 ```jsonc
 // wrangler.jsonc
 "vars": {
@@ -553,18 +560,20 @@ API key-authenticated testing mode for CI/CD and local development:
 ```
 
 **Implementation** (`src/routes/submissions.ts`):
+
 ```typescript
 // Check if testing bypass is allowed
 if (env.ALLOW_TESTING_BYPASS === 'true' && apiKey && apiKey === env['X-API-KEY']) {
-  // Create mock validation for testing
-  validation = createMockValidation(sanitizedData.email, metadata);
+	// Create mock validation for testing
+	validation = createMockValidation(sanitizedData.email, metadata);
 } else {
-  // Normal Turnstile validation
-  validation = await validateTurnstileToken(/* ... */);
+	// Normal Turnstile validation
+	validation = await validateTurnstileToken(/* ... */);
 }
 ```
 
 Requirements:
+
 - Requires **both** `ALLOW_TESTING_BYPASS=true` AND valid `X-API-KEY` header
 - All fraud detection layers still run (email, JA4, IP diversity, etc.)
 - Only skips Turnstile site-verify API call
@@ -573,40 +582,47 @@ Requirements:
 ## API Endpoints
 
 ### POST /api/submissions
+
 Submit form with Turnstile validation (single-step operation).
 
 **Request**:
+
 ```json
 {
-  "firstName": "John",
-  "lastName": "Doe",
-  "email": "john@example.com",
-  "phone": "+1234567890",
-  "address": "123 Main St",
-  "dateOfBirth": "1990-01-01",
-  "turnstileToken": "0.xxx..."
+	"firstName": "John",
+	"lastName": "Doe",
+	"email": "john@example.com",
+	"phone": "+1234567890",
+	"address": "123 Main St",
+	"dateOfBirth": "1990-01-01",
+	"turnstileToken": "0.xxx..."
 }
 ```
 
 **Response**:
+
 ```json
 {
-  "success": true,
-  "id": 123,
-  "message": "Submission created successfully"
+	"success": true,
+	"id": 123,
+	"message": "Submission created successfully"
 }
 ```
 
 ### GET /api/analytics/stats
+
 Get validation statistics.
 
 ### GET /api/analytics/submissions
+
 Get recent submissions (supports pagination).
 
 ### GET /api/analytics/countries
+
 Get submissions by country.
 
 ### GET /api/analytics/bot-scores
+
 Get bot score distribution.
 
 ## Deployment
@@ -655,6 +671,7 @@ flowchart LR
 ```
 
 **Flow Breakdown**:
+
 1. `npm run build` executes `cd frontend && npm run build && cd ..`
 2. Astro generates static files to `frontend/dist/`
 3. `wrangler deploy` bundles Worker code + uploads
@@ -664,33 +681,39 @@ flowchart LR
 ## Environment Setup
 
 **Required Secrets** (via `wrangler secret`):
+
 ```bash
 wrangler secret put TURNSTILE-SECRET-KEY
 wrangler secret put TURNSTILE-SITE-KEY
 ```
 
 **Configuration** (wrangler.jsonc):
+
 ```jsonc
 {
-  "name": "forminator",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-11-12",
+	"name": "forminator",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-11-12",
 
-  "assets": {
-    "binding": "ASSETS",
-    "directory": "./frontend/dist"
-  },
+	"assets": {
+		"binding": "ASSETS",
+		"directory": "./frontend/dist",
+	},
 
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "DB",
-    "database_id": "YOUR-DATABASE-ID"
-  }],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "DB",
+			"database_id": "YOUR-DATABASE-ID",
+		},
+	],
 
-  "routes": [{
-    "pattern": "form.erfi.dev",
-    "custom_domain": true
-  }]
+	"routes": [
+		{
+			"pattern": "form.erfi.dev",
+			"custom_domain": true,
+		},
+	],
 }
 ```
 
@@ -723,6 +746,7 @@ Remote D1 usage provides consistency with production and avoids local/remote dat
 ## Monitoring
 
 **Key Metrics**:
+
 - Total validations
 - Success rate
 - Block rate
@@ -731,6 +755,7 @@ Remote D1 usage provides consistency with production and avoids local/remote dat
 - Bot score distribution
 
 **Logs**:
+
 - All validation attempts (success + failure)
 - Fraud detection decisions
 - Token replay attempts

@@ -137,13 +137,13 @@ export default function SubmissionForm() {
 				setRateLimitInfo(null);
 				setSubmitResult(null);
 			} else {
-				setRateLimitInfo(prev => prev ? { ...prev, timeRemaining: remaining } : null);
+				setRateLimitInfo((prev) => (prev ? { ...prev, timeRemaining: remaining } : null));
 			}
 		}, 1000);
 
 		return () => clearInterval(interval);
-	// Only re-create interval when expiresAt changes, not on every timeRemaining tick
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// Only re-create interval when expiresAt changes, not on every timeRemaining tick
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [rateLimitInfo?.expiresAt]);
 
 	const {
@@ -180,7 +180,7 @@ export default function SubmissionForm() {
 				}),
 			});
 
-			const result = await response.json() as any;
+			const result = (await response.json()) as any;
 
 			if (response.ok) {
 				setFlowStep('success');
@@ -235,7 +235,8 @@ export default function SubmissionForm() {
 						message: userFriendlyMessage,
 					});
 				} else if (response.status === 403) {
-					userFriendlyMessage = 'Your submission has been blocked for security reasons. If you believe this is an error, please contact support.';
+					userFriendlyMessage =
+						'Your submission has been blocked for security reasons. If you believe this is an error, please contact support.';
 				} else if (response.status === 409) {
 					// Duplicate email
 					userFriendlyMessage = result.message || 'This email address has already been registered.';
@@ -414,16 +415,10 @@ export default function SubmissionForm() {
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="pb-8">
-				<form
-					id="submission-form"
-					onSubmit={handleFormSubmit(onSubmit)}
-					className="space-y-8"
-				>
+				<form id="submission-form" onSubmit={handleFormSubmit(onSubmit)} className="space-y-8">
 					{/* Personal Information Section */}
 					<div className="space-y-5">
-						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
-							Personal Information
-						</h3>
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">Personal Information</h3>
 						<div className="bg-muted/30 rounded-lg p-5 space-y-5">
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
 								<div className="space-y-2">
@@ -471,9 +466,7 @@ export default function SubmissionForm() {
 
 					{/* Contact Information Section */}
 					<div className="space-y-5">
-						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
-							Contact Information
-						</h3>
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">Contact Information</h3>
 						<div className="bg-muted/30 rounded-lg p-5 space-y-5">
 							<div className="space-y-2">
 								<Label htmlFor="email" className="text-sm font-medium">
@@ -498,8 +491,7 @@ export default function SubmissionForm() {
 
 							<div className="space-y-2">
 								<Label htmlFor="phone" className="text-sm font-medium">
-									Phone Number{' '}
-									<span className="text-xs text-muted-foreground font-normal">(Optional)</span>
+									Phone Number <span className="text-xs text-muted-foreground font-normal">(Optional)</span>
 								</Label>
 								<PhoneInput
 									defaultCountry={defaultCountry}
@@ -533,9 +525,7 @@ export default function SubmissionForm() {
 
 					{/* Additional Information Section */}
 					<div className="space-y-5">
-						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
-							Additional Information
-						</h3>
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">Additional Information</h3>
 						<div className="bg-muted/30 rounded-lg p-5">
 							<DateOfBirthInput
 								value={dateOfBirthValue || ''}
@@ -553,9 +543,7 @@ export default function SubmissionForm() {
 
 					{/* Verification Section */}
 					<div className="space-y-5">
-						<h3 className="text-lg font-semibold text-foreground border-b pb-2">
-							Security Verification
-						</h3>
+						<h3 className="text-lg font-semibold text-foreground border-b pb-2">Security Verification</h3>
 
 						{/* Visual submission flow */}
 						<SubmissionFlow currentStep={flowStep} errorMessage={flowError} />
@@ -586,7 +574,9 @@ export default function SubmissionForm() {
 									{errors.lastName && <li>{errors.lastName.message}</li>}
 									{errors.email && <li>{errors.email.message}</li>}
 									{errors.phone && <li>{errors.phone.message}</li>}
-									{errors.address && <li>Address: {typeof errors.address.message === 'string' ? errors.address.message : 'Invalid address'}</li>}
+									{errors.address && (
+										<li>Address: {typeof errors.address.message === 'string' ? errors.address.message : 'Invalid address'}</li>
+									)}
 									{errors.dateOfBirth && <li>{errors.dateOfBirth.message}</li>}
 								</ul>
 							</AlertDescription>
@@ -594,24 +584,22 @@ export default function SubmissionForm() {
 					)}
 
 					{((submitResult && submitResult.type === 'error') || rateLimitInfo) && (
-						<Alert
-							variant="destructive"
-							className="animate-in fade-in slide-in-from-top-2"
-						>
-							<AlertTitle className="font-semibold">
-								✗ Error
-							</AlertTitle>
+						<Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+							<AlertTitle className="font-semibold">✗ Error</AlertTitle>
 							<AlertDescription>
 								{submitResult?.message || rateLimitInfo?.message || 'Submission failed. Please try again.'}
 								{rateLimitInfo && (
 									<div className="mt-3 pt-3 border-t border-destructive/20">
 										<div className="flex items-center gap-2">
 											<svg className="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+												/>
 											</svg>
-											<span className="font-semibold">
-												Time remaining: {formatCountdown(rateLimitInfo.timeRemaining)}
-											</span>
+											<span className="font-semibold">Time remaining: {formatCountdown(rateLimitInfo.timeRemaining)}</span>
 										</div>
 									</div>
 								)}
@@ -628,20 +616,8 @@ export default function SubmissionForm() {
 						>
 							{isSubmitting ? (
 								<span className="flex items-center justify-center gap-2 text-inherit">
-									<svg
-										className="animate-spin h-5 w-5 text-inherit"
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-									>
-										<circle
-											className="opacity-25"
-											cx="12"
-											cy="12"
-											r="10"
-											stroke="currentColor"
-											strokeWidth="4"
-										></circle>
+									<svg className="animate-spin h-5 w-5 text-inherit" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
 										<path
 											className="opacity-75"
 											fill="currentColor"
@@ -653,20 +629,13 @@ export default function SubmissionForm() {
 							) : (
 								<span className="flex items-center justify-center gap-2 text-inherit">
 									<svg className="w-5 h-5 text-inherit" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-										/>
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 									</svg>
 									Submit
 								</span>
 							)}
 						</Button>
-						<p className="text-xs text-center text-muted-foreground">
-							By submitting, you agree to our data collection practices
-						</p>
+						<p className="text-xs text-center text-muted-foreground">By submitting, you agree to our data collection practices</p>
 					</div>
 				</form>
 			</CardContent>

@@ -19,7 +19,7 @@ export function formatZodErrors(zodError: ZodError): string {
 		return errors[0];
 	}
 
-	return `Validation failed:\n${errors.map(e => `• ${e}`).join('\n')}`;
+	return `Validation failed:\n${errors.map((e) => `• ${e}`).join('\n')}`;
 }
 
 /**
@@ -30,7 +30,7 @@ export class AppError extends Error {
 		message: string,
 		public statusCode: number = 500,
 		public userMessage?: string,
-		public context?: Record<string, any>
+		public context?: Record<string, any>,
 	) {
 		super(message);
 		this.name = this.constructor.name;
@@ -45,12 +45,7 @@ export class AppError extends Error {
  */
 export class ValidationError extends AppError {
 	constructor(message: string, context?: Record<string, any>, userMessage?: string) {
-		super(
-			message,
-			400,
-			userMessage || 'Please check your form data and try again',
-			context
-		);
+		super(message, 400, userMessage || 'Please check your form data and try again', context);
 	}
 }
 
@@ -59,12 +54,7 @@ export class ValidationError extends AppError {
  */
 export class AuthError extends AppError {
 	constructor(message: string, userMessage?: string, context?: Record<string, any>) {
-		super(
-			message,
-			403,
-			userMessage || 'Access denied',
-			context
-		);
+		super(message, 403, userMessage || 'Access denied', context);
 	}
 }
 
@@ -76,14 +66,9 @@ export class RateLimitError extends AppError {
 		message: string,
 		public retryAfter: number,
 		public expiresAt: string,
-		userMessage?: string
+		userMessage?: string,
 	) {
-		super(
-			message,
-			429,
-			userMessage || 'Too many requests. Please try again later',
-			{ retryAfter, expiresAt }
-		);
+		super(message, 429, userMessage || 'Too many requests. Please try again later', { retryAfter, expiresAt });
 	}
 }
 
@@ -92,12 +77,7 @@ export class RateLimitError extends AppError {
  */
 export class NotFoundError extends AppError {
 	constructor(resource: string, context?: Record<string, any>) {
-		super(
-			`${resource} not found`,
-			404,
-			`The requested ${resource.toLowerCase()} was not found`,
-			context
-		);
+		super(`${resource} not found`, 404, `The requested ${resource.toLowerCase()} was not found`, context);
 	}
 }
 
@@ -106,12 +86,7 @@ export class NotFoundError extends AppError {
  */
 export class ConflictError extends AppError {
 	constructor(message: string, userMessage?: string, context?: Record<string, any>) {
-		super(
-			message,
-			409,
-			userMessage || 'A conflict occurred with existing data',
-			context
-		);
+		super(message, 409, userMessage || 'A conflict occurred with existing data', context);
 	}
 }
 
@@ -119,17 +94,12 @@ export class ConflictError extends AppError {
  * External service error (502/503)
  */
 export class ExternalServiceError extends AppError {
-	constructor(
-		service: string,
-		message: string,
-		context?: Record<string, any>,
-		userMessage?: string
-	) {
+	constructor(service: string, message: string, context?: Record<string, any>, userMessage?: string) {
 		super(
 			`${service} error: ${message}`,
 			503,
 			userMessage || 'A required service is temporarily unavailable. Please try again in a moment',
-			{ service, ...context }
+			{ service, ...context },
 		);
 	}
 }
@@ -139,12 +109,11 @@ export class ExternalServiceError extends AppError {
  */
 export class DatabaseError extends AppError {
 	constructor(operation: string, originalError: Error, context?: Record<string, any>) {
-		super(
-			`Database ${operation} failed: ${originalError.message}`,
-			500,
-			'A database error occurred. Please try again',
-			{ operation, originalError: originalError.message, ...context }
-		);
+		super(`Database ${operation} failed: ${originalError.message}`, 500, 'A database error occurred. Please try again', {
+			operation,
+			originalError: originalError.message,
+			...context,
+		});
 	}
 }
 
@@ -171,7 +140,7 @@ export function handleError(error: unknown, c: Context) {
 				context: error.context,
 				erfid,
 			},
-			'Rate limit error'
+			'Rate limit error',
 		);
 
 		return c.json(
@@ -185,7 +154,7 @@ export function handleError(error: unknown, c: Context) {
 			error.statusCode as 429,
 			{
 				'Retry-After': String(error.retryAfter),
-			}
+			},
 		);
 	}
 
@@ -200,7 +169,7 @@ export function handleError(error: unknown, c: Context) {
 					stack: error.stack,
 					erfid,
 				},
-				`${error.name}: ${error.message}`
+				`${error.name}: ${error.message}`,
 			);
 		} else {
 			logger.warn(
@@ -210,7 +179,7 @@ export function handleError(error: unknown, c: Context) {
 					context: error.context,
 					erfid,
 				},
-				`${error.name}: ${error.message}`
+				`${error.name}: ${error.message}`,
 			);
 		}
 
@@ -221,7 +190,7 @@ export function handleError(error: unknown, c: Context) {
 				...(error.context && { details: error.context }),
 				...(erfid && { erfid }),
 			},
-			error.statusCode as any
+			error.statusCode as any,
 		);
 	}
 
@@ -236,7 +205,7 @@ export function handleError(error: unknown, c: Context) {
 			type: error instanceof Error ? error.constructor.name : typeof error,
 			erfid,
 		},
-		'Unexpected error'
+		'Unexpected error',
 	);
 
 	return c.json(
@@ -245,6 +214,6 @@ export function handleError(error: unknown, c: Context) {
 			message: 'An unexpected error occurred. Please try again',
 			...(erfid && { erfid }),
 		},
-		500
+		500,
 	);
 }

@@ -48,7 +48,9 @@ npm run preview
 ## Components
 
 ### TurnstileWidget
+
 Handles Cloudflare Turnstile integration with:
+
 - Explicit rendering
 - Execution mode: `execute` (manual trigger)
 - Appearance: `execute` (hidden until run, revealed on demand)
@@ -56,14 +58,18 @@ Handles Cloudflare Turnstile integration with:
 - Dark mode sync with system preferences
 
 ### SubmissionForm
+
 Contact form with:
+
 - Client-side validation
 - Turnstile integration
 - Automatic token submission
 - Error handling and user feedback
 
 ### AnalyticsDashboard
+
 Visualizes:
+
 - Validation statistics
 - Recent submissions
 - Geographic distribution
@@ -72,12 +78,14 @@ Visualizes:
 ## Configuration
 
 ### Turnstile Sitekey
+
 Provided via environment at build time:
+
 ```
 PUBLIC_TURNSTILE_SITE_KEY=your_site_key
 ```
-Read in `src/components/TurnstileWidget.tsx` as `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY`.
 
+Read in `src/components/TurnstileWidget.tsx` as `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY`.
 
 ## Build Process
 
@@ -97,5 +105,6 @@ The frontend is built and deployed as part of the main Worker deployment:
 ## Documentation
 
 For complete documentation, see the parent directory:
+
 - [Root README](../README.md) - Complete project documentation
 - [docs/](../docs/) - Technical documentation

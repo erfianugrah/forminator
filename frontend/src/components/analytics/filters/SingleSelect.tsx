@@ -19,14 +19,7 @@ interface SingleSelectProps {
  * SingleSelect component for filtering by a single value
  * Similar to MultiSelect but for single selection
  */
-export function SingleSelect({
-	options,
-	value,
-	onChange,
-	placeholder = 'Select...',
-	label,
-	className = '',
-}: SingleSelectProps) {
+export function SingleSelect({ options, value, onChange, placeholder = 'Select...', label, className = '' }: SingleSelectProps) {
 	const [isOpen, setIsOpen] = useState(false);
 	const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -51,20 +44,13 @@ export function SingleSelect({
 
 	return (
 		<div className={`relative ${className}`} ref={dropdownRef}>
-			{label && (
-				<label className="block text-sm font-medium text-foreground mb-1">{label}</label>
-			)}
+			{label && <label className="block text-sm font-medium text-foreground mb-1">{label}</label>}
 			<button
 				onClick={() => setIsOpen(!isOpen)}
 				className="flex items-center justify-between w-full px-4 py-2 border border-border rounded-md bg-background text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
 			>
-				<span className={value === 'all' || !value ? 'text-muted-foreground text-sm' : 'text-sm'}>
-					{selectedLabel}
-				</span>
-				<ChevronDown
-					size={16}
-					className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
-				/>
+				<span className={value === 'all' || !value ? 'text-muted-foreground text-sm' : 'text-sm'}>{selectedLabel}</span>
+				<ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
 			</button>
 
 			{isOpen && (
@@ -79,9 +65,7 @@ export function SingleSelect({
 									className="w-full flex items-center justify-between px-3 py-2 text-sm rounded text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
 								>
 									<span>{option.label}</span>
-									{isSelected && (
-										<Check size={16} className="text-primary" />
-									)}
+									{isSelected && <Check size={16} className="text-primary" />}
 								</button>
 							);
 						})}

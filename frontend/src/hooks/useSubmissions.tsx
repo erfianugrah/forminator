@@ -54,7 +54,7 @@ export function useSubmissions(
 	apiKey: string,
 	filters: UseSubmissionsFilters,
 	pagination: PaginationState,
-	sorting: SortingState
+	sorting: SortingState,
 ): UseSubmissionsReturn {
 	const [submissions, setSubmissions] = useState<Submission[]>([]);
 	const [totalCount, setTotalCount] = useState(0);
@@ -149,9 +149,7 @@ export function useSubmissions(
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') return;
 			console.error('Error loading submissions:', err);
-			const errorMessage = err instanceof Error
-				? err.message
-				: 'Failed to load submissions. Please check your API key and try again.';
+			const errorMessage = err instanceof Error ? err.message : 'Failed to load submissions. Please check your API key and try again.';
 			setError(errorMessage);
 		} finally {
 			setLoading(false);
@@ -172,7 +170,9 @@ export function useSubmissions(
 		filters.dateRange.start.toISOString(),
 		filters.dateRange.end.toISOString(),
 		filters.allowedStatus,
-		filters.fingerprintFlags ? `${filters.fingerprintFlags.headerReuse}-${filters.fingerprintFlags.tlsAnomaly}-${filters.fingerprintFlags.latencyMismatch}` : 'no-fp-filters',
+		filters.fingerprintFlags
+			? `${filters.fingerprintFlags.headerReuse}-${filters.fingerprintFlags.tlsAnomaly}-${filters.fingerprintFlags.latencyMismatch}`
+			: 'no-fp-filters',
 		pagination.pageIndex,
 		pagination.pageSize,
 		sorting.length > 0 ? sorting[0].id : '',

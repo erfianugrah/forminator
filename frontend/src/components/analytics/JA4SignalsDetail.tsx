@@ -32,7 +32,7 @@ export function JA4SignalsDetail({ signals, ja4Fingerprint, config }: JA4Signals
 	const browserThreshold = config?.ja4.browserRatioThreshold ?? 0.2;
 	const h2h3Threshold = config?.ja4.h2h3RatioThreshold ?? 0.9;
 	const cacheThreshold = config?.ja4.cacheRatioThreshold ?? 0.5;
-	const ja4WeightPercent = Math.round(((config?.risk.weights.ja4SessionHopping ?? DEFAULT_JA4_WEIGHT) * 100));
+	const ja4WeightPercent = Math.round((config?.risk.weights.ja4SessionHopping ?? DEFAULT_JA4_WEIGHT) * 100);
 
 	if (!signals || Object.keys(signals).length === 0) {
 		return (
@@ -49,19 +49,18 @@ export function JA4SignalsDetail({ signals, ja4Fingerprint, config }: JA4Signals
 
 	return (
 		<Card>
-				<CardHeader>
-					<h4 className="text-sm font-semibold">JA4 Intelligence (Cloudflare Global)</h4>
-					<p className="text-xs text-muted-foreground font-mono break-all">{ja4Fingerprint}</p>
-					<p className="text-xs text-muted-foreground mt-1">
-						1-hour Cloudflare telemetry feeds the Session Hopping component ({ja4WeightPercent}% weight) and seeds the fingerprint baseline cache used by the TLS/header anomaly detectors.
-					</p>
-				</CardHeader>
+			<CardHeader>
+				<h4 className="text-sm font-semibold">JA4 Intelligence (Cloudflare Global)</h4>
+				<p className="text-xs text-muted-foreground font-mono break-all">{ja4Fingerprint}</p>
+				<p className="text-xs text-muted-foreground mt-1">
+					1-hour Cloudflare telemetry feeds the Session Hopping component ({ja4WeightPercent}% weight) and seeds the fingerprint baseline
+					cache used by the TLS/header anomaly detectors.
+				</p>
+			</CardHeader>
 			<CardContent className="space-y-3">
 				{/* Critical signals used in fraud detection */}
 				<div className="space-y-2">
-					<h5 className="text-xs font-semibold text-muted-foreground uppercase">
-						Active Detection Signals
-					</h5>
+					<h5 className="text-xs font-semibold text-muted-foreground uppercase">Active Detection Signals</h5>
 
 					<SignalRow
 						label="IP Diversity (Global)"
@@ -84,25 +83,11 @@ export function JA4SignalsDetail({ signals, ja4Fingerprint, config }: JA4Signals
 
 				{/* Global rankings */}
 				<div className="space-y-2">
-					<h5 className="text-xs font-semibold text-muted-foreground uppercase">
-						Global Rankings (Cloudflare 1h)
-					</h5>
+					<h5 className="text-xs font-semibold text-muted-foreground uppercase">Global Rankings (Cloudflare 1h)</h5>
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-						<RankRow
-							label="IP Diversity Rank"
-							value={signals.ips_rank_1h}
-							description="Lower rank ⇒ more IPs globally share this JA4."
-						/>
-						<RankRow
-							label="Request Volume Rank"
-							value={signals.reqs_rank_1h}
-							description="Lower rank ⇒ higher global volume."
-						/>
-						<RankRow
-							label="UA Diversity Rank"
-							value={signals.uas_rank_1h}
-							description="Tracks how many UA strings present this JA4."
-						/>
+						<RankRow label="IP Diversity Rank" value={signals.ips_rank_1h} description="Lower rank ⇒ more IPs globally share this JA4." />
+						<RankRow label="Request Volume Rank" value={signals.reqs_rank_1h} description="Lower rank ⇒ higher global volume." />
+						<RankRow label="UA Diversity Rank" value={signals.uas_rank_1h} description="Tracks how many UA strings present this JA4." />
 						<RankRow
 							label="Path Diversity Rank"
 							value={signals.paths_rank_1h}
@@ -113,9 +98,7 @@ export function JA4SignalsDetail({ signals, ja4Fingerprint, config }: JA4Signals
 
 				{/* Optional signals (captured but not used) */}
 				<div className="space-y-2">
-					<h5 className="text-xs font-semibold text-muted-foreground uppercase">
-						Behavioral Signals (Monitoring)
-					</h5>
+					<h5 className="text-xs font-semibold text-muted-foreground uppercase">Behavioral Signals (Monitoring)</h5>
 
 					<SignalRow
 						label="Heuristic Ratio"
@@ -157,8 +140,8 @@ export function JA4SignalsDetail({ signals, ja4Fingerprint, config }: JA4Signals
 				<div className="flex items-start gap-2 p-3 rounded-md border border-border/60 bg-muted/30 text-xs">
 					<Info className="h-4 w-4 mt-0.5 text-primary" />
 					<p>
-						Known-good JA4 + TLS combinations are cached so repeat traffic skips anomaly checks. New or suspicious combos bypass the cache and
-						contribute to the fingerprint risk components immediately.
+						Known-good JA4 + TLS combinations are cached so repeat traffic skips anomaly checks. New or suspicious combos bypass the cache
+						and contribute to the fingerprint risk components immediately.
 					</p>
 				</div>
 			</CardContent>
@@ -182,7 +165,11 @@ function SignalRow({ label, value, threshold, description, format, used }: Signa
 				<div className="flex-1">
 					<div className="flex items-center gap-2">
 						<span className="text-sm font-medium">{label}</span>
-						{used && <Badge variant="outline" className="text-xs">Active</Badge>}
+						{used && (
+							<Badge variant="outline" className="text-xs">
+								Active
+							</Badge>
+						)}
 					</div>
 					<p className="text-xs text-muted-foreground mt-1">{description}</p>
 					<p className="text-xs text-muted-foreground mt-1">Value: N/A</p>
@@ -198,10 +185,7 @@ function SignalRow({ label, value, threshold, description, format, used }: Signa
 		<CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
 	);
 
-	const displayValue =
-		format === 'percentile'
-			? `${(value * 100).toFixed(1)}th percentile`
-			: `${(value * 100).toFixed(1)}%`;
+	const displayValue = format === 'percentile' ? `${(value * 100).toFixed(1)}th percentile` : `${(value * 100).toFixed(1)}%`;
 
 	return (
 		<div
@@ -215,7 +199,11 @@ function SignalRow({ label, value, threshold, description, format, used }: Signa
 			<div className="flex-1">
 				<div className="flex items-center gap-2">
 					<span className="text-sm font-medium">{label}</span>
-					{used && <Badge variant="outline" className="text-xs">Active</Badge>}
+					{used && (
+						<Badge variant="outline" className="text-xs">
+							Active
+						</Badge>
+					)}
 				</div>
 				<p className="text-xs text-muted-foreground mt-1">{description}</p>
 				<p className="text-xs font-mono mt-1">
@@ -226,15 +214,7 @@ function SignalRow({ label, value, threshold, description, format, used }: Signa
 	);
 }
 
-function RankRow({
-	label,
-	value,
-	description,
-}: {
-	label: string;
-	value: number | undefined;
-	description: string;
-}) {
+function RankRow({ label, value, description }: { label: string; value: number | undefined; description: string }) {
 	return (
 		<div className="p-2 rounded border border-border/60 bg-muted/40">
 			<div className="flex items-center justify-between">
@@ -245,10 +225,7 @@ function RankRow({
 			</div>
 			<p className="text-xs text-muted-foreground mt-1">{description}</p>
 			<p className="text-xs font-mono mt-1">
-				Value:{' '}
-				<span className="font-semibold">
-					{typeof value === 'number' ? `#${value}` : 'N/A'}
-				</span>
+				Value: <span className="font-semibold">{typeof value === 'number' ? `#${value}` : 'N/A'}</span>
 			</p>
 		</div>
 	);

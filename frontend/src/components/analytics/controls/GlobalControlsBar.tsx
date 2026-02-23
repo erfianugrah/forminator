@@ -122,49 +122,48 @@ export function GlobalControlsBar({
 
 				{/* Right Section - Export */}
 				<div className="flex items-center gap-2">
-
-				{/* Export Menu */}
-				{(onExportCSV || onExportJSON) && (
-					<div className="relative" ref={exportMenuRef}>
-						<button
-							onClick={() => setShowExportMenu(!showExportMenu)}
-							disabled={isLoading}
-							className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
-							title="Export data"
-						>
-							<Download size={16} />
-							Export
-						</button>
-						{showExportMenu && (
-							<div className="absolute right-0 mt-2 w-32 bg-popover border border-border rounded-md shadow-lg z-50 backdrop-blur-sm">
-								<div className="p-2 space-y-1">
-									{onExportCSV && (
-										<button
-											onClick={() => {
-												onExportCSV();
-												setShowExportMenu(false);
-											}}
-											className="w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary"
-										>
-											CSV
-										</button>
-									)}
-									{onExportJSON && (
-										<button
-											onClick={() => {
-												onExportJSON();
-												setShowExportMenu(false);
-											}}
-											className="w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary"
-										>
-											JSON
-										</button>
-									)}
+					{/* Export Menu */}
+					{(onExportCSV || onExportJSON) && (
+						<div className="relative" ref={exportMenuRef}>
+							<button
+								onClick={() => setShowExportMenu(!showExportMenu)}
+								disabled={isLoading}
+								className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
+								title="Export data"
+							>
+								<Download size={16} />
+								Export
+							</button>
+							{showExportMenu && (
+								<div className="absolute right-0 mt-2 w-32 bg-popover border border-border rounded-md shadow-lg z-50 backdrop-blur-sm">
+									<div className="p-2 space-y-1">
+										{onExportCSV && (
+											<button
+												onClick={() => {
+													onExportCSV();
+													setShowExportMenu(false);
+												}}
+												className="w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary"
+											>
+												CSV
+											</button>
+										)}
+										{onExportJSON && (
+											<button
+												onClick={() => {
+													onExportJSON();
+													setShowExportMenu(false);
+												}}
+												className="w-full text-left px-3 py-2 text-sm text-foreground rounded hover:bg-secondary"
+											>
+												JSON
+											</button>
+										)}
+									</div>
 								</div>
-							</div>
-						)}
-					</div>
-				)}
+							)}
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

@@ -38,9 +38,7 @@ export function getRelativeTime(isoTimestamp: string): string {
  * @param isoTimestamp ISO 8601 timestamp string
  * @returns 'critical' (<1h), 'warning' (<6h), 'normal' (>=6h), or 'expired'
  */
-export function getTimeUrgency(
-	isoTimestamp: string
-): 'critical' | 'warning' | 'normal' | 'expired' {
+export function getTimeUrgency(isoTimestamp: string): 'critical' | 'warning' | 'normal' | 'expired' {
 	const targetTime = new Date(isoTimestamp).getTime();
 	const now = Date.now();
 	const diffMs = targetTime - now;

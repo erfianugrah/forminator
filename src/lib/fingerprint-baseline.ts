@@ -17,7 +17,7 @@ export async function recordFingerprintBaseline(
 	fingerprintKey: string,
 	ja4?: string | null,
 	asn?: number | null,
-	metadata?: Record<string, any>
+	metadata?: Record<string, any>,
 ): Promise<void> {
 	if (!fingerprintKey) {
 		return;
@@ -33,7 +33,7 @@ export async function recordFingerprintBaseline(
 			`INSERT INTO fingerprint_baselines (type, fingerprint_key, ja4_bucket, asn_bucket, hit_count, metadata)
 			 VALUES (?, ?, ?, ?, 1, ?)
 			 ON CONFLICT(type, fingerprint_key, ja4_bucket, asn_bucket)
-			 DO UPDATE SET hit_count = hit_count + 1, last_seen = CURRENT_TIMESTAMP`
+			 DO UPDATE SET hit_count = hit_count + 1, last_seen = CURRENT_TIMESTAMP`,
 		)
 		.bind(type, fingerprintKey, ja4Bucket, asnBucket, metadataJson)
 		.run();
@@ -44,7 +44,7 @@ export async function isFingerprintBaselineKnown(
 	type: FingerprintType,
 	fingerprintKey?: string | null,
 	ja4?: string | null,
-	asn?: number | null
+	asn?: number | null,
 ): Promise<boolean> {
 	if (!fingerprintKey) {
 		return false;
@@ -58,7 +58,7 @@ export async function isFingerprintBaselineKnown(
 			`SELECT hit_count
 			 FROM fingerprint_baselines
 			 WHERE type = ? AND fingerprint_key = ? AND ja4_bucket = ? AND asn_bucket = ?
-			 LIMIT 1`
+			 LIMIT 1`,
 		)
 		.bind(type, fingerprintKey, ja4Bucket, asnBucket)
 		.first<{ hit_count: number }>();

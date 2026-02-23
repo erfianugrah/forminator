@@ -65,20 +65,20 @@ export interface ValidationDetail {
 
 // Helper function to format detection layer names for display
 function formatDetectionLayer(layer: string): string {
-const layerMap: Record<string, string> = {
-	'email_fraud_detection': 'Email Fraud Detection (Layer 1)',
-	'ephemeral_id_tracking': 'Ephemeral ID Tracking (Layer 2)',
-	'ja4_fingerprinting': 'JA4 Fingerprinting (Layer 4)',
-	'token_replay_protection': 'Token Replay Protection',
-	'turnstile_validation': 'Turnstile Validation',
-	'pre_validation_blacklist': 'Pre-Validation Blacklist (Layer 0)',
-	'duplicate_email': 'Duplicate Email Enforcement',
-	'holistic_risk': 'Holistic Risk (Layer 3)',
-	'header_fingerprint_reuse': 'Header Fingerprint Reuse (Layer 4.5)',
-	'tls_fingerprint_anomaly': 'TLS Fingerprint Anomaly (Layer 4.5)',
-	'latency_mismatch': 'Latency / Device Mismatch (Layer 4.5)',
-	'fingerprint_anomaly': 'Fingerprint Anomaly (Layer 4.5)',
-};
+	const layerMap: Record<string, string> = {
+		email_fraud_detection: 'Email Fraud Detection (Layer 1)',
+		ephemeral_id_tracking: 'Ephemeral ID Tracking (Layer 2)',
+		ja4_fingerprinting: 'JA4 Fingerprinting (Layer 4)',
+		token_replay_protection: 'Token Replay Protection',
+		turnstile_validation: 'Turnstile Validation',
+		pre_validation_blacklist: 'Pre-Validation Blacklist (Layer 0)',
+		duplicate_email: 'Duplicate Email Enforcement',
+		holistic_risk: 'Holistic Risk (Layer 3)',
+		header_fingerprint_reuse: 'Header Fingerprint Reuse (Layer 4.5)',
+		tls_fingerprint_anomaly: 'TLS Fingerprint Anomaly (Layer 4.5)',
+		latency_mismatch: 'Latency / Device Mismatch (Layer 4.5)',
+		fingerprint_anomaly: 'Fingerprint Anomaly (Layer 4.5)',
+	};
 	return layerMap[layer] || layer;
 }
 
@@ -100,12 +100,8 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 				) : validation ? (
 					<>
 						<DialogHeader>
-							<DialogTitle>
-								Validation Details - ID #{validation.id}
-							</DialogTitle>
-							<DialogDescription>
-								Complete information for this blocked validation attempt
-							</DialogDescription>
+							<DialogTitle>Validation Details - ID #{validation.id}</DialogTitle>
+							<DialogDescription>Complete information for this blocked validation attempt</DialogDescription>
 						</DialogHeader>
 
 						<div className="p-6 space-y-6">
@@ -115,25 +111,29 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 								<div className="grid grid-cols-2 gap-4 text-sm">
 									<div>
 										<span className="text-muted-foreground">Success:</span>
-										<p className={`font-bold ${validation.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+										<p
+											className={`font-bold ${validation.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+										>
 											{validation.success ? 'Yes' : 'No'}
 										</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">Allowed:</span>
-										<p className={`font-bold ${validation.allowed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+										<p
+											className={`font-bold ${validation.allowed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+										>
 											{validation.allowed ? 'Yes' : 'No (Blocked)'}
 										</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">Detection Layer:</span>
-										<p className="font-medium">
-											{validation.detection_type ? formatDetectionLayer(validation.detection_type) : 'N/A'}
-										</p>
+										<p className="font-medium">{validation.detection_type ? formatDetectionLayer(validation.detection_type) : 'N/A'}</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">Submission ID:</span>
-										<p className="font-mono text-xs">{validation.submission_id !== null ? validation.submission_id : 'No submission created'}</p>
+										<p className="font-mono text-xs">
+											{validation.submission_id !== null ? validation.submission_id : 'No submission created'}
+										</p>
 									</div>
 									{validation.block_reason && (
 										<div className="col-span-2">
@@ -144,13 +144,29 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 									<div>
 										<span className="text-muted-foreground">Challenge Time:</span>
 										<p className="font-medium">
-											{new Date(validation.challenge_ts).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+											{new Date(validation.challenge_ts).toLocaleString('en-US', {
+												year: 'numeric',
+												month: '2-digit',
+												day: '2-digit',
+												hour: '2-digit',
+												minute: '2-digit',
+												second: '2-digit',
+												hour12: false,
+											})}
 										</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">Created:</span>
 										<p className="font-medium">
-											{new Date(validation.created_at).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+											{new Date(validation.created_at).toLocaleString('en-US', {
+												year: 'numeric',
+												month: '2-digit',
+												day: '2-digit',
+												hour: '2-digit',
+												minute: '2-digit',
+												second: '2-digit',
+												hour12: false,
+											})}
 										</p>
 									</div>
 									<div>
@@ -171,14 +187,15 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 							</div>
 
 							{/* Fraud Risk Assessment */}
-							{validation.risk_score_breakdown && (() => {
-								try {
-									const breakdown = JSON.parse(validation.risk_score_breakdown);
-									return <FraudAssessment breakdown={breakdown} config={config} />;
-								} catch (e) {
-									return null;
-								}
-							})()}
+							{validation.risk_score_breakdown &&
+								(() => {
+									try {
+										const breakdown = JSON.parse(validation.risk_score_breakdown);
+										return <FraudAssessment breakdown={breakdown} config={config} />;
+									} catch (e) {
+										return null;
+									}
+								})()}
 
 							{/* Geographic Data */}
 							<div>
@@ -214,7 +231,9 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 									</div>
 									<div>
 										<span className="text-muted-foreground">EU Country:</span>
-										<p className="font-medium">{validation.is_eu_country === '1' ? 'Yes' : validation.is_eu_country === '0' ? 'No' : 'N/A'}</p>
+										<p className="font-medium">
+											{validation.is_eu_country === '1' ? 'Yes' : validation.is_eu_country === '0' ? 'No' : 'N/A'}
+										</p>
 									</div>
 								</div>
 							</div>
@@ -229,9 +248,7 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 									</div>
 									<div>
 										<span className="text-muted-foreground">ASN:</span>
-										<p className="font-mono text-xs">
-											{validation.asn ? `AS${validation.asn}` : 'N/A'}
-										</p>
+										<p className="font-mono text-xs">{validation.asn ? `AS${validation.asn}` : 'N/A'}</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">AS Organization:</span>
@@ -263,8 +280,8 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 												validation.bot_score && validation.bot_score < 30
 													? 'text-destructive'
 													: validation.bot_score && validation.bot_score >= 70
-													? 'text-green-600 dark:text-green-400'
-													: 'text-yellow-600 dark:text-yellow-400'
+														? 'text-green-600 dark:text-green-400'
+														: 'text-yellow-600 dark:text-yellow-400'
 											}`}
 										>
 											{validation.bot_score !== null ? validation.bot_score : 'N/A'}
@@ -272,9 +289,7 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 									</div>
 									<div>
 										<span className="text-muted-foreground">Client Trust Score:</span>
-										<p className="font-medium">
-											{validation.client_trust_score !== null ? validation.client_trust_score : 'N/A'}
-										</p>
+										<p className="font-medium">{validation.client_trust_score !== null ? validation.client_trust_score : 'N/A'}</p>
 									</div>
 									<div>
 										<span className="text-muted-foreground">Verified Bot:</span>
@@ -311,19 +326,21 @@ export function ValidationDetailDialog({ validation, loading, onClose, config }:
 							</div>
 
 							{/* JA4 Intelligence */}
-							{validation.ja4 && validation.ja4_signals && (() => {
-								try {
-									const signals = JSON.parse(validation.ja4_signals);
-									return <JA4SignalsDetail signals={signals} ja4Fingerprint={validation.ja4} config={config} />;
-								} catch (e) {
-									return (
-										<div>
-											<h3 className="text-lg font-semibold mb-3">JA4 Fingerprint</h3>
-											<p className="font-mono text-xs break-all">{validation.ja4}</p>
-										</div>
-									);
-								}
-							})()}
+							{validation.ja4 &&
+								validation.ja4_signals &&
+								(() => {
+									try {
+										const signals = JSON.parse(validation.ja4_signals);
+										return <JA4SignalsDetail signals={signals} ja4Fingerprint={validation.ja4} config={config} />;
+									} catch (e) {
+										return (
+											<div>
+												<h3 className="text-lg font-semibold mb-3">JA4 Fingerprint</h3>
+												<p className="font-mono text-xs break-all">{validation.ja4}</p>
+											</div>
+										);
+									}
+								})()}
 						</div>
 					</>
 				) : null}

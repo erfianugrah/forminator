@@ -124,11 +124,7 @@ export async function loadFieldMappings(env: Env): Promise<FieldMappingConfig> {
 /**
  * Extract a single field value from payload using configured mappings
  */
-export async function extractField(
-	payload: Record<string, any>,
-	fieldType: string,
-	env: Env,
-): Promise<string | null> {
+export async function extractField(payload: Record<string, any>, fieldType: string, env: Env): Promise<string | null> {
 	const mappings = await loadFieldMappings(env);
 	const config = mappings[fieldType];
 
@@ -165,10 +161,7 @@ export async function extractField(
 
 	// Required but not found?
 	if (config.required) {
-		throw new Error(
-			`Required field '${fieldType}' not found in payload. ` +
-				`Tried paths: ${config.paths.join(', ')}`,
-		);
+		throw new Error(`Required field '${fieldType}' not found in payload. ` + `Tried paths: ${config.paths.join(', ')}`);
 	}
 
 	return null;
@@ -244,10 +237,7 @@ function getNestedValue(obj: any, path: string): any {
 /**
  * Validate field value against validation rules
  */
-function validateFieldValue(
-	value: string,
-	validation: NonNullable<FieldMappingConfig[string]['validation']>,
-): boolean {
+function validateFieldValue(value: string, validation: NonNullable<FieldMappingConfig[string]['validation']>): boolean {
 	// Max length check
 	if (validation.maxLength && value.length > validation.maxLength) {
 		return false;

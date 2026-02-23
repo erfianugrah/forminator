@@ -1,14 +1,4 @@
-import {
-	ResponsiveContainer,
-	BarChart as RechartsBarChart,
-	Bar,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	Legend,
-	Cell,
-} from 'recharts';
+import { ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell } from 'recharts';
 
 interface BarChartProps {
 	data: any[];
@@ -24,13 +14,7 @@ interface BarChartProps {
 	className?: string;
 }
 
-const DEFAULT_COLORS = [
-	'hsl(var(--chart-1))',
-	'hsl(var(--chart-2))',
-	'hsl(var(--chart-3))',
-	'hsl(var(--chart-4))',
-	'hsl(var(--chart-5))',
-];
+const DEFAULT_COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
 /**
  * BarChart component for displaying categorical data
@@ -67,34 +51,12 @@ export function BarChart({
 	return (
 		<div className={className}>
 			<ResponsiveContainer width="100%" height={height}>
-				<RechartsBarChart
-					data={data}
-					layout={layout}
-					margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-				>
-					{showGrid && (
-						<CartesianGrid
-							strokeDasharray="3 3"
-							stroke="hsl(var(--border))"
-							opacity={0.3}
-						/>
-					)}
+				<RechartsBarChart data={data} layout={layout} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+					{showGrid && <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />}
 					{layout === 'horizontal' ? (
 						<>
-							<XAxis
-								dataKey={xAxisKey}
-								stroke="hsl(var(--muted-foreground))"
-								fontSize={12}
-								tickLine={false}
-								axisLine={false}
-							/>
-							<YAxis
-								stroke="hsl(var(--muted-foreground))"
-								fontSize={12}
-								tickLine={false}
-								axisLine={false}
-								tickFormatter={formatYAxis}
-							/>
+							<XAxis dataKey={xAxisKey} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+							<YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatYAxis} />
 						</>
 					) : (
 						<>
@@ -119,15 +81,9 @@ export function BarChart({
 					)}
 					<Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent))' }} />
 					{showLegend && <Legend />}
-					<Bar
-						dataKey={yAxisKey}
-						radius={layout === 'vertical' ? [0, 4, 4, 0] : [4, 4, 0, 0]}
-					>
+					<Bar dataKey={yAxisKey} radius={layout === 'vertical' ? [0, 4, 4, 0] : [4, 4, 0, 0]}>
 						{data.map((entry, index) => (
-							<Cell
-								key={`cell-${index}`}
-								fill={colors[index % colors.length]}
-							/>
+							<Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
 						))}
 					</Bar>
 				</RechartsBarChart>

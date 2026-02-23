@@ -25,6 +25,7 @@ The application uses **Cloudflare D1**, a serverless SQLite database. All databa
 **Database ID:** `f36739a7-badb-456f-bbab-da0732722cae`
 
 **Tables:**
+
 1. `submissions` – Form submissions + request metadata, risk breakdowns, and `testing_bypass`
 2. `turnstile_validations` – Turnstile attempts with fingerprints, risk context, and replay hashes
 3. `fraud_blocks` – Pre-validation blocks (email heuristics, blacklist hits)
@@ -39,14 +40,14 @@ The application uses **Cloudflare D1**, a serverless SQLite database. All databa
 
 ```jsonc
 {
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "DB",
-      "database_id": "f36739a7-badb-456f-bbab-da0732722cae",
-      "remote": true
-    }
-  ]
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "DB",
+			"database_id": "f36739a7-badb-456f-bbab-da0732722cae",
+			"remote": true,
+		},
+	],
 }
 ```
 
@@ -482,6 +483,7 @@ D1 doesn't support ALTER TABLE easily. For schema changes:
 3. Apply to production with `--remote`
 
 **Example: Add column**
+
 ```sql
 -- migrations/add_new_field.sql
 ALTER TABLE submissions ADD COLUMN new_field TEXT;
@@ -492,6 +494,7 @@ wrangler d1 execute DB --file=./migrations/add_new_field.sql --remote
 ```
 
 **Example: Remove NOT NULL constraint (recreate table)**
+
 ```sql
 -- Cannot directly remove NOT NULL in SQLite
 -- Must recreate table
@@ -570,6 +573,7 @@ wrangler d1 execute DB --file=./schema.sql  # local
 **Cause:** Trying to delete submissions before validations.
 
 **Solution:** Delete in correct order:
+
 ```bash
 # 1. Delete validations first
 wrangler d1 execute DB --command="DELETE FROM turnstile_validations" --remote
@@ -583,6 +587,7 @@ wrangler d1 execute DB --command="DELETE FROM submissions" --remote
 **Error:** `Couldn't find DB with name 'turnstile-demo'`
 
 **Solution:** Check database name in wrangler.jsonc matches command:
+
 ```bash
 # List databases
 wrangler d1 list
@@ -596,6 +601,7 @@ wrangler d1 execute DB --command="..." --remote
 **Error:** Query takes too long or times out
 
 **Solution:** Add indexes or limit results:
+
 ```bash
 # Add LIMIT
 wrangler d1 execute DB --command="
@@ -615,6 +621,7 @@ wrangler d1 execute DB --command="
 **Error:** SQL syntax error
 
 **Solution:** Escape special characters, use proper SQL:
+
 ```bash
 # Escape single quotes with double single quotes
 wrangler d1 execute DB --command="
@@ -629,6 +636,7 @@ wrangler d1 execute DB --command="SELECT * FROM submissions WHERE email = 'user@
 ### Performance Tips
 
 **1. Use Indexes**
+
 ```sql
 -- Check if query uses index
 EXPLAIN QUERY PLAN SELECT * FROM submissions WHERE ephemeral_id = '...';
@@ -637,6 +645,7 @@ EXPLAIN QUERY PLAN SELECT * FROM submissions WHERE ephemeral_id = '...';
 ```
 
 **2. Limit Large Queries**
+
 ```bash
 # Bad: Return all rows
 SELECT * FROM submissions
@@ -646,6 +655,7 @@ SELECT * FROM submissions LIMIT 100 OFFSET 0
 ```
 
 **3. Use Batch Operations**
+
 ```bash
 # Bad: Multiple small queries
 wrangler d1 execute DB --command="SELECT COUNT(*) FROM submissions" --remote

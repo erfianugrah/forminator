@@ -90,36 +90,23 @@ export function DataTable<TData>({
 							{table.getHeaderGroups().map((headerGroup) => (
 								<tr key={headerGroup.id}>
 									{headerGroup.headers.map((header) => (
-										<th
-											key={header.id}
-											className={`px-3 py-3.5 text-left text-sm font-semibold text-foreground`}
-										>
+										<th key={header.id} className={`px-3 py-3.5 text-left text-sm font-semibold text-foreground`}>
 											{header.isPlaceholder ? null : (
 												<div
 													className={
-														header.column.getCanSort()
-															? 'flex items-center gap-2 cursor-pointer select-none hover:text-primary'
-															: ''
+														header.column.getCanSort() ? 'flex items-center gap-2 cursor-pointer select-none hover:text-primary' : ''
 													}
 													onClick={header.column.getToggleSortingHandler()}
 												>
-													{flexRender(
-														header.column.columnDef.header,
-														header.getContext()
-													)}
+													{flexRender(header.column.columnDef.header, header.getContext())}
 													{header.column.getCanSort() && (
 														<span className="flex items-center">
-															{header.column.getIsSorted() ===
-															'asc' ? (
+															{header.column.getIsSorted() === 'asc' ? (
 																<ChevronUp size={16} />
-															) : header.column.getIsSorted() ===
-															  'desc' ? (
+															) : header.column.getIsSorted() === 'desc' ? (
 																<ChevronDown size={16} />
 															) : (
-																<ChevronsUpDown
-																	size={16}
-																	className="opacity-50"
-																/>
+																<ChevronsUpDown size={16} className="opacity-50" />
 															)}
 														</span>
 													)}
@@ -133,25 +120,16 @@ export function DataTable<TData>({
 						<tbody>
 							{table.getRowModel().rows.length === 0 ? (
 								<tr>
-									<td
-										colSpan={columns.length}
-										className="px-4 py-8 text-center text-muted-foreground"
-									>
+									<td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
 										No data available
 									</td>
 								</tr>
 							) : (
 								table.getRowModel().rows.map((row) => (
-									<tr
-										key={row.id}
-										className="border-t border-border hover:bg-muted/40 transition-colors"
-									>
+									<tr key={row.id} className="border-t border-border hover:bg-muted/40 transition-colors">
 										{row.getVisibleCells().map((cell) => (
 											<td key={cell.id} className={`px-3 py-3.5 text-sm`}>
-												{flexRender(
-													cell.column.columnDef.cell,
-													cell.getContext()
-												)}
+												{flexRender(cell.column.columnDef.cell, cell.getContext())}
 											</td>
 										))}
 									</tr>
@@ -167,14 +145,8 @@ export function DataTable<TData>({
 				<div className="text-sm text-muted-foreground">
 					{(() => {
 						const total = totalCount || data.length;
-						const start = Math.min(
-							pagination.pageIndex * pagination.pageSize + 1,
-							total
-						);
-						const end = Math.min(
-							(pagination.pageIndex + 1) * pagination.pageSize,
-							total
-						);
+						const start = Math.min(pagination.pageIndex * pagination.pageSize + 1, total);
+						const end = Math.min((pagination.pageIndex + 1) * pagination.pageSize, total);
 
 						if (total === 0) return 'No results';
 						if (total === 1) return 'Showing 1 result';

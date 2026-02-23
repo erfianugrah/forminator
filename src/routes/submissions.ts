@@ -40,7 +40,7 @@ async function getOffenseCount(
 	email?: string,
 	ephemeralId?: string | null,
 	ipAddress?: string,
-	ja4?: string | null
+	ja4?: string | null,
 ): Promise<number> {
 	const oneDayAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
@@ -76,7 +76,7 @@ async function getOffenseCount(
 			`SELECT COUNT(*) as count
 			 FROM fraud_blacklist
 			 WHERE (${whereClause})
-			 AND blocked_at > ?`
+			 AND blocked_at > ?`,
 		)
 		.bind(...bindings, oneDayAgo)
 		.first<{ count: number }>();
@@ -115,9 +115,7 @@ app.post('/', async (c) => {
 		let erfidConfig: ErfidConfig | undefined;
 		if (c.env.ERFID_CONFIG) {
 			try {
-				erfidConfig = typeof c.env.ERFID_CONFIG === 'string'
-					? JSON.parse(c.env.ERFID_CONFIG)
-					: c.env.ERFID_CONFIG;
+				erfidConfig = typeof c.env.ERFID_CONFIG === 'string' ? JSON.parse(c.env.ERFID_CONFIG) : c.env.ERFID_CONFIG;
 			} catch (parseError) {
 				logger.warn({ error: parseError }, 'Failed to parse ERFID_CONFIG');
 			}
@@ -138,9 +136,12 @@ app.post('/', async (c) => {
 			const encoder = new TextEncoder();
 			const apiKeyBytes = encoder.encode(apiKey);
 			const expectedKeyBytes = encoder.encode(expectedKey);
-			apiKeyValid = apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
-				(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean })
-					.timingSafeEqual(apiKeyBytes, expectedKeyBytes);
+			apiKeyValid =
+				apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
+				(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean }).timingSafeEqual(
+					apiKeyBytes,
+					expectedKeyBytes,
+				);
 		}
 		const skipTurnstile = Boolean(allowBypass && !isProduction && apiKeyValid);
 
@@ -152,21 +153,14 @@ app.post('/', async (c) => {
 
 		// ========== EXTRACT METADATA ==========
 		const metadata = extractRequestMetadata(c.req.raw);
-		logger.info(
-			{ ip: metadata.remoteIp, country: metadata.country, userAgent: metadata.userAgent },
-			'Form submission received'
-		);
+		logger.info({ ip: metadata.remoteIp, country: metadata.country, userAgent: metadata.userAgent }, 'Form submission received');
 
 		// ========== PARSE AND VALIDATE FORM DATA ==========
 		let rawPayload: Record<string, unknown>;
 		try {
 			rawPayload = await c.req.json();
 		} catch {
-			throw new ValidationError(
-				'Invalid JSON body',
-				{},
-				'Request body must be valid JSON'
-			);
+			throw new ValidationError('Invalid JSON body', {}, 'Request body must be valid JSON');
 		}
 		const extractedEmail = await extractField(rawPayload, 'email', c.env);
 		const extractedPhone = await extractField(rawPayload, 'phone', c.env);
@@ -176,7 +170,7 @@ app.post('/', async (c) => {
 			throw new ValidationError(
 				'Form validation failed',
 				{ errors: validationResult.error.errors },
-				formatZodErrors(validationResult.error)
+				formatZodErrors(validationResult.error),
 			);
 		}
 
@@ -191,7 +185,7 @@ app.post('/', async (c) => {
 			metadata.remoteIp,
 			metadata.ja4 ?? null,
 			sanitized.email,
-			db
+			db,
 		);
 
 		if (blacklistCheck.blocked) {
@@ -201,7 +195,7 @@ app.post('/', async (c) => {
 					confidence: blacklistCheck.confidence,
 					retryAfter: blacklistCheck.retryAfter,
 				},
-				'Blacklist block triggered'
+				'Blacklist block triggered',
 			);
 
 			const waitTime = formatWaitTime(blacklistCheck.retryAfter || 3600);
@@ -209,7 +203,7 @@ app.post('/', async (c) => {
 				blacklistCheck.reason || 'Blacklisted',
 				blacklistCheck.retryAfter || 3600,
 				blacklistCheck.expiresAt || new Date(Date.now() + 3600000).toISOString(),
-				`You have made too many submission attempts. Please wait ${waitTime} before trying again`
+				`You have made too many submission attempts. Please wait ${waitTime} before trying again`,
 			);
 		}
 
@@ -220,11 +214,7 @@ app.post('/', async (c) => {
 
 		if (!skipTurnstile) {
 			if (!turnstileToken) {
-				throw new ValidationError(
-					'Turnstile token required',
-					{},
-					'Security verification token is missing'
-				);
+				throw new ValidationError('Turnstile token required', {}, 'Security verification token is missing');
 			}
 
 			tokenHash = hashToken(turnstileToken);
@@ -232,15 +222,18 @@ app.post('/', async (c) => {
 
 			if (isReused) {
 				// Token replay is definitive block
-				const replayRiskScore = calculateNormalizedRiskScore({
-					tokenReplay: true,
-					emailRiskScore: 0,
-					ephemeralIdCount: 1,
-					validationCount: 1,
-					uniqueIPCount: 1,
-					ja4RawScore: 0,
-					blockTrigger: 'token_replay',
-				}, config);
+				const replayRiskScore = calculateNormalizedRiskScore(
+					{
+						tokenReplay: true,
+						emailRiskScore: 0,
+						ephemeralIdCount: 1,
+						validationCount: 1,
+						uniqueIPCount: 1,
+						ja4RawScore: 0,
+						blockTrigger: 'token_replay',
+					},
+					config,
+				);
 
 				await logValidation(db, {
 					tokenHash,
@@ -258,7 +251,7 @@ app.post('/', async (c) => {
 				throw new ValidationError(
 					'Token replay attack',
 					{ tokenHash },
-					'This verification has already been used. Please refresh and try again'
+					'This verification has already been used. Please refresh and try again',
 				);
 			}
 
@@ -270,15 +263,18 @@ app.post('/', async (c) => {
 
 		// Check Turnstile validation result (definitive if failed)
 		if (!validation.valid) {
-			const failedScore = calculateNormalizedRiskScore({
-				tokenReplay: false,
-				emailRiskScore: 0,
-				ephemeralIdCount: 1,
-				validationCount: 3, // Failed validations indicate attempts
-				uniqueIPCount: 1,
-				ja4RawScore: 0,
-				blockTrigger: 'turnstile_failed',
-			}, config);
+			const failedScore = calculateNormalizedRiskScore(
+				{
+					tokenReplay: false,
+					emailRiskScore: 0,
+					ephemeralIdCount: 1,
+					validationCount: 3, // Failed validations indicate attempts
+					uniqueIPCount: 1,
+					ja4RawScore: 0,
+					blockTrigger: 'turnstile_failed',
+				},
+				config,
+			);
 
 			await logValidation(db, {
 				tokenHash,
@@ -297,7 +293,7 @@ app.post('/', async (c) => {
 				'Turnstile',
 				validation.reason || 'Verification failed',
 				{ errors: validation.errors },
-				validation.userMessage || 'Please complete the verification challenge'
+				validation.userMessage || 'Please complete the verification challenge',
 			);
 		}
 
@@ -310,7 +306,7 @@ app.post('/', async (c) => {
 				metadata.remoteIp,
 				metadata.ja4 ?? null,
 				null, // email already checked in pre-validation
-				db
+				db,
 			);
 
 			if (ephemeralBlacklistCheck.blocked) {
@@ -321,7 +317,7 @@ app.post('/', async (c) => {
 						confidence: ephemeralBlacklistCheck.confidence,
 						retryAfter: ephemeralBlacklistCheck.retryAfter,
 					},
-					'Ephemeral ID blacklist block triggered (post-validation)'
+					'Ephemeral ID blacklist block triggered (post-validation)',
 				);
 
 				const waitTime = formatWaitTime(ephemeralBlacklistCheck.retryAfter || 3600);
@@ -329,7 +325,7 @@ app.post('/', async (c) => {
 					ephemeralBlacklistCheck.reason || 'Blacklisted',
 					ephemeralBlacklistCheck.retryAfter || 3600,
 					ephemeralBlacklistCheck.expiresAt || new Date(Date.now() + 3600000).toISOString(),
-					`You have made too many submission attempts. Please wait ${waitTime} before trying again`
+					`You have made too many submission attempts. Please wait ${waitTime} before trying again`,
 				);
 			}
 		}
@@ -370,7 +366,7 @@ app.post('/', async (c) => {
 						decision: emailFraudResult.decision,
 						pattern: emailFraudResult.signals.patternType,
 					},
-					'Email fraud signal collected'
+					'Email fraud signal collected',
 				);
 			}
 		}
@@ -387,20 +383,14 @@ app.post('/', async (c) => {
 					ips: ephemeralSignals.uniqueIPCount,
 					warnings: ephemeralSignals.warnings,
 				},
-				'Ephemeral ID signals collected'
+				'Ephemeral ID signals collected',
 			);
 		}
 
 		// 2.3: JA4 signals
 		let ja4Signals = null;
 		if (metadata.ja4) {
-			ja4Signals = await collectJA4Signals(
-				metadata.remoteIp,
-				metadata.ja4,
-				validation.ephemeralId || null,
-				db,
-				config
-			);
+			ja4Signals = await collectJA4Signals(metadata.remoteIp, metadata.ja4, validation.ephemeralId || null, db, config);
 
 			logger.info(
 				{
@@ -409,30 +399,19 @@ app.post('/', async (c) => {
 					layer: ja4Signals.detectionLayer,
 					warnings: ja4Signals.warnings,
 				},
-				'JA4 signals collected'
+				'JA4 signals collected',
 			);
 		}
 
 		// 2.4: IP Rate Limit signals
-		const ipRateLimitSignals = await collectIPRateLimitSignals(
-			metadata.remoteIp,
-			db,
-			config
-		);
+		const ipRateLimitSignals = await collectIPRateLimitSignals(metadata.remoteIp, db, config);
 
 		// 2.4b: Email diversity per IP (detects form spam with unique emails from same IP)
-		const emailDiversitySignal = await collectEmailDiversitySignal(
-			metadata.remoteIp,
-			db,
-			config
-		);
+		const emailDiversitySignal = await collectEmailDiversitySignal(metadata.remoteIp, db, config);
 
 		// Combine IP rate limit with email diversity — take the higher risk signal
 		const combinedIpRiskScore = Math.max(ipRateLimitSignals.riskScore, emailDiversitySignal.riskScore);
-		const combinedIpWarnings = [
-			...ipRateLimitSignals.warnings,
-			...(emailDiversitySignal.warning ? [emailDiversitySignal.warning] : []),
-		];
+		const combinedIpWarnings = [...ipRateLimitSignals.warnings, ...(emailDiversitySignal.warning ? [emailDiversitySignal.warning] : [])];
 
 		logger.info(
 			{
@@ -441,7 +420,7 @@ app.post('/', async (c) => {
 				email_diversity: emailDiversitySignal.distinctEmails,
 				warnings: combinedIpWarnings,
 			},
-			'IP rate limit signals collected'
+			'IP rate limit signals collected',
 		);
 
 		// 2.5: Fingerprint-level signals (header reuse, TLS anomalies, latency mismatches)
@@ -452,7 +431,7 @@ app.post('/', async (c) => {
 					fingerprint_warnings: fingerprintSignals.warnings,
 					fingerprint_trigger: fingerprintSignals.trigger,
 				},
-				'Fingerprint anomalies detected'
+				'Fingerprint anomalies detected',
 			);
 		}
 
@@ -466,13 +445,15 @@ app.post('/', async (c) => {
 			// Check how many times this email/IP has tried duplicate submissions recently (24h)
 			const twentyFourHoursAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
 			const duplicateAttempts = await db
-				.prepare(`
+				.prepare(
+					`
 					SELECT COUNT(*) as count
 					FROM fraud_blacklist
 					WHERE (email = ? OR ip_address = ?)
 					AND detection_type = 'duplicate_email'
 					AND blocked_at > ?
-				`)
+				`,
+				)
 				.bind(sanitized.email, metadata.remoteIp, twentyFourHoursAgo)
 				.first<{ count: number }>();
 
@@ -488,7 +469,7 @@ app.post('/', async (c) => {
 						existing_id: existingSubmission.id,
 						erfid,
 					},
-					'Repeated duplicate email attempts detected (fraud pattern)'
+					'Repeated duplicate email attempts detected (fraud pattern)',
 				);
 
 				// Add to blacklist with progressive timeout
@@ -497,7 +478,7 @@ app.post('/', async (c) => {
 					sanitized.email,
 					validation.ephemeralId || null,
 					metadata.remoteIp,
-					metadata.ja4 ?? null
+					metadata.ja4 ?? null,
 				);
 				const expiresIn = calculateProgressiveTimeout(offenseCount, config);
 				const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
@@ -516,7 +497,7 @@ app.post('/', async (c) => {
 						latencyMismatchScore: 0,
 						blockTrigger: 'email_fraud',
 					},
-					config
+					config,
 				);
 
 				await addToBlacklist(db, {
@@ -544,7 +525,7 @@ app.post('/', async (c) => {
 					`Repeated duplicate email attempts (${attemptCount} attempts)`,
 					expiresIn,
 					expiresAt,
-					`You have made too many duplicate submission attempts. Please wait ${waitTime} before trying again.`
+					`You have made too many duplicate submission attempts. Please wait ${waitTime} before trying again.`,
 				);
 			} else {
 				// First or second attempt = legitimate user error
@@ -555,7 +536,7 @@ app.post('/', async (c) => {
 						existing_id: existingSubmission.id,
 						erfid,
 					},
-					'Duplicate email detected (legitimate user error)'
+					'Duplicate email detected (legitimate user error)',
 				);
 
 				// Track this attempt for fraud pattern detection
@@ -579,7 +560,7 @@ app.post('/', async (c) => {
 				throw new ConflictError(
 					'Duplicate email',
 					'This email address has already been registered. If you believe this is an error, please contact support.',
-					{ email: sanitized.email, existingSubmissionId: existingSubmission.id }
+					{ email: sanitized.email, existingSubmissionId: existingSubmission.id },
 				);
 			}
 		}
@@ -587,29 +568,40 @@ app.post('/', async (c) => {
 		// ========== PHASE 3: HOLISTIC DECISION ==========
 
 		// 3.1: Calculate total risk score
-		const riskScore = calculateNormalizedRiskScore({
-			tokenReplay: false, // Already handled in Phase 1
-			emailRiskScore: emailFraudResult?.riskScore || 0,
-			ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
-			validationCount: ephemeralSignals?.validationCount || 1,
-			uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
-			ja4RawScore: ja4Signals?.rawScore || 0,
-			ipRateLimitScore: combinedIpRiskScore,
-			headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
-			tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
-			latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
-		}, config);
+		const riskScore = calculateNormalizedRiskScore(
+			{
+				tokenReplay: false, // Already handled in Phase 1
+				emailRiskScore: emailFraudResult?.riskScore || 0,
+				ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
+				validationCount: ephemeralSignals?.validationCount || 1,
+				uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
+				ja4RawScore: ja4Signals?.rawScore || 0,
+				ipRateLimitScore: combinedIpRiskScore,
+				headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
+				tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
+				latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
+			},
+			config,
+		);
 
 		// 3.2: Determine blockTrigger if any specific threshold exceeded
 		// detectionType now represents the PRIMARY DETECTION LAYER that caught the fraud
 		// Note: duplicate_email is handled earlier and throws ConflictError (not rate limit)
-		let blockTrigger: 'email_fraud' | 'ephemeral_id_fraud' | 'ja4_session_hopping' | 'ip_diversity' | 'validation_frequency' | 'ip_rate_limit' | 'header_fingerprint' | 'tls_anomaly' | 'latency_mismatch' | undefined = undefined;
+		let blockTrigger:
+			| 'email_fraud'
+			| 'ephemeral_id_fraud'
+			| 'ja4_session_hopping'
+			| 'ip_diversity'
+			| 'validation_frequency'
+			| 'ip_rate_limit'
+			| 'header_fingerprint'
+			| 'tls_anomaly'
+			| 'latency_mismatch'
+			| undefined = undefined;
 		let detectionType: string | null = null;
 
 		// Special case: validation burst with few submissions (many token attempts, few posts)
-		const validationBurst =
-			(ephemeralSignals?.validationCount || 0) >= 5 &&
-			(ephemeralSignals?.submissionCount || 0) < 2;
+		const validationBurst = (ephemeralSignals?.validationCount || 0) >= 5 && (ephemeralSignals?.submissionCount || 0) < 2;
 
 		if (emailFraudResult && emailFraudResult.decision === 'block') {
 			blockTrigger = 'email_fraud';
@@ -640,19 +632,22 @@ app.post('/', async (c) => {
 
 		// 3.3: Recalculate with blockTrigger for proper minimum scores
 		const finalRiskScore = blockTrigger
-			? calculateNormalizedRiskScore({
-					tokenReplay: false,
-					emailRiskScore: emailFraudResult?.riskScore || 0,
-					ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
-					validationCount: ephemeralSignals?.validationCount || 1,
-					uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
-					ja4RawScore: ja4Signals?.rawScore || 0,
-					ipRateLimitScore: combinedIpRiskScore,
-					headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
-					tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
-					latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
-					blockTrigger,
-			  }, config)
+			? calculateNormalizedRiskScore(
+					{
+						tokenReplay: false,
+						emailRiskScore: emailFraudResult?.riskScore || 0,
+						ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
+						validationCount: ephemeralSignals?.validationCount || 1,
+						uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
+						ja4RawScore: ja4Signals?.rawScore || 0,
+						ipRateLimitScore: combinedIpRiskScore,
+						headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
+						tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
+						latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
+						blockTrigger,
+					},
+					config,
+				)
 			: riskScore;
 
 		logger.info(
@@ -673,7 +668,7 @@ app.post('/', async (c) => {
 					latency_mismatch: finalRiskScore.latencyMismatch,
 				},
 			},
-			'Holistic risk score calculated'
+			'Holistic risk score calculated',
 		);
 
 		// 3.4: Make blocking decision
@@ -685,7 +680,7 @@ app.post('/', async (c) => {
 				sanitized.email,
 				validation.ephemeralId || null,
 				metadata.remoteIp,
-				metadata.ja4 ?? null
+				metadata.ja4 ?? null,
 			);
 			const expiresIn = calculateProgressiveTimeout(offenseCount, config);
 			const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
@@ -755,19 +750,25 @@ app.post('/', async (c) => {
 					block_trigger: blockTrigger,
 					detection_type: detectionType,
 					warnings: allWarnings,
-					email_fraud: emailFraudResult ? {
-						pattern: emailFraudResult.signals.patternType,
-						markov_detected: emailFraudResult.signals.markovDetected,
-					} : null,
-					ephemeral_signals: ephemeralSignals ? {
-						submissions: ephemeralSignals.submissionCount,
-						validations: ephemeralSignals.validationCount,
-						unique_ips: ephemeralSignals.uniqueIPCount,
-					} : null,
-					ja4_signals: ja4Signals ? {
-						raw_score: ja4Signals.rawScore,
-						detection_layer: ja4Signals.detectionLayer,
-					} : null,
+					email_fraud: emailFraudResult
+						? {
+								pattern: emailFraudResult.signals.patternType,
+								markov_detected: emailFraudResult.signals.markovDetected,
+							}
+						: null,
+					ephemeral_signals: ephemeralSignals
+						? {
+								submissions: ephemeralSignals.submissionCount,
+								validations: ephemeralSignals.validationCount,
+								unique_ips: ephemeralSignals.uniqueIPCount,
+							}
+						: null,
+					ja4_signals: ja4Signals
+						? {
+								raw_score: ja4Signals.rawScore,
+								detection_layer: ja4Signals.detectionLayer,
+							}
+						: null,
 					fingerprint_signals: fingerprintSignals.details || null,
 					ip_rate_limit: ipRateLimitSignals || null,
 					detected_at: new Date().toISOString(),
@@ -809,15 +810,10 @@ app.post('/', async (c) => {
 					warnings: allWarnings,
 					user_message: userMessage,
 				},
-				'Submission blocked by holistic risk scoring'
+				'Submission blocked by holistic risk scoring',
 			);
 
-			throw new RateLimitError(
-				blockReason,
-				expiresIn,
-				expiresAt,
-				userMessage
-			);
+			throw new RateLimitError(blockReason, expiresIn, expiresAt, userMessage);
 		}
 
 		// 3.5: ALLOW: Create submission
@@ -841,7 +837,7 @@ app.post('/', async (c) => {
 				extractedEmail,
 				extractedPhone,
 				erfid,
-				skipTurnstile
+				skipTurnstile,
 			);
 		} catch (dbError) {
 			// Handle UNIQUE constraint violation (duplicate email)
@@ -852,13 +848,13 @@ app.post('/', async (c) => {
 						ephemeral_id: validation.ephemeralId,
 						erfid,
 					},
-					'Duplicate email submission attempt (UNIQUE constraint)'
+					'Duplicate email submission attempt (UNIQUE constraint)',
 				);
 
 				throw new ConflictError(
 					'Duplicate email',
 					'This email address has already been registered. If you believe this is an error, please contact support.',
-					{ email: sanitized.email }
+					{ email: sanitized.email },
 				);
 			}
 			// Re-throw other database errors
@@ -894,7 +890,7 @@ app.post('/', async (c) => {
 				riskScore: finalRiskScore.total,
 				erfid,
 			},
-			'Submission created successfully'
+			'Submission created successfully',
 		);
 
 		c.header('X-Request-Id', erfid);
@@ -906,7 +902,7 @@ app.post('/', async (c) => {
 				erfid,
 				message: 'Form submitted successfully',
 			},
-			201
+			201,
 		);
 	} catch (error) {
 		return handleError(error, c);

@@ -29,6 +29,7 @@ forminator/
 ## Features
 
 ### Security & Fraud Detection
+
 - **Turnstile Integration**: Explicit rendering with interaction-only appearance
 - **Single-step Validation**: Token validation + fraud check + submission in one atomic operation
 - **Token Replay Protection**: SHA256 hashing with unique index
@@ -45,7 +46,9 @@ forminator/
 - **Input Sanitization**: HTML stripping and normalization
 
 ### Rich Metadata Collection
+
 Captures 40+ fields from `request.cf` and headers:
+
 - **Geographic**: Country, region, city, postal code, lat/long, timezone
 - **Network**: ASN, AS organization, colo, HTTP protocol, TLS version/cipher
 - **Bot Management**: Bot score, client trust score, verified bot flag, JS detection
@@ -55,6 +58,7 @@ Captures 40+ fields from `request.cf` and headers:
 - **TLS Internals**: ClientHello length, ClientRandom, TLS extension hashes, exported authenticator, client-auth metadata, client RTT, CF Ray, device type
 
 ### UI & Analytics
+
 - **Dark Mode**: Full support with enhanced accent colors and shadows
 - **Custom Phone Input**: International phone selector with 200+ countries, SVG flags, searchable dropdown
 - **Real-time Analytics**: 20 endpoints covering submissions, validations, blacklist, fraud reasons, exports, and per-erfid lookups
@@ -67,6 +71,7 @@ Captures 40+ fields from `request.cf` and headers:
 ## Quick Start
 
 ### Prerequisites
+
 - Node.js 18+
 - Wrangler CLI: `npm install -g wrangler`
 - Cloudflare account with D1 database created
@@ -113,6 +118,7 @@ EOF
 ```
 
 **Optional env vars**
+
 - `ALLOWED_ORIGINS`: Comma-separated CORS allowlist (defaults to `https://form.erfi.dev`; dev also whitelists `http://localhost:8787` and `http://localhost:4321` automatically).
 - `DISABLE_STATIC_ASSETS`: `"true"` to run backend-only (no Astro assets).
 - `ROUTES`: JSON map to rename `/api/*` prefixes (e.g., `{"submissions":"/forms"}`).
@@ -122,6 +128,7 @@ EOF
 ### 4. Update Configuration
 
 Edit `wrangler.jsonc`:
+
 - Update `database_id` with your D1 database ID
 - Verify `routes` section has your custom domain (form.erfi.dev)
 
@@ -160,29 +167,32 @@ The `--remote` flag uses your production D1 database for testing.
 Submit form with Turnstile validation (atomic operation).
 
 Request body:
+
 ```json
 {
-  "firstName": "John",
-  "lastName": "Doe",
-  "email": "john@example.com",
-  "phone": "+1234567890",
-  "address": {
-    "street": "123 Main St",
-    "city": "San Francisco",
-    "state": "CA",
-    "postalCode": "94102",
-    "country": "US"
-  },
-  "dateOfBirth": "1990-01-01",
-  "turnstileToken": "0.xxx..."
+	"firstName": "John",
+	"lastName": "Doe",
+	"email": "john@example.com",
+	"phone": "+1234567890",
+	"address": {
+		"street": "123 Main St",
+		"city": "San Francisco",
+		"state": "CA",
+		"postalCode": "94102",
+		"country": "US"
+	},
+	"dateOfBirth": "1990-01-01",
+	"turnstileToken": "0.xxx..."
 }
 ```
 
 Notes:
+
 - `phone`, `address`, and `dateOfBirth` are optional. Phone numbers are normalized to E.164 and address objects must include `country` when other fields are provided.
 - `turnstileToken` is required unless `ALLOW_TESTING_BYPASS=true` **and** the request includes a valid `X-API-KEY` header (used for CI and load tests).
 
 Processing flow:
+
 1. Generate an `erfid` and expose it via the JSON response and `X-Request-Id` header
 2. Extract 40+ Cloudflare metadata fields plus optional field-mapping metadata for analytics
 3. Validate & sanitize payload with Zod (optional phone/address/DOB supported)
@@ -280,6 +290,7 @@ Service health check.
 ## Database Schema
 
 ### submissions (40+ columns)
+
 - **Form data**: first_name, last_name, email, phone, structured address JSON, date_of_birth
 - **Email risk**: email_risk_score, email_fraud_signals JSON, email_pattern_type, email_markov_detected, email_ood_detected
 - **Risk metadata**: risk_score_breakdown JSON, raw form_data payload, extracted_email, extracted_phone
@@ -289,12 +300,14 @@ Service health check.
 - **Tracking**: ephemeral_id, erfid, created_at timestamps
 
 ### turnstile_validations (35+ columns)
+
 - **Validation data**: token_hash (unique), success, allowed, block_reason, challenge_ts, hostname, action, detection_type
 - **Risk**: normalized risk_score plus risk_score_breakdown JSON for transparency
 - **Request metadata**: identical geo/network/bot fields as submissions
 - **Linkage**: submission_id (nullable), erfid, warnings, raw error codes
 
 ### fraud_blacklist (progressive mitigation cache)
+
 - **Identifiers**: email, ephemeral_id, ip_address, ja4 (any combination)
 - **Block metadata**: block_reason, detection_type, detection_confidence, detection_metadata JSON, submission_count, last_seen_at, erfid
 - **Risk transparency**: persisted risk_score plus risk_score_breakdown JSON (same structure as submissions/validations) so analytics can explain pre-validation blocks
@@ -302,11 +315,13 @@ Service health check.
 - **Purpose**: Layer 0 cache so repeat offenders are blocked before Turnstile calls
 
 ### fraud_blocks (forensic log)
+
 - **Scope**: Tracks pre-Turnstile blocks (email RPC failures, blacklist hits, etc.)
 - **Fields**: detection_type, block_reason, risk_score, remote_ip, user_agent, country, metadata_json, fraud_signals_json, erfid, created_at
 - **Purpose**: Feed analytics dashboards without slowing down Layer 0 decisions
 
 ### Indexes
+
 - **Token replay**: UNIQUE index on `turnstile_validations.token_hash`
 - **Submissions**: created_at, ephemeral_id, email, country, ja3_hash, ja4, email_pattern_type, extracted_email, extracted_phone
 - **Validations**: ephemeral_id, created_at, country, bot_score, ja3_hash, ja4
@@ -317,16 +332,19 @@ Service health check.
 ### Layered Detection System
 
 **Layer 0: Pre-validation Blacklist**
+
 - Fast D1 lookup before Turnstile API call
 - Significantly reduces API calls for repeat offenders
 - Checks email, ephemeral_id, ja4, and IP address against `fraud_blacklist`
 
 **Layer 0.5: IP Behavioral Signal**
+
 - Counts submissions per IP in the last hour
 - Contributes to risk scoring (0/25/50/75/100) but never blocks on its own
 - Designed to detect browser-switching attacks that change fingerprints
 
 **Layer 1: Email Fraud Detection (Markov-Mail Integration)**
+
 - Worker-to-Worker RPC service binding
 - Markov Chain pattern analysis (83% accuracy, 0% false positives)
 - Pattern classification: sequential, dated, formatted, gibberish
@@ -336,20 +354,24 @@ Service health check.
 - Fail-open design: allows submissions if service unavailable
 
 **Layer 2: Ephemeral ID Fraud Detection**
+
 - Tracks same device across a few days without cookies
 - Defensive mode: 2+ submissions in 24h block immediately; additive mode just boosts the risk score
 - Detects repeat registration attempts without requiring cookies
 
 **Layer 3: Validation Frequency Monitoring**
+
 - Defensive mode: 3+ validation attempts in 1h block immediately; additive mode treats them as high risk while still allowing
 - 2 validation attempts in 1h: High risk (allows one retry)
 - Catches rapid-fire attacks before D1 replication lag
 
 **Layer 3.5: Repeat Offender Memory**
+
 - Any detection type that blocked in the last 30 minutes for the same email/ephemeral/IP will immediately block again
 - Prevents attackers from oscillating between “allowed” and “blocked” states across attempts
 
 **Layer 4: JA4 Session Hopping Detection (3 sub-layers)**
+
 - **4a: IP Clustering (1h)**: Same subnet + same JA4 + 2+ ephemeral IDs
 - **4b: Rapid Global (5min)**: Same JA4 + 3+ ephemeral IDs globally
 - **4c: Extended Global (1h)**: Same JA4 + 5+ ephemeral IDs globally
@@ -358,15 +380,19 @@ Service health check.
 - TLS fingerprint-based device tracking
 
 **Layer 5: IP Diversity Detection**
+
 - 2+ unique IPs for same ephemeral ID in 24h: Block immediately
 - Detects proxy rotation and distributed botnets
 
 **Duplicate Email Protection**
+
 - First duplicate attempt returns HTTP 409 with guidance
 - 3+ duplicate attempts in 24h escalate to the blacklist with progressive timeouts
 
 ### Normalized Risk Scoring
+
 All components contribute to normalized 0-100 risk score (weights total exactly 100%):
+
 - **Token Replay**: 28% (instant block, highest priority)
 - **Email Fraud**: 14% (Markov-Mail pattern detection)
 - **Ephemeral ID**: 15% (device tracking, core fraud signal)
@@ -381,7 +407,9 @@ All components contribute to normalized 0-100 risk score (weights total exactly 
 **Block Threshold**: riskScore >= 70
 
 ### Progressive Timeout System
+
 Auto-blacklist with escalating timeouts:
+
 - 1st offense: 1 hour
 - 2nd offense: 4 hours
 - 3rd offense: 8 hours
@@ -393,6 +421,7 @@ Auto-blacklist with escalating timeouts:
 The worker is configured for `form.erfi.dev`. To use your own domain:
 
 1. Update `worker/wrangler.jsonc`:
+
 ```jsonc
 "routes": [
   {
@@ -413,23 +442,28 @@ The worker is configured for `form.erfi.dev`. To use your own domain:
 ## Troubleshooting
 
 ### D1 Database Not Found
+
 ```bash
 wrangler d1 list
 # Verify database_id matches worker/wrangler.jsonc
 ```
 
 ### Secrets Not Loading
+
 Ensure `.dev.vars` exists in `worker/` directory for local development.
 
 ### Turnstile Widget Not Loading
+
 1. Check browser console for errors
 2. Verify sitekey in `TurnstileWidget.tsx` matches your widget
 3. Ensure script tag is present in Layout.astro
 
 ### Bot Scores Always Null
+
 Bot Management signals (bot_score, ja3_hash, ja4, detection_ids) require Cloudflare Enterprise with Bot Management enabled.
 
 ### Frontend Changes Not Reflecting
+
 ```bash
 # Rebuild frontend
 cd frontend
@@ -443,15 +477,18 @@ wrangler deploy
 ## Documentation
 
 ### Core Documentation
+
 - **[.dev.vars.example](./.dev.vars.example)** - Local development secrets template
 - **[docs/README.md](./docs/README.md)** - Complete documentation index
 
 ### System Architecture (`docs/`)
+
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Complete architecture and design decisions
 - **[docs/SECURITY.md](./docs/SECURITY.md)** - Security implementation details
 - **[docs/API-REFERENCE.md](./docs/API-REFERENCE.md)** - Complete API documentation for all endpoints
 
 ### Features (`docs/`)
+
 - **[docs/FORM-VALIDATION.md](./docs/FORM-VALIDATION.md)** - Exhaustive form validation system guide
 - **[docs/PHONE-INPUT.md](./docs/PHONE-INPUT.md)** - International phone input system
 - **[docs/GEOLOCATION.md](./docs/GEOLOCATION.md)** - Country detection via Cloudflare
@@ -467,6 +504,7 @@ wrangler deploy
 ## License
 
 MIT
+
 ### Using Forminator with your own frontend
 
 You can deploy the Worker as a backend-only service and point any form at the `/api/submissions` endpoint. Set `DISABLE_STATIC_ASSETS=true` (or remove the `assets` binding) to disable the bundled Astro UI, configure `ALLOWED_ORIGINS` with your domains, and follow the [backend-only guide](docs/backend-only.md) for deployment + integration details. The Worker continues to expose:
