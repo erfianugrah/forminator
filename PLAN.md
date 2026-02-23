@@ -31,7 +31,7 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 
 **Recommended**: Option A as minimum (cheapest), Option B for robustness.
 
-**Status**: [ ] Pending
+**Status**: [ ] Pending — requires architectural change (Durable Objects or write-before-read)
 
 ---
 
@@ -43,7 +43,7 @@ Issues in the fraud detection pipeline where attackers can bypass or evade detec
 
 **Fix**: Change queries to `ORDER BY expires_at DESC LIMIT 1` to find the entry that expires latest, not the one blocked most recently.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -72,7 +72,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Remove `uniqueIPCount > 1` requirement for email fraud deterministic blocks. A fraudulent email pattern is self-sufficient evidence.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -84,7 +84,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: When ephemeral IDs unavailable, redistribute weight to remaining signals. Add a config flag for the Turnstile tier so scoring adapts automatically.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -96,7 +96,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Count from both `submissions` AND `turnstile_validations` (like ephemeral ID signals already do for IP diversity).
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -108,7 +108,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Pre-validation should only hard-block on `confidence: 'high'` or `confidence: 'medium'`. Low-confidence entries should be signal inputs only, or stored in a separate tracking table.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -118,7 +118,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Add a signal collector: `SELECT COUNT(DISTINCT email) FROM submissions WHERE remote_ip = ? AND created_at > ?`. Score ≥ 3 distinct emails per IP in 1 hour as high risk.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -130,7 +130,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Log at ERROR level on failure. Caller should check return value and log if blacklist write fails.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -156,7 +156,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Replace all `|| null` with `?? null` for numeric fields. Fix `markovDetected`/`oodDetected` to guard with `emailFraudResult ? (signals.markovDetected ? 1 : 0) : null`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -168,7 +168,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Change to `tv.allowed`. Add LEFT JOIN to count query when `allowed` filter is active.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -180,7 +180,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Account for month and day in age calculation.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -192,7 +192,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Use `/^[\p{L}\s'-]+$/u`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -202,7 +202,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Use `crypto.subtle.timingSafeEqual()` or `timingSafeEqual` from `node:crypto`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -212,7 +212,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Only return `{ status: 'ok', timestamp }` on health. Move config details behind API key auth, or only expose values the frontend needs.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -222,7 +222,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Escape `%` and `_` in search term, add `ESCAPE '\\'` to LIKE clauses.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -232,7 +232,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Wrap in try/catch, throw `ValidationError` with 400 status.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -242,7 +242,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 **Fix**: Guard with `if (Error.captureStackTrace)`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -280,7 +280,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 **File**: `logger.ts:8`
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -288,7 +288,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 **File**: `routes/analytics.ts:806` — `details: errorMessage` should be removed from client response.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -302,7 +302,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 **Fix**: Store `expiresAt` in separate state or ref. Countdown updates `timeRemaining` without triggering the effect.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -314,7 +314,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 **Fix**: Initialize with `startOfDay(subDays(new Date(), 30))` and `endOfDay(new Date())`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -334,7 +334,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 `emailPatternsRes`, `blockedStatsRes`, `blockReasonsRes` not checked before `.json()`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -429,7 +429,7 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 
 Move `playwright-extra` and `puppeteer-extra-plugin-stealth` to `devDependencies`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -469,7 +469,7 @@ Local dev hits production database. Add environment-specific overrides.
 
 Prettier not enforced in any script or CI. Add `format:check` to deploy chain.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -477,7 +477,7 @@ Prettier not enforced in any script or CI. Add `format:check` to deploy chain.
 
 **File**: `frontend/package.json:20-21`
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -508,33 +508,33 @@ I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 | ID | Track | Priority | Status | Description |
 |----|-------|----------|--------|-------------|
 | F-1 | Fraud | Critical | [ ] | Concurrent submissions bypass count-based signals |
-| F-2 | Fraud | Critical | [ ] | Blacklist query returns wrong entry (most-recent vs latest-expiring) |
+| F-2 | Fraud | Critical | [x] | Blacklist query returns wrong entry (most-recent vs latest-expiring) |
 | F-3 | Fraud | High | [ ] | Additive scoring can't reach block threshold alone |
-| F-4 | Fraud | High | [ ] | Email fraud block requires multi-IP unnecessarily |
-| F-5 | Fraud | High | [ ] | Missing ephemeral IDs kill 32% of scoring weight |
-| F-6 | Fraud | Medium | [ ] | IP rate limit blind to blocked requests |
-| F-7 | Fraud | Medium | [ ] | Low-confidence blacklist entries cause false blocks |
-| F-8 | Fraud | Medium | [ ] | No email-diversity-per-IP signal |
-| F-9 | Fraud | Medium | [ ] | Blacklist INSERT failure silently ignored |
+| F-4 | Fraud | High | [x] | Email fraud block requires multi-IP unnecessarily |
+| F-5 | Fraud | High | [x] | Missing ephemeral IDs kill 32% of scoring weight |
+| F-6 | Fraud | Medium | [x] | IP rate limit blind to blocked requests |
+| F-7 | Fraud | Medium | [x] | Low-confidence blacklist entries cause false blocks |
+| F-8 | Fraud | Medium | [x] | No email-diversity-per-IP signal |
+| F-9 | Fraud | Medium | [x] | Blacklist INSERT failure silently ignored |
 | F-10 | Fraud | Medium | [ ] | JA4 household false positives |
-| B-1 | Backend | High | [ ] | `\|\| null` converts falsy 0 to null |
-| B-2 | Backend | High | [ ] | `s.allowed` column doesn't exist |
-| B-3 | Backend | Medium | [ ] | Age validation ignores month/day |
-| B-4 | Backend | Medium | [ ] | Name regex rejects non-ASCII |
-| B-5 | Backend | Medium | [ ] | No timing-safe API key comparison |
-| B-6 | Backend | Medium | [ ] | Config/health leak fraud thresholds |
-| B-7 | Backend | Medium | [ ] | LIKE wildcard injection |
-| B-8 | Backend | Low | [ ] | Malformed JSON returns 500 |
-| B-9 | Backend | Low | [ ] | `Error.captureStackTrace` guard |
+| B-1 | Backend | High | [x] | `\|\| null` converts falsy 0 to null |
+| B-2 | Backend | High | [x] | `s.allowed` column doesn't exist |
+| B-3 | Backend | Medium | [x] | Age validation ignores month/day |
+| B-4 | Backend | Medium | [x] | Name regex rejects non-ASCII |
+| B-5 | Backend | Medium | [x] | No timing-safe API key comparison |
+| B-6 | Backend | Medium | [x] | Config/health leak fraud thresholds |
+| B-7 | Backend | Medium | [x] | LIKE wildcard injection |
+| B-8 | Backend | Low | [x] | Malformed JSON returns 500 |
+| B-9 | Backend | Low | [x] | `Error.captureStackTrace` guard |
 | B-10 | Backend | Low | [ ] | FNV-1a 32-bit collision risk |
 | B-11 | Backend | Low | [ ] | Incomplete sanitizeString |
 | B-12 | Backend | Low | [ ] | Export capped at 100 rows |
-| B-13 | Backend | Low | [ ] | Logger hardcodes production env |
-| B-14 | Backend | Low | [ ] | Error details leaked in 500 |
-| FE-1 | Frontend | High | [ ] | Timer recreates interval every second |
-| FE-2 | Frontend | High | [ ] | hasActiveFilters always true |
+| B-13 | Backend | Low | [x] | Logger hardcodes production env |
+| B-14 | Backend | Low | [x] | Error details leaked in 500 |
+| FE-1 | Frontend | High | [x] | Timer recreates interval every second |
+| FE-2 | Frontend | High | [x] | hasActiveFilters always true |
 | FE-3 | Frontend | Medium | [ ] | Missing AbortController in hooks |
-| FE-4 | Frontend | Medium | [ ] | Missing .ok checks on 3 responses |
+| FE-4 | Frontend | Medium | [x] | Missing .ok checks on 3 responses |
 | FE-5 | Frontend | Medium | [ ] | `as any` casts on API responses |
 | FE-6 | Frontend | Medium | [ ] | Dialog missing accessibility |
 | FE-7 | Frontend | Medium | [ ] | `alert()` for errors |
@@ -543,12 +543,12 @@ I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 | I-1 | Infra | High | [ ] | Migration numbering conflicts |
 | I-2 | Infra | High | [ ] | Missing column migrations |
 | I-3 | Infra | Medium | [ ] | Missing database indexes |
-| I-4 | Infra | Medium | [ ] | Test packages in prod deps |
+| I-4 | Infra | Medium | [x] | Test packages in prod deps |
 | I-5 | Infra | Medium | [ ] | --disable-web-security in tests |
 | I-6 | Infra | Medium | [ ] | DOM lib in worker tsconfig |
 | I-7 | Infra | Medium | [ ] | Dev hits production DB |
-| I-8 | Infra | Low | [ ] | No format:check script |
-| I-9 | Infra | Low | [ ] | @types in wrong deps section |
+| I-8 | Infra | Low | [x] | No format:check script |
+| I-9 | Infra | Low | [x] | @types in wrong deps section |
 
 ---
 
