@@ -8,10 +8,12 @@
     "build": "npm run build:frontend",
     "build:frontend": "cd frontend && npm run build",
     "typecheck": "tsc --noEmit && cd frontend && npm run typecheck && cd ..",
-    "deploy": "npm run typecheck && npm run build && wrangler deploy",
+    "deploy": "npm run typecheck && npm run format:check && npm run build && wrangler deploy",
     "deploy:worker": "npm run typecheck && wrangler deploy --var DISABLE_STATIC_ASSETS=true",
     "tail": "wrangler tail",
     "cf-typegen": "wrangler types",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
@@ -22,13 +24,13 @@
   "dependencies": {
     "hono": "^4.7.12",
     "pino": "^9.7.0",
-    "playwright-extra": "^4.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250107.0",
     "@playwright/test": "^1.56.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "typescript": "^5.9.3",
     "wrangler": "^4.47.0"
   }

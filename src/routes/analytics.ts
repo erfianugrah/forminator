@@ -811,7 +811,7 @@ app.get('/fraud-patterns', async (c) => {
 				success: false,
 				error: 'Internal server error',
 				message: 'Failed to detect fraud patterns',
-				details: errorMessage, // Include error details for debugging
+				// Error details logged server-side — don't expose to client
 			},
 			500
 		);
