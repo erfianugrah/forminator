@@ -113,52 +113,48 @@ export default function SubmissionForm() {
 	}, []);
 
 	// Countdown timer for rate limiting
+	// Uses a ref for expiresAt to avoid re-creating the interval on every tick.
+	// The interval only reads from the ref and updates timeRemaining state.
+	const expiresAtRef = useRef<string | null>(null);
+
+	// Sync ref when rateLimitInfo changes externally (e.g., new rate limit response)
 	useEffect(() => {
-		if (!rateLimitInfo) return;
+		expiresAtRef.current = rateLimitInfo?.expiresAt ?? null;
+	}, [rateLimitInfo?.expiresAt]);
 
-		// Validate expiresAt to prevent immediate clearing
+	useEffect(() => {
+		if (!rateLimitInfo?.expiresAt) return;
+
 		const expiresAtTime = new Date(rateLimitInfo.expiresAt).getTime();
-		if (isNaN(expiresAtTime)) {
-			console.error('Invalid expiresAt timestamp:', rateLimitInfo.expiresAt);
-			return;
-		}
+		if (isNaN(expiresAtTime)) return;
 
-		// Calculate initial remaining time
 		const initialRemaining = Math.max(0, Math.ceil((expiresAtTime - Date.now()) / 1000));
-
-		// If timer has already expired, clear immediately (but log it)
 		if (initialRemaining <= 0) {
-			console.warn('Rate limit timer already expired on mount', {
-				expiresAt: rateLimitInfo.expiresAt,
-				now: new Date().toISOString(),
-				difference: expiresAtTime - Date.now()
-			});
 			setRateLimitInfo(null);
 			setSubmitResult(null);
 			return;
 		}
 
-		// Update countdown every second
 		const interval = setInterval(() => {
-			const now = Date.now();
-			const expiresAt = new Date(rateLimitInfo.expiresAt).getTime();
-			const remaining = Math.max(0, Math.ceil((expiresAt - now) / 1000));
-
-			console.debug('Timer tick:', { remaining, expiresAt: rateLimitInfo.expiresAt, now: new Date(now).toISOString() });
+			const ea = expiresAtRef.current;
+			if (!ea) {
+				clearInterval(interval);
+				return;
+			}
+			const remaining = Math.max(0, Math.ceil((new Date(ea).getTime() - Date.now()) / 1000));
 
 			if (remaining <= 0) {
-				// Rate limit expired, clear it
-				console.log('Rate limit expired, clearing timer');
 				setRateLimitInfo(null);
 				setSubmitResult(null);
 			} else {
-				// Update time remaining
 				setRateLimitInfo(prev => prev ? { ...prev, timeRemaining: remaining } : null);
 			}
 		}, 1000);
 
 		return () => clearInterval(interval);
-	}, [rateLimitInfo]);
+	// Only re-create interval when expiresAt changes, not on every timeRemaining tick
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [rateLimitInfo?.expiresAt]);
 
 	const {
 		register,

@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { subDays } from 'date-fns';
+import { subDays, startOfDay, endOfDay } from 'date-fns';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
 import { Alert, AlertDescription } from './ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -68,8 +68,8 @@ export default function AnalyticsDashboard() {
 	const [botScoreRange, setBotScoreRange] = useState<[number, number]>([0, 100]);
 	const [allowedStatus, setAllowedStatus] = useState<'all' | 'allowed' | 'blocked'>('all');
 	const [dateRange, setDateRange] = useState({
-		start: subDays(new Date(), 30),
-		end: new Date(),
+		start: startOfDay(subDays(new Date(), 30)),
+		end: endOfDay(new Date()),
 	});
 	const [fingerprintFlags, setFingerprintFlags] = useState({
 		headerReuse: false,
@@ -276,8 +276,8 @@ export default function AnalyticsDashboard() {
 		fingerprintFlags.headerReuse ||
 		fingerprintFlags.tlsAnomaly ||
 		fingerprintFlags.latencyMismatch ||
-		dateRange.start.getTime() !== subDays(new Date(), 30).setHours(0, 0, 0, 0) ||
-		dateRange.end.getTime() !== new Date().setHours(23, 59, 59, 999);
+		dateRange.start.getTime() !== startOfDay(subDays(new Date(), 30)).getTime() ||
+		dateRange.end.getTime() !== endOfDay(new Date()).getTime();
 
 	return (
 		<>

@@ -215,11 +215,14 @@ export function useAnalytics(apiKey: string, autoRefresh = false, refreshInterva
 				!tlsRes.ok ||
 				!ja3Res.ok ||
 				!ja4Res.ok ||
+				!emailPatternsRes.ok ||
 				!timeSeriesRes.ok ||
 				!fingerprintHeaderRes.ok ||
 				!fingerprintTlsRes.ok ||
 				!fingerprintLatencyRes.ok ||
-				!testingBypassRes.ok
+				!testingBypassRes.ok ||
+				!blockedStatsRes.ok ||
+				!blockReasonsRes.ok
 			) {
 				throw new Error('Failed to fetch analytics');
 			}
