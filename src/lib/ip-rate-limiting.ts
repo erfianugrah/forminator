@@ -65,15 +65,17 @@ export async function collectIPRateLimitSignals(
 	const timeAgo = toSQLiteDateTime(new Date(Date.now() - timeWindowSeconds * 1000));
 
 	try {
-		// Count submissions from this IP in time window (ANY ephemeral_id, ANY JA4)
+		// Count ALL activity from this IP in time window — both successful submissions
+		// and blocked validation attempts. Without this, an attacker blocked 100 times
+		// would still show IP count=0 since blocked requests don't create submissions.
 		const result = await db
 			.prepare(
-				`SELECT COUNT(*) as count
-				 FROM submissions
-				 WHERE remote_ip = ?
-				 AND created_at > ?`
+				`SELECT
+					(SELECT COUNT(*) FROM submissions WHERE remote_ip = ? AND created_at > ?) +
+					(SELECT COUNT(*) FROM turnstile_validations WHERE remote_ip = ? AND allowed = 0 AND created_at > ?)
+				 AS count`
 			)
-			.bind(remoteIp, timeAgo)
+			.bind(remoteIp, timeAgo, remoteIp, timeAgo)
 			.first<{ count: number }>();
 
 		const submissionCount = result?.count || 0;

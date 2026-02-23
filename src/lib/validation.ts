@@ -38,12 +38,12 @@ export const formSubmissionSchema = z.object({
 		.string()
 		.min(1, 'First name is required')
 		.max(50, 'First name must be less than 50 characters')
-		.regex(/^[a-zA-Z\s'-]+$/, 'First name contains invalid characters'),
+		.regex(/^[\p{L}\s'-]+$/u, 'First name contains invalid characters'),
 	lastName: z
 		.string()
 		.min(1, 'Last name is required')
 		.max(50, 'Last name must be less than 50 characters')
-		.regex(/^[a-zA-Z\s'-]+$/, 'Last name contains invalid characters'),
+		.regex(/^[\p{L}\s'-]+$/u, 'Last name contains invalid characters'),
 	email: z
 		.string()
 		.min(1, 'Email is required')
@@ -76,7 +76,11 @@ export const formSubmissionSchema = z.object({
 				.refine((date) => {
 					const birthDate = new Date(date);
 					const today = new Date();
-					const age = today.getFullYear() - birthDate.getFullYear();
+					const yearDiff = today.getFullYear() - birthDate.getFullYear();
+					const monthDiff = today.getMonth() - birthDate.getMonth();
+					const dayDiff = today.getDate() - birthDate.getDate();
+					// Subtract 1 if birthday hasn't occurred yet this year
+					const age = (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) ? yearDiff - 1 : yearDiff;
 					return age >= 18 && age <= 120;
 				}, 'You must be at least 18 years old')
 				.optional()

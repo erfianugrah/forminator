@@ -261,12 +261,27 @@ export function calculateNormalizedRiskScore(
 	} else {
 		const baseScore = Object.values(components).reduce((sum, c) => sum + c.contribution, 0);
 
-		// When token replay is not applicable (score=0), re-normalize weights
-		// so other components can achieve 100% instead of max 72%
-		// This ensures the block threshold (70) is meaningful
-		const tokenReplayWeight = config.risk.weights.tokenReplay;
-		const isTokenReplayApplicable = components.tokenReplay.score > 0;
-		const normalizationFactor = isTokenReplayApplicable ? 1.0 : 1.0 / (1.0 - tokenReplayWeight);
+		// Re-normalize weights when some signals are not applicable, so remaining
+		// signals can still reach the full 0-100 range and the block threshold remains meaningful.
+		// Without this, missing signals permanently reduce the max achievable score.
+		let inactiveWeight = 0;
+		// Token replay is only active when detected
+		if (components.tokenReplay.score === 0) {
+			inactiveWeight += config.risk.weights.tokenReplay;
+		}
+		// When ephemeral IDs are unavailable (non-Enterprise Turnstile), the ephemeral ID,
+		// validation frequency, and IP diversity signals are all stuck at baseline.
+		// Redistribute their combined 32% weight to the remaining signals.
+		const ephemeralAtBaseline = components.ephemeralId.rawScore === undefined || components.ephemeralId.rawScore <= 1;
+		const validationAtBaseline = components.validationFrequency.rawScore === undefined || components.validationFrequency.rawScore <= 1;
+		const ipDiversityAtBaseline = components.ipDiversity.rawScore === undefined || components.ipDiversity.rawScore <= 1;
+		if (ephemeralAtBaseline && validationAtBaseline && ipDiversityAtBaseline) {
+			// All three are at default/baseline — likely no ephemeral ID available
+			inactiveWeight += config.risk.weights.ephemeralId;
+			inactiveWeight += config.risk.weights.validationFrequency;
+			inactiveWeight += config.risk.weights.ipDiversity;
+		}
+		const normalizationFactor = inactiveWeight < 1.0 ? 1.0 / (1.0 - inactiveWeight) : 1.0;
 		const normalizedScore = baseScore * normalizationFactor;
 
 		if (isForceBlockTrigger) {

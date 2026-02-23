@@ -158,7 +158,16 @@ app.post('/', async (c) => {
 		);
 
 		// ========== PARSE AND VALIDATE FORM DATA ==========
-		const rawPayload = await c.req.json();
+		let rawPayload: Record<string, unknown>;
+		try {
+			rawPayload = await c.req.json();
+		} catch {
+			throw new ValidationError(
+				'Invalid JSON body',
+				{},
+				'Request body must be valid JSON'
+			);
+		}
 		const extractedEmail = await extractField(rawPayload, 'email', c.env);
 		const extractedPhone = await extractField(rawPayload, 'phone', c.env);
 
