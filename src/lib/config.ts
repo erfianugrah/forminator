@@ -424,6 +424,20 @@ function mergeConfig(defaults: FraudDetectionConfig, custom: Partial<FraudDetect
 		};
 	}
 
+	// Validate that weights still sum to ~1.0 after merging.
+	// If a custom config provides partial weight overrides, the sum may drift.
+	// Normalize weights to exactly 1.0 to prevent score inflation/deflation.
+	const weightSum = Object.values(merged.risk.weights).reduce((sum, w) => sum + w, 0);
+	if (Math.abs(weightSum - 1.0) > 0.001) {
+		const factor = 1.0 / weightSum;
+		const w = merged.risk.weights;
+		const normalized = {} as Record<string, number>;
+		for (const key of Object.keys(w)) {
+			normalized[key] = Math.round((w as Record<string, number>)[key] * factor * 10000) / 10000;
+		}
+		merged.risk = { ...merged.risk, weights: normalized as typeof w };
+	}
+
 	return merged;
 }
 

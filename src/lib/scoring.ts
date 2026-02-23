@@ -436,14 +436,14 @@ function normalizeEphemeralIdScore(count: number, config: FraudDetectionConfig):
 
 // Normalize validation attempts to 0-100
 function normalizeValidationScore(count: number, config: FraudDetectionConfig): number {
-	if (count === 1) return 0; // Normal
+	if (count <= 1) return 0; // Normal (including 0 as defensive fallback)
 	if (count === config.detection.validationFrequencyWarnThreshold) return 40; // Acceptable retry
 	return 100; // At block threshold = aggressive
 }
 
 // Normalize IP diversity to 0-100
 function normalizeIPScore(count: number, config: FraudDetectionConfig): number {
-	if (count === 1) return 0; // Normal
+	if (count <= 1) return 0; // Normal (including 0 as defensive fallback)
 	if (count === config.detection.ipDiversityThreshold) return 50; // Suspicious
 	return 100; // Above threshold = proxy rotation
 }

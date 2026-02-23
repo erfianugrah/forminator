@@ -79,6 +79,13 @@ function selectTrigger(results: FingerprintSignalsResult): FingerprintSignalsRes
 			detectionType: 'tls_fingerprint_anomaly',
 		});
 	}
+	if (results.latencyMismatchScore > 0) {
+		candidates.push({
+			score: results.latencyMismatchScore,
+			trigger: 'latency_mismatch',
+			detectionType: 'latency_mismatch',
+		});
+	}
 
 	if (candidates.length === 0) {
 		return results;
