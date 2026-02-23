@@ -262,7 +262,7 @@ The system effectively requires a `blockTrigger` (deterministic) to block — th
 
 Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. Low risk since React auto-escapes, but fragile if data rendered in non-React context.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -272,7 +272,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 `getSubmissions` defaults to `Math.min(limit || 50, 100)`. Export likely intends to return all matching rows.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -324,7 +324,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 **Problem**: No fetch cancellation on unmount. Stale responses can overwrite current data. setState on unmounted component.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -344,7 +344,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 **Fix**: Define `ApiResponse<T>` type and use it instead of `(data as any).data`.
 
-**Status**: [ ] Pending
+**Status**: [ ] Deferred — high-effort/low-risk refactor
 
 ---
 
@@ -354,7 +354,7 @@ Strips `<tags>` but not partial tags, encoded entities, or `javascript:` URIs. L
 
 Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key handling.
 
-**Status**: [ ] Pending
+**Status**: [ ] Deferred — shadcn/ui component, requires careful a11y audit
 
 ---
 
@@ -364,7 +364,7 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 
 **Fix**: Use existing Alert component.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -374,7 +374,7 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 
 `reason.includes('validation')` without `&&` matches too broadly due to `&&`/`||` precedence.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -382,7 +382,7 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 
 ~25+ debug statements in `SubmissionForm.tsx` and `TurnstileWidget.tsx`.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -408,7 +408,7 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 
 `email_risk_score`, `email_fraud_signals`, `email_pattern_type`, `email_markov_detected`, `email_ood_detected` exist in `schema.sql` but have no ALTER TABLE migration.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -417,9 +417,9 @@ Missing `role="dialog"`, `aria-modal`, `aria-labelledby`, focus trap, Escape key
 - `submissions(remote_ip, created_at)` — IP rate limiting queries
 - `fraud_blacklist(blocked_at)` — recency queries
 - `turnstile_validations(submission_id)` — LEFT JOIN foreign key
-- `fraud_blocks(erfid)` — consistency with other tables
+- `turnstile_validations(remote_ip, created_at)` — IP rate limiting queries
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -439,7 +439,7 @@ Move `playwright-extra` and `puppeteer-extra-plugin-stealth` to `devDependencies
 
 Hides CORS bugs. Remove flag and test against proper CORS headers.
 
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 ---
 
@@ -527,24 +527,24 @@ I-1 through I-9, B-10 through B-14, FE-6 through FE-9
 | B-8 | Backend | Low | [x] | Malformed JSON returns 500 |
 | B-9 | Backend | Low | [x] | `Error.captureStackTrace` guard |
 | B-10 | Backend | Low | [ ] | FNV-1a 32-bit collision risk |
-| B-11 | Backend | Low | [ ] | Incomplete sanitizeString |
-| B-12 | Backend | Low | [ ] | Export capped at 100 rows |
+| B-11 | Backend | Low | [x] | Incomplete sanitizeString |
+| B-12 | Backend | Low | [x] | Export capped at 100 rows |
 | B-13 | Backend | Low | [x] | Logger hardcodes production env |
 | B-14 | Backend | Low | [x] | Error details leaked in 500 |
 | FE-1 | Frontend | High | [x] | Timer recreates interval every second |
 | FE-2 | Frontend | High | [x] | hasActiveFilters always true |
-| FE-3 | Frontend | Medium | [ ] | Missing AbortController in hooks |
+| FE-3 | Frontend | Medium | [x] | Missing AbortController in hooks |
 | FE-4 | Frontend | Medium | [x] | Missing .ok checks on 3 responses |
-| FE-5 | Frontend | Medium | [ ] | `as any` casts on API responses |
-| FE-6 | Frontend | Medium | [ ] | Dialog missing accessibility |
-| FE-7 | Frontend | Medium | [ ] | `alert()` for errors |
-| FE-8 | Frontend | Low | [ ] | Operator precedence in inferDetectionType |
-| FE-9 | Frontend | Low | [ ] | Excessive console.log |
+| FE-5 | Frontend | Medium | [-] | `as any` casts on API responses (deferred) |
+| FE-6 | Frontend | Medium | [-] | Dialog missing accessibility (deferred) |
+| FE-7 | Frontend | Medium | [x] | `alert()` for errors |
+| FE-8 | Frontend | Low | [x] | Operator precedence in inferDetectionType |
+| FE-9 | Frontend | Low | [x] | Excessive console.log |
 | I-1 | Infra | High | [ ] | Migration numbering conflicts |
-| I-2 | Infra | High | [ ] | Missing column migrations |
-| I-3 | Infra | Medium | [ ] | Missing database indexes |
+| I-2 | Infra | High | [x] | Missing column migrations |
+| I-3 | Infra | Medium | [x] | Missing database indexes |
 | I-4 | Infra | Medium | [x] | Test packages in prod deps |
-| I-5 | Infra | Medium | [ ] | --disable-web-security in tests |
+| I-5 | Infra | Medium | [x] | --disable-web-security in tests |
 | I-6 | Infra | Medium | [ ] | DOM lib in worker tsconfig |
 | I-7 | Infra | Medium | [ ] | Dev hits production DB |
 | I-8 | Infra | Low | [x] | No format:check script |
