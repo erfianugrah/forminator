@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Shield, Activity, Globe, Zap } from 'lucide-react';
+import { AlertTriangle, Shield, Activity, Globe, Zap, Eye } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import { Alert, AlertDescription } from '../../ui/alert';
 import { Badge } from '../../ui/badge';
@@ -94,16 +94,7 @@ export function FraudAlert({ data, loading, config }: FraudAlertProps) {
 								{data.blacklisted.slice(0, 3).map((item: any, index: number) => {
 									const parsed = parseBlacklistReason(item.block_reason || '');
 									return (
-										<div
-											key={index}
-											className="p-3 bg-secondary rounded-lg border border-red-600/20 space-y-2 cursor-pointer hover:bg-secondary/80 transition-colors"
-											onClick={() => setSelectedEntry(toBlacklistEntry(item))}
-											role="button"
-											tabIndex={0}
-											onKeyDown={(e) => {
-												if (e.key === 'Enter' || e.key === ' ') setSelectedEntry(toBlacklistEntry(item));
-											}}
-										>
+										<div key={index} className="p-3 bg-secondary rounded-lg border border-red-600/20 space-y-2">
 											{/* Header: Ephemeral ID + Confidence */}
 											<div className="flex justify-between items-start gap-2">
 												<span className="font-mono text-xs break-all text-foreground">{item.ephemeral_id || item.ip_address}</span>
@@ -167,22 +158,41 @@ export function FraudAlert({ data, loading, config }: FraudAlertProps) {
 												</div>
 											)}
 
-											{/* Meta: submissions + expiry */}
-											<div className="flex items-center gap-3 text-xs text-muted-foreground pt-1 border-t border-border/40">
-												<span>Submissions: {item.submission_count}</span>
-												<span>•</span>
-												<span>
-													Expires:{' '}
-													{new Date(item.expires_at).toLocaleString('en-US', {
-														year: 'numeric',
-														month: '2-digit',
-														day: '2-digit',
-														hour: '2-digit',
-														minute: '2-digit',
-														second: '2-digit',
-														hour12: false,
-													})}
-												</span>
+											{/* Meta: submissions + expiry + actions */}
+											<div className="flex items-center justify-between pt-1 border-t border-border/40">
+												<div className="flex items-center gap-3 text-xs text-muted-foreground">
+													<span>Submissions: {item.submission_count}</span>
+													<span>•</span>
+													<span>
+														Expires:{' '}
+														{new Date(item.expires_at).toLocaleString('en-US', {
+															year: 'numeric',
+															month: '2-digit',
+															day: '2-digit',
+															hour: '2-digit',
+															minute: '2-digit',
+															second: '2-digit',
+															hour12: false,
+														})}
+													</span>
+												</div>
+												<div className="flex items-center gap-2">
+													<button
+														onClick={() => setSelectedEntry(toBlacklistEntry(item))}
+														className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-xs font-medium flex-shrink-0"
+														title="View full breakdown"
+													>
+														<Eye size={14} />
+														<span>Details</span>
+													</button>
+													<button
+														onClick={() => exportBlacklistEntry(item)}
+														className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-md text-xs font-medium hover:bg-accent"
+														title="Export entry JSON"
+													>
+														Export
+													</button>
+												</div>
 											</div>
 										</div>
 									);
@@ -302,6 +312,27 @@ export function FraudAlert({ data, loading, config }: FraudAlertProps) {
 }
 
 // ========== HELPERS ==========
+
+/** Export a blacklisted item as a JSON file download */
+function exportBlacklistEntry(item: any): void {
+	const entry = toBlacklistEntry(item);
+	const exportData = {
+		exportedAt: new Date().toISOString(),
+		type: 'blacklist_entry',
+		data: {
+			...entry,
+			risk_score_breakdown: entry.risk_score_breakdown ? JSON.parse(entry.risk_score_breakdown) : null,
+			detection_metadata: entry.detection_metadata ? JSON.parse(entry.detection_metadata) : null,
+		},
+	};
+	const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = `blacklist-${entry.id || 'entry'}.json`;
+	a.click();
+	URL.revokeObjectURL(url);
+}
 
 /** Map a fraud-patterns blacklisted item to the BlacklistEntry shape for the detail dialog */
 function toBlacklistEntry(item: any): BlacklistEntry {
