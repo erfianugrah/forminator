@@ -1,7 +1,11 @@
+import { useState } from 'react';
 import { AlertTriangle, Shield, Activity, Globe, Zap } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/card';
 import { Alert, AlertDescription } from '../../ui/alert';
 import { Badge } from '../../ui/badge';
+import { BlacklistDetailDialog } from '../sections/BlacklistDetailDialog';
+import type { BlacklistEntry } from '../../../hooks/useBlacklist';
+import type { FraudDetectionConfig } from '../../../hooks/useConfig';
 
 interface FraudPattern {
 	blacklisted: any[];
@@ -13,6 +17,7 @@ interface FraudPattern {
 interface FraudAlertProps {
 	data: FraudPattern | null;
 	loading?: boolean;
+	config?: FraudDetectionConfig;
 }
 
 /**
@@ -20,7 +25,9 @@ interface FraudAlertProps {
  * Aligns with fraud detection in src/routes/submissions.ts:96-242
  * Shows: blacklisted IDs, high-risk patterns, proxy rotation, and high-frequency validators
  */
-export function FraudAlert({ data, loading }: FraudAlertProps) {
+export function FraudAlert({ data, loading, config }: FraudAlertProps) {
+	const [selectedEntry, setSelectedEntry] = useState<BlacklistEntry | null>(null);
+
 	if (loading) {
 		return (
 			<Card>
@@ -87,7 +94,16 @@ export function FraudAlert({ data, loading }: FraudAlertProps) {
 								{data.blacklisted.slice(0, 3).map((item: any, index: number) => {
 									const parsed = parseBlacklistReason(item.block_reason || '');
 									return (
-										<div key={index} className="p-3 bg-secondary rounded-lg border border-red-600/20 space-y-2">
+										<div
+											key={index}
+											className="p-3 bg-secondary rounded-lg border border-red-600/20 space-y-2 cursor-pointer hover:bg-secondary/80 transition-colors"
+											onClick={() => setSelectedEntry(toBlacklistEntry(item))}
+											role="button"
+											tabIndex={0}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') setSelectedEntry(toBlacklistEntry(item));
+											}}
+										>
 											{/* Header: Ephemeral ID + Confidence */}
 											<div className="flex justify-between items-start gap-2">
 												<span className="font-mono text-xs break-all text-foreground">{item.ephemeral_id || item.ip_address}</span>
@@ -279,11 +295,38 @@ export function FraudAlert({ data, loading }: FraudAlertProps) {
 					</Alert>
 				)}
 			</CardContent>
+
+			<BlacklistDetailDialog entry={selectedEntry} onClose={() => setSelectedEntry(null)} config={config} />
 		</Card>
 	);
 }
 
 // ========== HELPERS ==========
+
+/** Map a fraud-patterns blacklisted item to the BlacklistEntry shape for the detail dialog */
+function toBlacklistEntry(item: any): BlacklistEntry {
+	return {
+		id: item.id ?? 0,
+		ephemeral_id: item.ephemeral_id ?? null,
+		ip_address: item.ip_address ?? null,
+		ja4: item.ja4 ?? null,
+		country: item.country ?? null,
+		city: item.city ?? null,
+		detection_type: item.detection_type ?? null,
+		detection_confidence: item.confidence ?? null,
+		block_reason: item.block_reason ?? '',
+		risk_score: item.risk_score ?? 0,
+		risk_score_breakdown: item.risk_score_breakdown ?? null,
+		ja4_signals: item.ja4_signals ?? null,
+		offense_count: item.offense_count ?? 1,
+		blocked_at: item.created_at ?? '',
+		expires_at: item.expires_at ?? '',
+		erfid: item.erfid ?? null,
+		submission_count: item.submission_count ?? null,
+		last_seen_at: item.last_seen_at ?? null,
+		detection_metadata: item.detection_metadata ?? null,
+	};
+}
 
 const COMPONENT_LABELS: Record<string, string> = {
 	tokenReplay: 'Token Replay',

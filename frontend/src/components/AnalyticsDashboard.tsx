@@ -376,7 +376,7 @@ export default function AnalyticsDashboard() {
 
 					<OverviewStats stats={analyticsData.stats} />
 
-					<FraudAlert data={analyticsData.fraudPatterns} loading={analyticsData.loading} />
+					<FraudAlert data={analyticsData.fraudPatterns} loading={analyticsData.loading} config={config} />
 
 					<Suspense fallback={<SectionSkeleton title="Recent submissions" />}>
 						<RecentSubmissionsSection

@@ -1247,13 +1247,25 @@ export async function detectFraudPatterns(db: D1Database): Promise<any> {
 		// Pattern 1: Blacklisted Ephemeral IDs (currently blocked)
 		const blacklistedQuery = `
 			SELECT
+				id,
 				ephemeral_id,
+				ip_address,
+				ja4,
 				block_reason,
+				detection_type,
 				detection_confidence as confidence,
+				risk_score,
+				risk_score_breakdown,
+				ja4_signals,
 				submission_count,
+				offense_count,
 				blocked_at as created_at,
 				expires_at,
-				detection_metadata
+				erfid,
+				last_seen_at,
+				detection_metadata,
+				country,
+				city
 			FROM fraud_blacklist
 			WHERE expires_at > datetime('now')
 				AND ephemeral_id IS NOT NULL
