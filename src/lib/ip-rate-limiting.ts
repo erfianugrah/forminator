@@ -54,6 +54,56 @@ export interface IPRateLimitSignals {
  * @param config - Fraud detection configuration
  * @returns Behavioral signals for risk scoring
  */
+/**
+ * Check for email diversity from the same IP — a classic form-spam indicator.
+ * Counts distinct emails submitted from an IP within a time window.
+ * 3+ distinct emails from one IP in 1 hour is highly suspicious.
+ *
+ * @returns A score 0-100 based on email diversity count
+ */
+export async function collectEmailDiversitySignal(
+	remoteIp: string,
+	db: D1Database,
+	config: FraudDetectionConfig
+): Promise<{ distinctEmails: number; riskScore: number; warning?: string }> {
+	const timeWindowSeconds = config.detection.ipRateLimitWindow || 3600;
+	const timeAgo = toSQLiteDateTime(new Date(Date.now() - timeWindowSeconds * 1000));
+
+	try {
+		const result = await db
+			.prepare(
+				`SELECT COUNT(DISTINCT email) as count
+				 FROM submissions
+				 WHERE remote_ip = ?
+				 AND created_at > ?`
+			)
+			.bind(remoteIp, timeAgo)
+			.first<{ count: number }>();
+
+		const distinctEmails = (result?.count || 0) + 1; // +1 for current submission
+
+		let riskScore: number;
+		if (distinctEmails <= 1) {
+			riskScore = 0;
+		} else if (distinctEmails === 2) {
+			riskScore = 20; // Could be household
+		} else if (distinctEmails === 3) {
+			riskScore = 60; // Suspicious
+		} else {
+			riskScore = 100; // Definite form spam
+		}
+
+		const warning = distinctEmails >= 3
+			? `${distinctEmails} distinct emails from same IP in ${Math.round(timeWindowSeconds / 60)} minutes`
+			: undefined;
+
+		return { distinctEmails, riskScore, warning };
+	} catch (error) {
+		logger.error({ error, remote_ip: remoteIp }, 'Error collecting email diversity signal');
+		return { distinctEmails: 0, riskScore: 0 };
+	}
+}
+
 export async function collectIPRateLimitSignals(
 	remoteIp: string,
 	db: D1Database,

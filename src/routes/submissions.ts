@@ -14,7 +14,7 @@ import { logValidation, createSubmission } from '../lib/database';
 import logger from '../lib/logger';
 import { checkPreValidationBlock, addToBlacklist } from '../lib/fraud-prevalidation';
 import { collectJA4Signals } from '../lib/ja4-fraud-detection';
-import { collectIPRateLimitSignals } from '../lib/ip-rate-limiting';
+import { collectIPRateLimitSignals, collectEmailDiversitySignal } from '../lib/ip-rate-limiting';
 import { calculateNormalizedRiskScore } from '../lib/scoring';
 import { checkEmailFraud } from '../lib/email-fraud-detection';
 import { extractField } from '../lib/field-mapper';
@@ -398,11 +398,26 @@ app.post('/', async (c) => {
 			config
 		);
 
+		// 2.4b: Email diversity per IP (detects form spam with unique emails from same IP)
+		const emailDiversitySignal = await collectEmailDiversitySignal(
+			metadata.remoteIp,
+			db,
+			config
+		);
+
+		// Combine IP rate limit with email diversity — take the higher risk signal
+		const combinedIpRiskScore = Math.max(ipRateLimitSignals.riskScore, emailDiversitySignal.riskScore);
+		const combinedIpWarnings = [
+			...ipRateLimitSignals.warnings,
+			...(emailDiversitySignal.warning ? [emailDiversitySignal.warning] : []),
+		];
+
 		logger.info(
 			{
 				submission_count: ipRateLimitSignals.submissionCount,
-				risk_score: ipRateLimitSignals.riskScore,
-				warnings: ipRateLimitSignals.warnings,
+				risk_score: combinedIpRiskScore,
+				email_diversity: emailDiversitySignal.distinctEmails,
+				warnings: combinedIpWarnings,
 			},
 			'IP rate limit signals collected'
 		);
@@ -557,7 +572,7 @@ app.post('/', async (c) => {
 			validationCount: ephemeralSignals?.validationCount || 1,
 			uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
 			ja4RawScore: ja4Signals?.rawScore || 0,
-			ipRateLimitScore: ipRateLimitSignals.riskScore,
+			ipRateLimitScore: combinedIpRiskScore,
 			headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
 			tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
 			latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
@@ -610,7 +625,7 @@ app.post('/', async (c) => {
 					validationCount: ephemeralSignals?.validationCount || 1,
 					uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
 					ja4RawScore: ja4Signals?.rawScore || 0,
-					ipRateLimitScore: ipRateLimitSignals.riskScore,
+					ipRateLimitScore: combinedIpRiskScore,
 					headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
 					tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
 					latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
