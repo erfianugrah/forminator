@@ -70,7 +70,7 @@ export async function checkPreValidationBlock(
 			SELECT * FROM fraud_blacklist
 			WHERE email = ?
 			AND expires_at > ?
-			ORDER BY blocked_at DESC
+			ORDER BY expires_at DESC
 			LIMIT 1
 		`
 			)
@@ -113,7 +113,7 @@ export async function checkPreValidationBlock(
 			SELECT * FROM fraud_blacklist
 			WHERE ephemeral_id = ?
 			AND expires_at > ?
-			ORDER BY blocked_at DESC
+			ORDER BY expires_at DESC
 			LIMIT 1
 		`
 			)
@@ -156,7 +156,7 @@ export async function checkPreValidationBlock(
 			SELECT * FROM fraud_blacklist
 			WHERE ja4 = ?
 			AND expires_at > ?
-			ORDER BY blocked_at DESC
+			ORDER BY expires_at DESC
 			LIMIT 1
 		`
 			)
@@ -198,7 +198,7 @@ export async function checkPreValidationBlock(
 		SELECT * FROM fraud_blacklist
 		WHERE ip_address = ?
 		AND expires_at > ?
-		ORDER BY blocked_at DESC
+		ORDER BY expires_at DESC
 		LIMIT 1
 	`
 		)

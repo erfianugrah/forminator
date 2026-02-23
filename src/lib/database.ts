@@ -118,7 +118,7 @@ export async function logValidation(
 				data.validation.ephemeralId || null,
 				data.riskScore,
 				data.validation.errors ? JSON.stringify(data.validation.errors) : null,
-				data.submissionId || null,
+				data.submissionId ?? null,
 				// Request metadata
 				data.metadata.remoteIp,
 				data.metadata.userAgent,
@@ -134,8 +134,8 @@ export async function logValidation(
 				data.metadata.colo || null,
 				data.metadata.httpProtocol || null,
 				data.metadata.tlsVersion || null,
-				data.metadata.botScore || null,
-				data.metadata.clientTrustScore || null,
+				data.metadata.botScore ?? null,
+				data.metadata.clientTrustScore ?? null,
 				data.metadata.verifiedBot || false,
 				data.metadata.jsDetectionPassed || false,
 				data.metadata.detectionIds ? JSON.stringify(data.metadata.detectionIds) : null,
@@ -182,7 +182,7 @@ export async function logFraudBlock(
 		const emailMarkovDetected = data.fraudSignals?.markovDetected ? 1 : 0;
 		const emailOodDetected = data.fraudSignals?.oodDetected ? 1 : 0;
 		const emailDisposableDomain = data.fraudSignals?.isDisposableDomain ? 1 : 0;
-		const emailTldRiskScore = data.fraudSignals?.tldRiskScore || null;
+		const emailTldRiskScore = data.fraudSignals?.tldRiskScore ?? null;
 
 		await db
 			.prepare(
@@ -308,8 +308,8 @@ export async function createSubmission(
 				metadata.httpProtocol || null,
 				metadata.tlsVersion || null,
 				metadata.tlsCipher || null,
-				metadata.botScore || null,
-				metadata.clientTrustScore || null,
+				metadata.botScore ?? null,
+				metadata.clientTrustScore ?? null,
 				metadata.verifiedBot || false,
 				metadata.detectionIds ? JSON.stringify(metadata.detectionIds) : null,
 				metadata.ja3Hash || null,
@@ -317,9 +317,9 @@ export async function createSubmission(
 				metadata.ja4Signals ? JSON.stringify(metadata.ja4Signals) : null,
 				emailFraudResult ? emailFraudResult.riskScore / 100 : null, // Convert back to 0.0-1.0
 				emailFraudResult ? JSON.stringify(emailFraudResult.signals) : null,
-				emailFraudResult?.signals.patternType || null,
-				emailFraudResult?.signals.markovDetected ? 1 : 0,
-				emailFraudResult?.signals.oodDetected ? 1 : 0,
+				emailFraudResult?.signals.patternType ?? null,
+				emailFraudResult ? (emailFraudResult.signals.markovDetected ? 1 : 0) : null,
+				emailFraudResult ? (emailFraudResult.signals.oodDetected ? 1 : 0) : null,
 				riskScoreBreakdown ? JSON.stringify(riskScoreBreakdown) : null,
 				// Phase 3: Store raw payload and extracted fields
 				rawPayload ? JSON.stringify(rawPayload) : null,
@@ -503,8 +503,9 @@ export async function getSubmissions(
 		}
 
 		// Allowed status filter (show blocked, allowed, or all)
+		// Note: `allowed` column is on turnstile_validations (tv), not submissions (s)
 		if (filters.allowed !== undefined && filters.allowed !== 'all') {
-			whereClauses.push('s.allowed = ?');
+			whereClauses.push('tv.allowed = ?');
 			bindings.push(filters.allowed ? 1 : 0);
 		}
 
@@ -539,9 +540,12 @@ export async function getSubmissions(
 		`;
 
 		// Build count query for total (must use same alias as main query)
+		// Include LEFT JOIN when filtering by `allowed` since that column is on turnstile_validations
+		const needsJoin = filters.allowed !== undefined && filters.allowed !== 'all';
 		const countQuery = `
 			SELECT COUNT(*) as total
 			FROM submissions s
+			${needsJoin ? 'LEFT JOIN turnstile_validations tv ON s.id = tv.submission_id' : ''}
 			WHERE ${whereClause}
 		`;
 

@@ -381,10 +381,9 @@ function qualifiesForDeterministicBlock(
 				(checks.ipRateLimitScore ?? 0) >= 25
 			);
 		case 'email_fraud':
-			return (
-				(components.emailFraud?.score ?? 0) >= config.risk.blockThreshold &&
-				(checks.uniqueIPCount ?? 1) > 1
-			);
+			// Email fraud is self-sufficient evidence — no multi-IP requirement.
+			// A clearly fraudulent email pattern should block on the first attempt.
+			return (components.emailFraud?.score ?? 0) >= config.risk.blockThreshold;
 		case 'duplicate_email':
 			return true;
 		case 'repeat_offender':
