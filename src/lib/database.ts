@@ -1245,28 +1245,51 @@ function getDateFormatString(interval: string): string | null {
 export async function detectFraudPatterns(db: D1Database): Promise<any> {
 	try {
 		// Pattern 1: Blacklisted Ephemeral IDs (currently blocked)
-		// Includes all fields needed for BlacklistDetailDialog + FraudAssessment
+		// Uses the same LEFT JOIN enrichment as getActiveBlacklistEntries() so
+		// BlacklistDetailDialog gets full data (location, JA4 signals, offense count)
 		const blacklistedQuery = `
 			SELECT
-				id,
-				ephemeral_id,
-				ip_address,
-				ja4,
-				block_reason,
-				detection_type,
-				detection_confidence as confidence,
-				risk_score,
-				risk_score_breakdown,
-				submission_count,
-				blocked_at as created_at,
-				expires_at,
-				erfid,
-				last_seen_at,
-				detection_metadata
-			FROM fraud_blacklist
-			WHERE expires_at > datetime('now')
-				AND ephemeral_id IS NOT NULL
-			ORDER BY blocked_at DESC
+				fb.id,
+				fb.ephemeral_id,
+				COALESCE(fb.ip_address, tv.remote_ip) as ip_address,
+				COALESCE(fb.ja4, tv.ja4) as ja4,
+				fb.block_reason,
+				fb.detection_type,
+				fb.detection_confidence,
+				fb.erfid,
+				REPLACE(fb.blocked_at, ' ', 'T') || 'Z' AS blocked_at,
+				REPLACE(fb.expires_at, ' ', 'T') || 'Z' AS expires_at,
+				fb.submission_count,
+				REPLACE(fb.last_seen_at, ' ', 'T') || 'Z' AS last_seen_at,
+				fb.detection_metadata,
+				fb.risk_score_breakdown,
+				tv.ja4_signals,
+				tv.country,
+				tv.city,
+				(SELECT COUNT(*)
+				 FROM fraud_blacklist
+				 WHERE (ephemeral_id = fb.ephemeral_id OR ip_address = fb.ip_address)
+				 AND blocked_at > datetime('now', '-24 hours')) as offense_count,
+				COALESCE(
+					fb.risk_score,
+					CASE fb.detection_confidence
+						WHEN 'high' THEN 100
+						WHEN 'medium' THEN 80
+						WHEN 'low' THEN 70
+						ELSE 50
+					END
+				) as risk_score
+			FROM fraud_blacklist fb
+			LEFT JOIN turnstile_validations tv ON tv.id = (
+				SELECT id FROM turnstile_validations
+				WHERE (fb.ephemeral_id IS NOT NULL AND ephemeral_id = fb.ephemeral_id)
+				   OR (fb.ip_address IS NOT NULL AND remote_ip = fb.ip_address)
+				ORDER BY created_at DESC
+				LIMIT 1
+			)
+			WHERE fb.expires_at > datetime('now')
+				AND fb.ephemeral_id IS NOT NULL
+			ORDER BY fb.blocked_at DESC
 			LIMIT 20
 		`;
 

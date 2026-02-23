@@ -48,9 +48,13 @@ export function BlacklistDetailDialog({ entry, onClose, config }: BlacklistDetai
 		<Dialog open={!!entry} onClose={onClose}>
 			<DialogContent className="p-0 max-w-3xl max-h-[85vh] overflow-y-auto">
 				<DialogHeader>
-					<DialogTitle>Active Block Details</DialogTitle>
+					<DialogTitle>Active Block — {detectionLabel}</DialogTitle>
 					<DialogDescription>
-						Block reason recorded {blockedAgo}. Expires {expiresIn}.
+						{entry.ephemeral_id && (
+							<span className="font-mono text-xs break-all">{entry.ephemeral_id}</span>
+						)}
+						{entry.ephemeral_id && <br />}
+						Block recorded {blockedAgo}. Expires {expiresIn}.
 					</DialogDescription>
 				</DialogHeader>
 
