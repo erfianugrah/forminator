@@ -29,6 +29,22 @@ const DEFAULT_CONFIG = {
 		},
 
 		/**
+		 * Corroboration bonus: reward convergent evidence from independent signals
+		 *
+		 * When N+ signals independently score above a threshold, a flat bonus is added.
+		 * This catches cases where no single signal is strong enough to block,
+		 * but multiple weak signals together indicate fraud.
+		 */
+		corroboration: {
+			/** Minimum component score to count as "corroborating" */
+			threshold: 30,
+			/** Number of corroborating signals required to trigger the bonus */
+			minSignals: 3,
+			/** Flat bonus added to the score when triggered */
+			bonus: 15,
+		},
+
+		/**
 		 * Component weights (must sum to 1.0)
 		 *
 		 * Adjusted to include IP rate limiting as behavioral signal
@@ -363,6 +379,10 @@ function mergeConfig(defaults: FraudDetectionConfig, custom: Partial<FraudDetect
 			levels: {
 				...defaults.risk.levels,
 				...custom.risk.levels,
+			},
+			corroboration: {
+				...defaults.risk.corroboration,
+				...custom.risk.corroboration,
 			},
 			weights: {
 				...defaults.risk.weights,

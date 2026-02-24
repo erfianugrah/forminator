@@ -364,19 +364,17 @@ export function calculateNormalizedRiskScore(
 		}
 
 		// Corroboration bonus
-		const CORROBORATION_THRESHOLD = 30;
-		const CORROBORATION_MIN_SIGNALS = 3;
-		const CORROBORATION_BONUS = 15;
+		const { threshold: corroborationThreshold, minSignals: corroborationMinSignals, bonus: corroborationBonusBase } = config.risk.corroboration;
 		const corroboratingSignals = Object.entries(components)
 			.filter(([key]) => key !== 'tokenReplay')
-			.filter(([, comp]) => comp.score >= CORROBORATION_THRESHOLD);
-		const corroborationBonusValue = corroboratingSignals.length >= CORROBORATION_MIN_SIGNALS ? CORROBORATION_BONUS : 0;
+			.filter(([, comp]) => comp.score >= corroborationThreshold);
+		const corroborationBonusValue = corroboratingSignals.length >= corroborationMinSignals ? corroborationBonusBase : 0;
 		decision.corroborationBonus = {
 			applied: corroborationBonusValue > 0,
 			bonus: corroborationBonusValue,
 			corroboratingSignals: corroboratingSignals.map(([key]) => key),
-			threshold: CORROBORATION_THRESHOLD,
-			minSignals: CORROBORATION_MIN_SIGNALS,
+			threshold: corroborationThreshold,
+			minSignals: corroborationMinSignals,
 		};
 
 		const adjustedScore = normalizedScore + corroborationBonusValue;
@@ -446,10 +444,13 @@ function normalizeEphemeralIdScore(count: number, config: FraudDetectionConfig):
 }
 
 // Normalize validation attempts to 0-100
+// Graduated scale: 0 → 40 → 70 → 85 → 100 for counts 1 → 2 → 3 → 4 → 5+
 function normalizeValidationScore(count: number, config: FraudDetectionConfig): number {
 	if (count <= 1) return 0; // Normal (including 0 as defensive fallback)
 	if (count === config.detection.validationFrequencyWarnThreshold) return 40; // Acceptable retry
-	return 100; // At block threshold = aggressive
+	if (count === config.detection.validationFrequencyBlockThreshold) return config.risk.blockThreshold; // At block threshold
+	if (count === config.detection.validationFrequencyBlockThreshold + 1) return 85; // Above threshold
+	return 100; // Far above threshold = definite attack
 }
 
 // Normalize IP diversity to 0-100
