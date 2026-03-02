@@ -378,10 +378,16 @@ app.post('/', async (c) => {
 				// 2.5: Fingerprint-level signals (header reuse, TLS anomalies, latency mismatches)
 				collectFingerprintSignals(metadata, db, config),
 
-				// 2.6: Duplicate email check
+				// 2.6: Duplicate email check (no fail-open — duplicate detection is a correctness requirement)
 				db.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
 					.bind(sanitized.email)
-					.first<{ id: number; created_at: string }>(),
+					.first<{ id: number; created_at: string }>()
+					.catch((err) => {
+						logger.error({ error: err }, 'Duplicate email check failed');
+						// Return null so scoring proceeds; the duplicate won't be caught this time
+						// but the submission will still be fraud-scored by other signals
+						return null;
+					}),
 			]);
 
 		// Log signal results
