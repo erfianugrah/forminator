@@ -351,7 +351,13 @@ export function calculateNormalizedRiskScore(
 				`ephemeralId+validationFrequency+ipDiversity (${((config.risk.weights.ephemeralId + config.risk.weights.validationFrequency + config.risk.weights.ipDiversity) * 100).toFixed(0)}%) — all at baseline`,
 			);
 		}
-		const normalizationFactor = inactiveWeight < 1.0 ? 1.0 / (1.0 - inactiveWeight) : 1.0;
+		// Cap the normalization factor at 2.0x to prevent over-amplification of remaining
+		// signals when many are inactive. Without this cap, first-time submissions (tokenReplay=0,
+		// all device signals at baseline) would get a 2.5x multiplier on the remaining 6 signals,
+		// potentially pushing moderate-risk scores into the block threshold.
+		const MAX_NORMALIZATION_FACTOR = 2.0;
+		const rawNormalizationFactor = inactiveWeight < 1.0 ? 1.0 / (1.0 - inactiveWeight) : 1.0;
+		const normalizationFactor = Math.min(rawNormalizationFactor, MAX_NORMALIZATION_FACTOR);
 		const normalizedScore = baseScore * normalizationFactor;
 		decision.normalizedScore = Math.round(normalizedScore * 100) / 100;
 

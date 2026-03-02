@@ -114,8 +114,7 @@ Custom error hierarchy in `src/lib/errors.ts`:
 - Route handlers: single `try/catch` wrapping entire handler, errors caught by `handleError(error, c)`.
 - `throw` typed errors — never return raw status codes manually.
 - Each error has a `userMessage` for client-facing responses.
-- **Fail-open**: email fraud detection, ephemeral ID signals, fraud block logging.
-- **Fail-secure**: token reuse check.
+- **Fail-open**: all signal collectors including token reuse check, email fraud detection, ephemeral ID signals, fraud block logging. The Turnstile API still validates tokens cryptographically; the replay check degrades gracefully during DB outages.
 
 ### Logging
 

@@ -121,9 +121,12 @@ export async function checkTokenReuse(tokenHash: string, db: D1Database): Promis
 
 		return result !== null;
 	} catch (error) {
-		logger.error({ error }, 'Error checking token reuse');
-		// Fail secure: if we can't check, assume it's reused
-		return true;
+		logger.error({ error }, 'Error checking token reuse — failing open (Turnstile API still validates token cryptographically)');
+		// Fail-open: consistent with all other signal collectors. The Turnstile API
+		// already validates the token's cryptographic integrity; this check only detects
+		// replayed tokens. During a DB outage, replay detection degrades gracefully
+		// rather than blocking all legitimate users with false positives.
+		return false;
 	}
 }
 
@@ -176,19 +179,48 @@ export async function collectEphemeralIdSignals(
 		const oneHourAgo = toSQLiteDateTime(new Date(Date.now() - 60 * 60 * 1000));
 		const oneDayAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
-		// Signal 1: Submission count (24h window)
-		// The write-before-read pattern inserts into turnstile_validations, NOT submissions.
-		// The current request has NOT been inserted into submissions yet (that happens after
-		// scoring in submissions.ts), so we add +1 to account for the current attempt.
-		const recentSubmissions = await db
-			.prepare(
+		// Run all 3 signal queries in parallel — they are independent D1 reads
+		const [recentSubmissions, recentValidations, uniqueIps] = await Promise.all([
+			// Signal 1: Submission count (24h window)
+			// The write-before-read pattern inserts into turnstile_validations, NOT submissions.
+			// The current request has NOT been inserted into submissions yet (that happens after
+			// scoring in submissions.ts), so we add +1 to account for the current attempt.
+			db.prepare(
 				`SELECT COUNT(*) as count
 				 FROM submissions
 				 WHERE ephemeral_id = ?
 				 AND created_at > ?`,
 			)
-			.bind(ephemeralId, oneDayAgo)
-			.first<{ count: number }>();
+				.bind(ephemeralId, oneDayAgo)
+				.first<{ count: number }>(),
+
+			// Signal 2: Validation frequency (1h window for rapid-fire detection)
+			// The current request's validation record is already in the DB
+			// (write-before-read pattern) so the COUNT includes this request.
+			db.prepare(
+				`SELECT COUNT(*) as count
+				 FROM turnstile_validations
+				 WHERE ephemeral_id = ?
+				 AND created_at > ?`,
+			)
+				.bind(ephemeralId, oneHourAgo)
+				.first<{ count: number }>(),
+
+			// Signal 3: IP diversity (24h window)
+			// Query both submissions AND turnstile_validations to catch proxy rotation
+			// attacks that may not result in successful submissions
+			db.prepare(
+				`SELECT COUNT(DISTINCT remote_ip) as count FROM (
+					SELECT remote_ip FROM submissions
+					WHERE ephemeral_id = ? AND created_at > ?
+					UNION
+					SELECT remote_ip FROM turnstile_validations
+					WHERE ephemeral_id = ? AND created_at > ?
+				)`,
+			)
+				.bind(ephemeralId, oneDayAgo, ephemeralId, oneDayAgo)
+				.first<{ count: number }>(),
+		]);
 
 		// +1 for current attempt which hasn't been inserted into submissions yet
 		// (only the validation record exists at this point)
@@ -198,19 +230,6 @@ export async function collectEphemeralIdSignals(
 			warnings.push(`Multiple submissions detected (${submissionCount} total in 24h) - registration forms should only be submitted once`);
 		}
 
-		// Signal 2: Validation frequency (1h window for rapid-fire detection)
-		// The current request's validation record is already in the DB
-		// (write-before-read pattern) so the COUNT includes this request.
-		const recentValidations = await db
-			.prepare(
-				`SELECT COUNT(*) as count
-				 FROM turnstile_validations
-				 WHERE ephemeral_id = ?
-				 AND created_at > ?`,
-			)
-			.bind(ephemeralId, oneHourAgo)
-			.first<{ count: number }>();
-
 		// No +1 needed — the early validation record is already counted
 		const validationCount = Math.max(1, recentValidations?.count || 0);
 
@@ -219,22 +238,6 @@ export async function collectEphemeralIdSignals(
 		} else if (validationCount >= config.detection.validationFrequencyWarnThreshold) {
 			warnings.push(`Multiple validation attempts detected (${validationCount} in 1h)`);
 		}
-
-		// Signal 3: IP diversity (24h window)
-		// Query both submissions AND turnstile_validations to catch proxy rotation
-		// attacks that may not result in successful submissions
-		const uniqueIps = await db
-			.prepare(
-				`SELECT COUNT(DISTINCT remote_ip) as count FROM (
-					SELECT remote_ip FROM submissions
-					WHERE ephemeral_id = ? AND created_at > ?
-					UNION
-					SELECT remote_ip FROM turnstile_validations
-					WHERE ephemeral_id = ? AND created_at > ?
-				)`,
-			)
-			.bind(ephemeralId, oneDayAgo, ephemeralId, oneDayAgo)
-			.first<{ count: number }>();
 
 		const ipCount = uniqueIps?.count || 0;
 

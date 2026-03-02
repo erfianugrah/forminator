@@ -261,204 +261,150 @@ export function parseJA4Signals(ja4SignalsJson: string | null): JA4Signals | nul
 // Signal Analysis Functions
 // ============================================================================
 
+/** Row shape returned by the JA4 activity query */
+interface JA4ActivityRow {
+	ephemeral_id: string;
+	remote_ip: string;
+	created_at: string;
+	ja4_signals: string | null;
+	bot_score: number | null;
+}
+
 /**
- * Analyze JA4 clustering patterns
+ * Query all JA4 activity (submissions + blocked validations) within a time window.
+ * This is the single source for JA4 clustering data, used by both IP-filtered (Layer 4a)
+ * and global (Layers 4b/4c) analysis to eliminate duplicate UNION ALL queries.
+ *
+ * @param ja4 JA4 fingerprint to query
+ * @param db D1 database instance
+ * @param timeWindowMinutes How far back to look
+ * @returns Array of activity rows, or empty array
+ */
+async function queryJA4Activity(ja4: string, db: D1Database, timeWindowMinutes: number): Promise<JA4ActivityRow[]> {
+	const timeAgo = toSQLiteDateTime(new Date(Date.now() - timeWindowMinutes * 60 * 1000));
+
+	const results = await db
+		.prepare(
+			`SELECT ephemeral_id, remote_ip, created_at, ja4_signals, bot_score FROM (
+				SELECT
+					ephemeral_id,
+					remote_ip,
+					created_at,
+					ja4_signals,
+					bot_score
+				FROM submissions
+				WHERE ja4 = ?
+				AND created_at > ?
+				UNION ALL
+				SELECT
+					ephemeral_id,
+					remote_ip,
+					created_at,
+					ja4_signals,
+					bot_score
+				FROM turnstile_validations
+				WHERE ja4 = ?
+				AND created_at > ?
+			)
+			ORDER BY created_at ASC`,
+		)
+		.bind(ja4, timeAgo, ja4, timeAgo)
+		.all<JA4ActivityRow>();
+
+	return results.results || [];
+}
+
+/**
+ * Build a ClusteringAnalysis from a set of JA4 activity rows.
+ *
+ * @param ja4 The JA4 fingerprint
+ * @param rows Activity rows (pre-filtered if needed)
+ * @param currentEphemeralId Current request's ephemeral ID (to avoid double-counting)
+ * @returns ClusteringAnalysis or null if no rows
+ */
+function buildClusteringAnalysis(
+	ja4: string,
+	rows: JA4ActivityRow[],
+	currentEphemeralId?: string | null,
+): ClusteringAnalysis | null {
+	if (rows.length === 0) {
+		return null;
+	}
+
+	const uniqueEphemeralIds = new Set(
+		rows.map((r) => r.ephemeral_id).filter((value): value is string => typeof value === 'string' && value.length > 0),
+	);
+	const currentEphemeral = currentEphemeralId || null;
+	const hasCurrentEphemeral = currentEphemeral ? uniqueEphemeralIds.has(currentEphemeral) : false;
+	const ephemeralCount = Math.max(1, uniqueEphemeralIds.size + (hasCurrentEphemeral ? 0 : 1));
+
+	const timestamps = rows.map((r) => new Date(r.created_at.replace(' ', 'T') + 'Z').getTime());
+	const minTime = Math.min(...timestamps);
+	const maxTime = Math.max(...timestamps);
+	const timeSpanMinutes = (maxTime - minTime) / (60 * 1000);
+
+	const ja4SignalsAvg = parseJA4Signals(rows[0].ja4_signals);
+
+	const botScores = rows.map((r) => r.bot_score).filter((s): s is number => s !== null);
+	const avgBotScore = botScores.length > 0 ? Math.round(botScores.reduce((a, b) => a + b, 0) / botScores.length) : null;
+
+	return {
+		ja4,
+		ephemeralCount,
+		submissionCount: rows.length + 1, // +1 for current request
+		timeSpanMinutes,
+		ja4SignalsAvg,
+		avgBotScore,
+	};
+}
+
+/**
+ * Analyze JA4 clustering patterns (IP-filtered variant for Layer 4a)
  * Signal 1: Detects same JA4 from same IP/subnet with multiple ephemeral IDs
  *
  * Phase 1.7: Now handles IPv6 /64 subnet matching for privacy extensions (RFC 8981)
  *
  * @param remoteIp IP address to analyze
  * @param ja4 JA4 fingerprint to analyze
- * @param db D1 database instance
- * @returns Clustering analysis result
+ * @param rows Pre-fetched JA4 activity rows (from queryJA4Activity)
+ * @param currentEphemeralId Current request's ephemeral ID
+ * @returns Clustering analysis result (IP-filtered)
  */
-async function analyzeJA4Clustering(
+function analyzeJA4Clustering(
 	remoteIp: string,
 	ja4: string,
-	db: D1Database,
+	rows: JA4ActivityRow[],
 	currentEphemeralId?: string | null,
-): Promise<ClusteringAnalysis | null> {
-	const oneHourAgo = toSQLiteDateTime(new Date(Date.now() - 60 * 60 * 1000));
-
-	try {
-		// Query all submissions AND blocked validation attempts with this JA4 in last hour.
-		// Including turnstile_validations ensures that repeatedly blocked attackers
-		// still escalate the clustering score even though they never create submissions.
-		// Phase 1.7: Remove remote_ip filter - we'll filter by subnet in JavaScript
-		const results = await db
-			.prepare(
-				`SELECT ephemeral_id, remote_ip, created_at, ja4_signals, bot_score FROM (
-					SELECT
-						ephemeral_id,
-						remote_ip,
-						created_at,
-						ja4_signals,
-						bot_score
-					FROM submissions
-					WHERE ja4 = ?
-					AND created_at > ?
-					UNION ALL
-					SELECT
-						ephemeral_id,
-						remote_ip,
-						created_at,
-						ja4_signals,
-						bot_score
-					FROM turnstile_validations
-					WHERE ja4 = ?
-					AND created_at > ?
-				)
-				ORDER BY created_at ASC`,
-			)
-			.bind(ja4, oneHourAgo, ja4, oneHourAgo)
-			.all<{
-				ephemeral_id: string;
-				remote_ip: string;
-				created_at: string;
-				ja4_signals: string | null;
-				bot_score: number | null;
-			}>();
-
-		if (!results.results || results.results.length === 0) {
-			// No previous activity with this JA4 in last hour
-			return null;
-		}
-
-		// Filter to same IP/subnet only
-		const sameNetwork = results.results.filter((r) => isSameNetwork(r.remote_ip, remoteIp));
-
-		if (sameNetwork.length === 0) {
-			// No clustering at this IP/subnet
-			return null;
-		}
-
-		// Count unique ephemeral IDs from same network
-		const uniqueEphemeralIds = new Set(
-			sameNetwork.map((r) => r.ephemeral_id).filter((value): value is string => typeof value === 'string' && value.length > 0),
-		);
-		const currentEphemeral = currentEphemeralId || null;
-		const hasCurrentEphemeral = currentEphemeral ? uniqueEphemeralIds.has(currentEphemeral) : false;
-		const ephemeralCount = Math.max(1, uniqueEphemeralIds.size + (hasCurrentEphemeral ? 0 : 1));
-
-		// Calculate time span
-		const timestamps = sameNetwork.map((r) => new Date(r.created_at.replace(' ', 'T') + 'Z').getTime());
-		const minTime = Math.min(...timestamps);
-		const maxTime = Math.max(...timestamps);
-		const timeSpanMinutes = (maxTime - minTime) / (60 * 1000);
-
-		// Parse JA4 signals from first result (they should be consistent)
-		const ja4SignalsAvg = parseJA4Signals(sameNetwork[0].ja4_signals);
-
-		// Calculate average bot_score (0=bot, 99=human)
-		const botScores = sameNetwork.map((r) => r.bot_score).filter((s): s is number => s !== null);
-		const avgBotScore = botScores.length > 0 ? Math.round(botScores.reduce((a, b) => a + b, 0) / botScores.length) : null;
-
-		return {
-			ja4,
-			ephemeralCount,
-			submissionCount: sameNetwork.length + 1, // +1 for current
-			timeSpanMinutes,
-			ja4SignalsAvg,
-			avgBotScore,
-		};
-	} catch (error) {
-		logger.error({ error, remoteIp, ja4 }, 'Error analyzing JA4 clustering');
-		throw error;
+): ClusteringAnalysis | null {
+	if (rows.length === 0) {
+		return null;
 	}
+
+	// Filter to same IP/subnet only
+	const sameNetwork = rows.filter((r) => isSameNetwork(r.remote_ip, remoteIp));
+
+	if (sameNetwork.length === 0) {
+		return null;
+	}
+
+	return buildClusteringAnalysis(ja4, sameNetwork, currentEphemeralId);
 }
 
 /**
- * Analyze JA4 clustering patterns globally (no IP filtering)
+ * Analyze JA4 clustering patterns globally (no IP filtering, for Layers 4b/4c)
  * Phase 1.8: Detects network-switching attacks where attacker uses same JA4 across different IPs
  *
  * @param ja4 JA4 fingerprint to analyze
- * @param db D1 database instance
- * @param timeWindowMinutes Time window to analyze (5 or 60 minutes)
+ * @param rows Pre-fetched JA4 activity rows (from queryJA4Activity)
+ * @param currentEphemeralId Current request's ephemeral ID
  * @returns Global clustering analysis or null
  */
-async function analyzeJA4GlobalClustering(
+function analyzeJA4GlobalClustering(
 	ja4: string,
-	db: D1Database,
-	timeWindowMinutes: number,
+	rows: JA4ActivityRow[],
 	currentEphemeralId?: string | null,
-): Promise<ClusteringAnalysis | null> {
-	const timeAgo = toSQLiteDateTime(new Date(Date.now() - timeWindowMinutes * 60 * 1000));
-
-	try {
-		// Query all submissions AND blocked validation attempts with this JA4 in time window.
-		// NO IP filtering - we want to catch network switching.
-		// Including turnstile_validations ensures blocked attackers escalate clustering scores.
-		const results = await db
-			.prepare(
-				`SELECT ephemeral_id, remote_ip, created_at, ja4_signals, bot_score FROM (
-					SELECT
-						ephemeral_id,
-						remote_ip,
-						created_at,
-						ja4_signals,
-						bot_score
-					FROM submissions
-					WHERE ja4 = ?
-					AND created_at > ?
-					UNION ALL
-					SELECT
-						ephemeral_id,
-						remote_ip,
-						created_at,
-						ja4_signals,
-						bot_score
-					FROM turnstile_validations
-					WHERE ja4 = ?
-					AND created_at > ?
-				)
-				ORDER BY created_at ASC`,
-			)
-			.bind(ja4, timeAgo, ja4, timeAgo)
-			.all<{
-				ephemeral_id: string;
-				remote_ip: string;
-				created_at: string;
-				ja4_signals: string | null;
-				bot_score: number | null;
-			}>();
-
-		if (!results.results || results.results.length === 0) {
-			return null;
-		}
-
-		// Count unique ephemeral IDs globally (across all IPs)
-		const uniqueEphemeralIds = new Set(
-			results.results.map((r) => r.ephemeral_id).filter((value): value is string => typeof value === 'string' && value.length > 0),
-		);
-		const currentEphemeral = currentEphemeralId || null;
-		const hasCurrentEphemeral = currentEphemeral ? uniqueEphemeralIds.has(currentEphemeral) : false;
-		const ephemeralCount = Math.max(1, uniqueEphemeralIds.size + (hasCurrentEphemeral ? 0 : 1));
-
-		// Calculate time span
-		const timestamps = results.results.map((r) => new Date(r.created_at.replace(' ', 'T') + 'Z').getTime());
-		const minTime = Math.min(...timestamps);
-		const maxTime = Math.max(...timestamps);
-		const timeSpanMinutes = (maxTime - minTime) / (60 * 1000);
-
-		// Parse JA4 signals
-		const ja4SignalsAvg = parseJA4Signals(results.results[0].ja4_signals);
-
-		// Calculate average bot_score
-		const botScores = results.results.map((r) => r.bot_score).filter((s): s is number => s !== null);
-		const avgBotScore = botScores.length > 0 ? Math.round(botScores.reduce((a, b) => a + b, 0) / botScores.length) : null;
-
-		return {
-			ja4,
-			ephemeralCount,
-			submissionCount: results.results.length + 1,
-			timeSpanMinutes,
-			ja4SignalsAvg,
-			avgBotScore,
-		};
-	} catch (error) {
-		logger.error({ error, ja4, timeWindowMinutes }, 'Error analyzing JA4 global clustering');
-		throw error;
-	}
+): ClusteringAnalysis | null {
+	return buildClusteringAnalysis(ja4, rows, currentEphemeralId);
 }
 
 /**
@@ -632,8 +578,18 @@ export async function collectJA4Signals(
 	logger.info({ remoteIp, ja4 }, 'JA4 signal collection started');
 
 	try {
-		// Layer 4a: JA4 + IP Clustering (same IP/subnet + same JA4)
-		const clusteringIP = await analyzeJA4Clustering(remoteIp, ja4, db, ephemeralId);
+		// Single query: fetch all JA4 activity with the largest time window (1 hour).
+		// Layers 4a and 4c both use 1-hour windows; Layer 4b uses a shorter window
+		// that we filter from the same result set in JavaScript.
+		const maxWindowMinutes = Math.max(
+			60, // Layer 4a always uses 1 hour
+			config.detection.ja4Clustering.rapidGlobalWindowMinutes,
+			config.detection.ja4Clustering.extendedGlobalWindowMinutes,
+		);
+		const allRows = await queryJA4Activity(ja4, db, maxWindowMinutes);
+
+		// Layer 4a: JA4 + IP Clustering (same IP/subnet + same JA4, 1 hour)
+		const clusteringIP = analyzeJA4Clustering(remoteIp, ja4, allRows, ephemeralId);
 
 		if (clusteringIP && clusteringIP.ephemeralCount >= config.detection.ja4Clustering.ipClusteringThreshold) {
 			const velocity = analyzeVelocity(clusteringIP, config);
@@ -667,7 +623,10 @@ export async function collectJA4Signals(
 		}
 
 		// Layer 4b: JA4 + Rapid Global Clustering (5 min, 3+ ephemeral IDs, NO IP filter)
-		const clusteringRapid = await analyzeJA4GlobalClustering(ja4, db, config.detection.ja4Clustering.rapidGlobalWindowMinutes, ephemeralId);
+		// Filter the cached rows to the shorter time window
+		const rapidCutoff = new Date(Date.now() - config.detection.ja4Clustering.rapidGlobalWindowMinutes * 60 * 1000).getTime();
+		const rapidRows = allRows.filter((r) => new Date(r.created_at.replace(' ', 'T') + 'Z').getTime() >= rapidCutoff);
+		const clusteringRapid = analyzeJA4GlobalClustering(ja4, rapidRows, ephemeralId);
 
 		if (clusteringRapid && clusteringRapid.ephemeralCount >= config.detection.ja4Clustering.rapidGlobalThreshold) {
 			const velocity = analyzeVelocity(clusteringRapid, config);
@@ -701,12 +660,8 @@ export async function collectJA4Signals(
 		}
 
 		// Layer 4c: JA4 + Extended Global Clustering (1 hour, 5+ ephemeral IDs, NO IP filter)
-		const clusteringExtended = await analyzeJA4GlobalClustering(
-			ja4,
-			db,
-			config.detection.ja4Clustering.extendedGlobalWindowMinutes,
-			ephemeralId,
-		);
+		// Reuses the full allRows (same 1-hour window) — no additional query needed
+		const clusteringExtended = analyzeJA4GlobalClustering(ja4, allRows, ephemeralId);
 
 		if (clusteringExtended && clusteringExtended.ephemeralCount >= config.detection.ja4Clustering.extendedGlobalThreshold) {
 			const velocity = analyzeVelocity(clusteringExtended, config);

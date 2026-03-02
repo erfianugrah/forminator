@@ -352,30 +352,51 @@ app.post('/', async (c) => {
 			logger.warn({ error: earlyLogError, erfid }, 'Early validation log failed — continuing without concurrency guard');
 		}
 
-		// ========== PHASE 2: COLLECT SIGNALS ==========
+		// ========== PHASE 2: COLLECT SIGNALS (parallelized) ==========
+		// All signal collectors are independent of each other (they only depend on Phase 1
+		// outputs: validation, metadata, sanitized). Run them concurrently to reduce latency.
 
-		// 2.1: Email fraud signal
-		let emailFraudResult = null;
-		if (sanitized.email) {
-			emailFraudResult = await checkEmailFraud(sanitized.email, c.env, c.req.raw);
+		const [emailFraudResult, ephemeralSignals, ja4Signals, ipRateLimitSignals, emailDiversitySignal, fingerprintSignals, existingSubmission] =
+			await Promise.all([
+				// 2.1: Email fraud signal (RPC to markov-mail)
+				sanitized.email ? checkEmailFraud(sanitized.email, c.env, c.req.raw) : Promise.resolve(null),
 
-			if (emailFraudResult) {
-				logger.info(
-					{
-						risk_score: emailFraudResult.riskScore,
-						decision: emailFraudResult.decision,
-						pattern: emailFraudResult.signals.patternType,
-					},
-					'Email fraud signal collected',
-				);
-			}
+				// 2.2: Ephemeral ID signals
+				validation.ephemeralId ? collectEphemeralIdSignals(validation.ephemeralId, db, config) : Promise.resolve(null),
+
+				// 2.3: JA4 signals
+				metadata.ja4
+					? collectJA4Signals(metadata.remoteIp, metadata.ja4, validation.ephemeralId || null, db, config)
+					: Promise.resolve(null),
+
+				// 2.4: IP Rate Limit signals
+				collectIPRateLimitSignals(metadata.remoteIp, db, config),
+
+				// 2.4b: Email diversity per IP
+				collectEmailDiversitySignal(metadata.remoteIp, db, config),
+
+				// 2.5: Fingerprint-level signals (header reuse, TLS anomalies, latency mismatches)
+				collectFingerprintSignals(metadata, db, config),
+
+				// 2.6: Duplicate email check
+				db.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
+					.bind(sanitized.email)
+					.first<{ id: number; created_at: string }>(),
+			]);
+
+		// Log signal results
+		if (emailFraudResult) {
+			logger.info(
+				{
+					risk_score: emailFraudResult.riskScore,
+					decision: emailFraudResult.decision,
+					pattern: emailFraudResult.signals.patternType,
+				},
+				'Email fraud signal collected',
+			);
 		}
 
-		// 2.2: Ephemeral ID signals
-		let ephemeralSignals = null;
-		if (validation.ephemeralId) {
-			ephemeralSignals = await collectEphemeralIdSignals(validation.ephemeralId, db, config);
-
+		if (ephemeralSignals) {
 			logger.info(
 				{
 					submissions: ephemeralSignals.submissionCount,
@@ -387,11 +408,7 @@ app.post('/', async (c) => {
 			);
 		}
 
-		// 2.3: JA4 signals
-		let ja4Signals = null;
-		if (metadata.ja4) {
-			ja4Signals = await collectJA4Signals(metadata.remoteIp, metadata.ja4, validation.ephemeralId || null, db, config);
-
+		if (ja4Signals) {
 			logger.info(
 				{
 					raw_score: ja4Signals.rawScore,
@@ -402,12 +419,6 @@ app.post('/', async (c) => {
 				'JA4 signals collected',
 			);
 		}
-
-		// 2.4: IP Rate Limit signals
-		const ipRateLimitSignals = await collectIPRateLimitSignals(metadata.remoteIp, db, config);
-
-		// 2.4b: Email diversity per IP (detects form spam with unique emails from same IP)
-		const emailDiversitySignal = await collectEmailDiversitySignal(metadata.remoteIp, db, config);
 
 		// Combine IP rate limit with email diversity — take the higher risk signal
 		const combinedIpRiskScore = Math.max(ipRateLimitSignals.riskScore, emailDiversitySignal.riskScore);
@@ -423,8 +434,6 @@ app.post('/', async (c) => {
 			'IP rate limit signals collected',
 		);
 
-		// 2.5: Fingerprint-level signals (header reuse, TLS anomalies, latency mismatches)
-		const fingerprintSignals = await collectFingerprintSignals(metadata, db, config);
 		if (fingerprintSignals.warnings.length > 0) {
 			logger.warn(
 				{
@@ -434,12 +443,6 @@ app.post('/', async (c) => {
 				'Fingerprint anomalies detected',
 			);
 		}
-
-		// 2.5: Duplicate email check (hybrid approach)
-		const existingSubmission = await db
-			.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
-			.bind(sanitized.email)
-			.first<{ id: number; created_at: string }>();
 
 		if (existingSubmission !== null) {
 			// Check how many times this email/IP has tried duplicate submissions recently (24h)

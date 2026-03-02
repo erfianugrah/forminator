@@ -1630,79 +1630,83 @@ export async function getBlacklistStats(db: D1Database) {
 }
 
 /**
+ * Build a UNION ALL query for blocked events (turnstile_validations + fraud_blocks).
+ * Shared between getRecentBlockedValidations and exportDetectionEvents to avoid
+ * maintaining near-duplicate SQL.
+ *
+ * @param tsAlias Column alias for the formatted timestamp ('challenge_ts' or 'timestamp')
+ * @param validationFilters Optional WHERE clauses for filtering (date, risk level)
+ * @param fraudBlockFilters Optional WHERE clauses for filtering (date, risk level)
+ */
+function buildBlockedEventsQuery(
+	tsAlias: string,
+	validationFilters: { clause: string; bindings: Array<string | number> } = { clause: '', bindings: [] },
+	fraudBlockFilters: { clause: string; bindings: Array<string | number> } = { clause: '', bindings: [] },
+): { query: string; filterBindings: Array<string | number> } {
+	const query = `
+		SELECT *
+		FROM (
+			SELECT
+				id,
+				ephemeral_id,
+				remote_ip AS ip_address,
+				country,
+				city,
+				block_reason,
+				detection_type,
+				risk_score,
+				risk_score_breakdown,
+				bot_score,
+				user_agent,
+				ja4,
+				erfid,
+				REPLACE(created_at, ' ', 'T') || 'Z' AS ${tsAlias},
+				created_at,
+				NULL as fraud_signals_json,
+				'validation' as source
+			FROM turnstile_validations
+			WHERE allowed = 0
+			${validationFilters.clause}
+
+			UNION ALL
+
+			SELECT
+				id,
+				NULL as ephemeral_id,
+				remote_ip AS ip_address,
+				country,
+				NULL as city,
+				block_reason,
+				detection_type,
+				risk_score,
+				NULL as risk_score_breakdown,
+				NULL as bot_score,
+				user_agent,
+				NULL as ja4,
+				erfid,
+				REPLACE(created_at, ' ', 'T') || 'Z' AS ${tsAlias},
+				created_at,
+				fraud_signals_json,
+				'fraud_block' as source
+			FROM fraud_blocks
+			WHERE 1 = 1
+			${fraudBlockFilters.clause}
+		)
+		ORDER BY created_at DESC
+		LIMIT ?`;
+
+	return { query, filterBindings: [...validationFilters.bindings, ...fraudBlockFilters.bindings] };
+}
+
+/**
  * Get recent blocked validations with details
  */
 export async function getRecentBlockedValidations(db: D1Database, limit: number = 50) {
 	try {
+		const { query, filterBindings } = buildBlockedEventsQuery('challenge_ts');
 		const result = await db
-			.prepare(
-				`SELECT
-					id,
-					ephemeral_id,
-					ip_address,
-					country,
-					city,
-					block_reason,
-					detection_type,
-					risk_score,
-					risk_score_breakdown,
-					bot_score,
-					user_agent,
-					ja4,
-					erfid,
-					challenge_ts,
-					fraud_signals_json,
-					source
-				FROM (
-					-- Post-Turnstile blocks (from turnstile_validations)
-					SELECT
-						id,
-						ephemeral_id,
-						remote_ip AS ip_address,
-						country,
-						city,
-						block_reason,
-						detection_type,
-						risk_score,
-						risk_score_breakdown,
-						bot_score,
-						user_agent,
-						ja4,
-						erfid,
-						REPLACE(created_at, ' ', 'T') || 'Z' AS challenge_ts,
-						created_at,
-						NULL as fraud_signals_json,
-						'validation' as source
-					FROM turnstile_validations
-					WHERE allowed = 0
-
-					UNION ALL
-
-					-- Pre-Turnstile blocks (from fraud_blocks)
-					SELECT
-						id,
-						NULL as ephemeral_id,
-						remote_ip AS ip_address,
-						country,
-						NULL as city,
-						block_reason,
-						detection_type,
-						risk_score,
-						NULL as risk_score_breakdown,
-						NULL as bot_score,
-						user_agent,
-						NULL as ja4,
-						erfid,
-						REPLACE(created_at, ' ', 'T') || 'Z' AS challenge_ts,
-						created_at,
-						fraud_signals_json,
-						'fraud_block' as source
-					FROM fraud_blocks
-				)
-				ORDER BY created_at DESC
-				LIMIT ?`,
-			)
-			.bind(limit)
+			.prepare(query)
+			.bind(...filterBindings, limit)
 			.all();
 
 		return result.results;
@@ -1932,64 +1936,15 @@ async function exportDetectionEvents(db: D1Database, params: { start?: string; e
 	const fraudBlockDate = buildDateClause('created_at', start, end);
 	const fraudBlockRisk = buildRiskLevelClause('COALESCE(risk_score, 0)', riskLevel);
 
-	const query = `
-		SELECT *
-		FROM (
-			SELECT
-				id,
-				ephemeral_id,
-				remote_ip AS ip_address,
-				country,
-				city,
-				block_reason,
-				detection_type,
-				risk_score,
-				risk_score_breakdown,
-				bot_score,
-				user_agent,
-				ja4,
-				erfid,
-				REPLACE(created_at, ' ', 'T') || 'Z' AS timestamp,
-				'validation' as source,
-				created_at
-			FROM turnstile_validations
-			WHERE allowed = 0
-			${validationDate.clause}
-			${validationRisk.clause}
-
-			UNION ALL
-
-			SELECT
-				id,
-				NULL as ephemeral_id,
-				remote_ip AS ip_address,
-				country,
-				NULL as city,
-				block_reason,
-				detection_type,
-				risk_score,
-				NULL as risk_score_breakdown,
-				NULL as bot_score,
-				user_agent,
-				NULL as ja4,
-				erfid,
-				REPLACE(created_at, ' ', 'T') || 'Z' AS timestamp,
-				'fraud_block' as source,
-				created_at
-			FROM fraud_blocks
-			WHERE 1 = 1
-			${fraudBlockDate.clause}
-			${fraudBlockRisk.clause}
-		)
-		ORDER BY created_at DESC
-		LIMIT ?
-	`;
-
-	const bindings = [...validationDate.bindings, ...validationRisk.bindings, ...fraudBlockDate.bindings, ...fraudBlockRisk.bindings, limit];
+	const { query, filterBindings } = buildBlockedEventsQuery(
+		'timestamp',
+		{ clause: `${validationDate.clause}${validationRisk.clause}`, bindings: [...validationDate.bindings, ...validationRisk.bindings] },
+		{ clause: `${fraudBlockDate.clause}${fraudBlockRisk.clause}`, bindings: [...fraudBlockDate.bindings, ...fraudBlockRisk.bindings] },
+	);
 
 	const result = await db
 		.prepare(query)
-		.bind(...bindings)
+		.bind(...filterBindings, limit)
 		.all();
 	return result.results;
 }
