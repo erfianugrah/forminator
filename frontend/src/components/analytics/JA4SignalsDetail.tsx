@@ -62,23 +62,25 @@ export function JA4SignalsDetail({ signals, ja4Fingerprint, config }: JA4Signals
 				<div className="space-y-2">
 					<h5 className="text-xs font-semibold text-muted-foreground uppercase">Active Detection Signals</h5>
 
-					<SignalRow
-						label="IP Diversity (Global)"
-						value={signals.ips_quantile_1h}
-						threshold={ipsThreshold}
-						description="This JA4 is used by many different IPs globally. High values can indicate popular browser OR proxy/bot networks."
-						format="percentile"
-						used={true}
-					/>
+				<SignalRow
+					label="IP Diversity (Global)"
+					value={signals.ips_quantile_1h}
+					threshold={ipsThreshold}
+					description="This JA4 is used by many different IPs globally. High values can indicate popular browser OR proxy/bot networks."
+					format="percentile"
+					used={true}
+					warnWhen="above"
+				/>
 
-					<SignalRow
-						label="Request Volume (Global)"
-						value={signals.reqs_quantile_1h}
-						threshold={reqsThreshold}
-						description="This JA4 generates high request volume globally. Can indicate popular browser OR bot networks."
-						format="percentile"
-						used={true}
-					/>
+				<SignalRow
+					label="Request Volume (Global)"
+					value={signals.reqs_quantile_1h}
+					threshold={reqsThreshold}
+					description="This JA4 generates high request volume globally. Can indicate popular browser OR bot networks."
+					format="percentile"
+					used={true}
+					warnWhen="above"
+				/>
 				</div>
 
 				{/* Global rankings */}
@@ -100,41 +102,45 @@ export function JA4SignalsDetail({ signals, ja4Fingerprint, config }: JA4Signals
 				<div className="space-y-2">
 					<h5 className="text-xs font-semibold text-muted-foreground uppercase">Behavioral Signals (Monitoring)</h5>
 
-					<SignalRow
-						label="Heuristic Ratio"
-						value={signals.heuristic_ratio_1h}
-						threshold={heuristicThreshold}
-						description="Ratio of heuristic bot detections. High values indicate bot-like behavior."
-						format="percentage"
-						used={false}
-					/>
+				<SignalRow
+					label="Heuristic Ratio"
+					value={signals.heuristic_ratio_1h}
+					threshold={heuristicThreshold}
+					description="Ratio of heuristic bot detections. High values indicate bot-like behavior."
+					format="percentage"
+					used={false}
+					warnWhen="above"
+				/>
 
-					<SignalRow
-						label="Browser Ratio"
-						value={signals.browser_ratio_1h}
-						threshold={browserThreshold}
-						description="Ratio of browser-like requests. Low values may indicate automation."
-						format="percentage"
-						used={false}
-					/>
+				<SignalRow
+					label="Browser Ratio"
+					value={signals.browser_ratio_1h}
+					threshold={browserThreshold}
+					description="Ratio of browser-like requests. Low values may indicate automation."
+					format="percentage"
+					used={false}
+					warnWhen="below"
+				/>
 
-					<SignalRow
-						label="HTTP/2-3 Ratio"
-						value={signals.h2h3_ratio_1h}
-						threshold={h2h3Threshold}
-						description="Ratio of HTTP/2 and HTTP/3 requests. Unusual values may indicate custom clients."
-						format="percentage"
-						used={false}
-					/>
+				<SignalRow
+					label="HTTP/2-3 Ratio"
+					value={signals.h2h3_ratio_1h}
+					threshold={h2h3Threshold}
+					description="Ratio of HTTP/2 and HTTP/3 requests. Low values may indicate custom clients."
+					format="percentage"
+					used={false}
+					warnWhen="below"
+				/>
 
-					<SignalRow
-						label="Cache Ratio"
-						value={signals.cache_ratio_1h}
-						threshold={cacheThreshold}
-						description="Ratio of cached responses. Very low values may indicate scraping."
-						format="percentage"
-						used={false}
-					/>
+				<SignalRow
+					label="Cache Ratio"
+					value={signals.cache_ratio_1h}
+					threshold={cacheThreshold}
+					description="Ratio of cached responses. Very low values may indicate scraping."
+					format="percentage"
+					used={false}
+					warnWhen="below"
+				/>
 				</div>
 
 				<div className="flex items-start gap-2 p-3 rounded-md border border-border/60 bg-muted/30 text-xs">
@@ -156,9 +162,11 @@ interface SignalRowProps {
 	description: string;
 	format: 'percentile' | 'percentage';
 	used: boolean;
+	/** Whether to warn when value is above or below the threshold */
+	warnWhen: 'above' | 'below';
 }
 
-function SignalRow({ label, value, threshold, description, format, used }: SignalRowProps) {
+function SignalRow({ label, value, threshold, description, format, used, warnWhen }: SignalRowProps) {
 	if (value === undefined || value === null) {
 		return (
 			<div className="flex items-start gap-2 p-2 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
@@ -178,8 +186,8 @@ function SignalRow({ label, value, threshold, description, format, used }: Signa
 		);
 	}
 
-	const isHigh = value >= threshold;
-	const icon = isHigh ? (
+	const isSuspicious = warnWhen === 'above' ? value >= threshold : value <= threshold;
+	const icon = isSuspicious ? (
 		<AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
 	) : (
 		<CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -190,7 +198,7 @@ function SignalRow({ label, value, threshold, description, format, used }: Signa
 	return (
 		<div
 			className={`flex items-start gap-2 p-2 rounded border ${
-				isHigh
+				isSuspicious
 					? 'border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950'
 					: 'border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900'
 			}`}
