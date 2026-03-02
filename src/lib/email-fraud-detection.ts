@@ -1,6 +1,5 @@
 import type { Env } from './types';
 import { logger } from './logger';
-import crypto from 'crypto';
 
 export interface EmailFraudResult {
 	riskScore: number; // 0-100

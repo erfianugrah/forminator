@@ -176,9 +176,10 @@ export async function collectEphemeralIdSignals(
 		const oneHourAgo = toSQLiteDateTime(new Date(Date.now() - 60 * 60 * 1000));
 		const oneDayAgo = toSQLiteDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
-		// Signal 1: Submission count (changed to 24h window for consistency)
-		// NOTE: The current request's validation is already written to the DB
-		// (write-before-read pattern in submissions.ts) so we do NOT add +1 here.
+		// Signal 1: Submission count (24h window)
+		// The write-before-read pattern inserts into turnstile_validations, NOT submissions.
+		// The current request has NOT been inserted into submissions yet (that happens after
+		// scoring in submissions.ts), so we add +1 to account for the current attempt.
 		const recentSubmissions = await db
 			.prepare(
 				`SELECT COUNT(*) as count

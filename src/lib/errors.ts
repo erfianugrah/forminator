@@ -159,7 +159,7 @@ export function handleError(error: unknown, c: Context) {
 	}
 
 	if (error instanceof AppError) {
-		// Log based on severity
+		// Log based on severity (context is logged server-side only)
 		if (error.statusCode >= 500) {
 			logger.error(
 				{
@@ -183,11 +183,12 @@ export function handleError(error: unknown, c: Context) {
 			);
 		}
 
+		// Never expose internal context (tokenHash, email, etc.) to the client.
+		// Only userMessage is safe for the response body.
 		return c.json(
 			{
 				error: error.name,
 				message: error.userMessage || error.message,
-				...(error.context && { details: error.context }),
 				...(erfid && { erfid }),
 			},
 			error.statusCode as any,
