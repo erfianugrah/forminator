@@ -370,7 +370,11 @@ export function calculateNormalizedRiskScore(
 		}
 
 		// Corroboration bonus
-		const { threshold: corroborationThreshold, minSignals: corroborationMinSignals, bonus: corroborationBonusBase } = config.risk.corroboration;
+		const {
+			threshold: corroborationThreshold,
+			minSignals: corroborationMinSignals,
+			bonus: corroborationBonusBase,
+		} = config.risk.corroboration;
 		const corroboratingSignals = Object.entries(components)
 			.filter(([key]) => key !== 'tokenReplay')
 			.filter(([, comp]) => comp.score >= corroborationThreshold);
@@ -445,24 +449,27 @@ function normalizeEphemeralIdScore(count: number, config: FraudDetectionConfig):
 	if (count === 0) return 0;
 	if (count === 1) return 10; // Baseline
 	const threshold = config.detection.ephemeralIdSubmissionThreshold;
-	if (count === threshold) return config.risk.blockThreshold; // At threshold
-	return 100; // Above threshold = definite fraud
+	if (count >= threshold) return count === threshold ? config.risk.blockThreshold : 100;
+	// Between 1 and threshold: linear interpolation
+	return Math.round(10 + ((count - 1) / (threshold - 1)) * (config.risk.blockThreshold - 10));
 }
 
 // Normalize validation attempts to 0-100
-// Graduated scale: 0 → 40 → 70 → 85 → 100 for counts 1 → 2 → 3 → 4 → 5+
+// Graduated scale: 0 → 40 → blockThreshold → 85 → 100
 function normalizeValidationScore(count: number, config: FraudDetectionConfig): number {
 	if (count <= 1) return 0; // Normal (including 0 as defensive fallback)
-	if (count === config.detection.validationFrequencyWarnThreshold) return 40; // Acceptable retry
-	if (count === config.detection.validationFrequencyBlockThreshold) return config.risk.blockThreshold; // At block threshold
-	if (count === config.detection.validationFrequencyBlockThreshold + 1) return 85; // Above threshold
+	const warnThreshold = config.detection.validationFrequencyWarnThreshold;
+	const blockThreshold = config.detection.validationFrequencyBlockThreshold;
+	if (count <= warnThreshold) return 40; // At or below warn threshold
+	if (count <= blockThreshold) return config.risk.blockThreshold; // At block threshold
+	if (count <= blockThreshold + 1) return 85; // Just above threshold
 	return 100; // Far above threshold = definite attack
 }
 
 // Normalize IP diversity to 0-100
 function normalizeIPScore(count: number, config: FraudDetectionConfig): number {
 	if (count <= 1) return 0; // Normal (including 0 as defensive fallback)
-	if (count === config.detection.ipDiversityThreshold) return 50; // Suspicious
+	if (count <= config.detection.ipDiversityThreshold) return 50; // At or below threshold = suspicious
 	return 100; // Above threshold = proxy rotation
 }
 

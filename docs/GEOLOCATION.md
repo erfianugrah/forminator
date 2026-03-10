@@ -24,13 +24,15 @@ Cloudflare adds `CF-IPCountry` header to every request based on client IP.
 ```typescript
 // src/routes/geo.ts
 geo.get('/', (c) => {
-	const countryCode = c.req.header('CF-IPCountry') || 'US';
+	const countryCode = c.req.header('CF-IPCountry') || 'XX';
 	return c.json({
 		success: true,
 		countryCode: countryCode.toLowerCase(), // Lowercase format for consistency
 	});
 });
 ```
+
+**Note**: The default fallback is `'XX'` (unknown), not `'US'`. This avoids silently assuming a country for users when Cloudflare metadata is unavailable (e.g., local development). The frontend phone input handles `'xx'` by defaulting to `'us'` separately.
 
 **Response:**
 

@@ -127,10 +127,26 @@ function buildHeaderSnapshot(headers: Headers): {
 	fingerprint?: string;
 } {
 	const normalizedEntries: [string, string][] = [];
+	// Headers excluded from fingerprint hash because they are:
+	// - Per-request volatile (cf-ray, cf-request-id change every request)
+	// - Client-IP dependent (vary with proxies/load balancers)
+	// - Sensitive secrets (cookie, authorization, API keys)
+	const EXCLUDED_HEADERS = new Set([
+		'cookie',
+		'authorization',
+		'x-api-key',
+		'cf-ray',
+		'cf-request-id',
+		'cf-connecting-ip',
+		'x-real-ip',
+		'x-forwarded-for',
+		'x-forwarded-proto',
+	]);
+
 	headers.forEach((value, key) => {
 		const normalizedKey = key.toLowerCase();
-		if (normalizedKey === 'cookie' || normalizedKey === 'authorization') {
-			return; // avoid storing sensitive secrets in logs/DB
+		if (EXCLUDED_HEADERS.has(normalizedKey)) {
+			return; // avoid volatile/sensitive headers in fingerprint
 		}
 		normalizedEntries.push([normalizedKey, value]);
 	});
@@ -240,9 +256,9 @@ export function extractRequestMetadata(request: Request): RequestMetadata {
 		tlsClientAuth: cfAny?.tlsClientAuth || null,
 
 		// Bot detection (prefer cf.botManagement over headers)
-		botScore: cf?.botManagement?.score || (headers.get('cf-bot-score') ? parseInt(headers.get('cf-bot-score')!, 10) : undefined),
+		botScore: cf?.botManagement?.score ?? (headers.get('cf-bot-score') ? parseInt(headers.get('cf-bot-score')!, 10) : undefined),
 		clientTrustScore: cfAny?.clientTrustScore,
-		verifiedBot: cf?.botManagement?.verifiedBot || headers.get('cf-verified-bot') === 'true',
+		verifiedBot: cf?.botManagement?.verifiedBot ?? headers.get('cf-verified-bot') === 'true',
 		jsDetectionPassed: (cf?.botManagement as any)?.jsDetection?.passed,
 		detectionIds: (cf?.botManagement as any)?.detectionIds,
 		corporateProxy: (cf?.botManagement as any)?.corporateProxy ?? undefined,
@@ -276,6 +292,8 @@ export function extractRequestMetadata(request: Request): RequestMetadata {
 			dest: headers.get('sec-fetch-dest') || undefined,
 			user: headers.get('sec-fetch-user') || undefined,
 		},
+		// Note: secFetchSite/Mode/Dest/User are kept for backward compat with DB queries
+		// that reference these fields. They mirror fetchMetadata values.
 		secFetchSite: headers.get('sec-fetch-site') || undefined,
 		secFetchMode: headers.get('sec-fetch-mode') || undefined,
 		secFetchDest: headers.get('sec-fetch-dest') || undefined,

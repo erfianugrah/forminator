@@ -103,10 +103,11 @@ export const formSchema = z.object({
 
 ### Validation Rules
 
-**Names** use regex to:
+**Names** use Unicode-aware regex (`\p{L}` with `/u` flag) to:
 
-- Allow letters, spaces, hyphens (Mary-Jane), and apostrophes (O'Brien)
+- Allow letters from any script (Latin, Cyrillic, CJK, Arabic, etc.), spaces, hyphens (Mary-Jane), and apostrophes (O'Brien)
 - Reject numbers and special characters
+- Frontend and backend both use `\p{L}` for consistent Unicode name validation
 
 **Phone** normalization:
 

@@ -181,9 +181,9 @@ export async function updateValidationResult(
 		detectionType?: string;
 		riskScoreBreakdown?: RiskScoreBreakdown;
 	},
-): Promise<void> {
+): Promise<boolean> {
 	try {
-		await db
+		const result = await db
 			.prepare(
 				`UPDATE turnstile_validations
 				 SET risk_score = ?,
@@ -205,10 +205,17 @@ export async function updateValidationResult(
 			)
 			.run();
 
-		logger.info({ validationId, allowed: data.allowed, riskScore: data.riskScore }, 'Validation result updated');
+		const rowsUpdated = result.meta?.changes ?? 0;
+		if (rowsUpdated === 0) {
+			logger.warn({ validationId }, 'updateValidationResult matched 0 rows — record may not exist');
+		} else {
+			logger.info({ validationId, allowed: data.allowed, riskScore: data.riskScore }, 'Validation result updated');
+		}
+		return rowsUpdated > 0;
 	} catch (error) {
 		logger.error({ error, validationId }, 'Error updating validation result');
 		// Non-fatal: the early record is still valid for signal collection
+		return false;
 	}
 }
 

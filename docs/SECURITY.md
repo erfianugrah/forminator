@@ -149,6 +149,7 @@ HTML and potentially dangerous characters are stripped from user inputs before s
 
 - Allowlist comes from `ALLOWED_ORIGINS` (comma-separated). If unset the worker defaults to `https://form.erfi.dev`.
 - In **non-production** environments it automatically appends `http://localhost:8787` and `http://localhost:4321` so local frontends work without extra config.
+- **Staging** uses explicit localhost origins (not wildcard `"*"`) to prevent credential-bearing requests from arbitrary origins while still sharing the production D1 database.
 - Allowed methods: `GET, POST, OPTIONS`
 - Allowed headers: `Content-Type, X-API-KEY`
 - Exposed headers: `X-Request-Id` (mirrors the `erfid` generated per request)
@@ -162,12 +163,14 @@ Middleware validates the request origin against the allowlist derived above befo
 
 The following security headers are applied to every response by `src/index.ts`:
 
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` - Enforces HTTPS for 2 years
 - `X-Content-Type-Options: nosniff` - Prevents MIME type sniffing
 - `X-Frame-Options: DENY` - Prevents clickjacking
-- `X-XSS-Protection: 1; mode=block` - Enables browser XSS protection
 - `Referrer-Policy: strict-origin-when-cross-origin` - Controls referrer information
 - `Permissions-Policy: geolocation=(), microphone=(), camera=()` - Denies access to these sensors
 - `Content-Security-Policy` - Defines trusted content sources
+
+**Note**: `X-XSS-Protection` has been intentionally removed. It is deprecated, can introduce XSS vulnerabilities in older browsers, and CSP provides superior protection.
 
 ### Content Security Policy
 
@@ -200,8 +203,18 @@ Enterprise-only fields (bot_score, ja3_hash, ja4, detection_ids) require Cloudfl
 Analytics endpoints are protected with API key authentication:
 
 - Require `X-API-KEY` header when the `X-API-KEY` environment variable is present
-- If the variable is **unset**, the middleware allows open access and logs a warning (backward compatibility)
+- If the variable is **unset**, the endpoint returns **503 Service Unavailable** (fail-closed — no open access)
 - Returns 401 for missing or invalid keys when the variable is set
+- All API key comparisons use constant-time `timingSafeCompare()` from `src/lib/utils/timing-safe.ts` to prevent timing side-channel attacks
+
+### Timing-Safe Comparison
+
+API key comparisons use a constant-time approach that prevents length-leaking:
+
+- Both strings are padded to the same maximum length before comparison
+- Uses `crypto.subtle.timingSafeEqual` on equal-length `Uint8Array` buffers
+- Located in `src/lib/utils/timing-safe.ts` — imported by `analytics.ts`, `submissions.ts`, and `config.ts`
+- Never use inline `===` or raw `timingSafeEqual` with a `byteLength` early-exit for secret comparison
 
 ### Testing Bypass
 
@@ -266,6 +279,24 @@ if (env.ALLOW_TESTING_BYPASS === 'true' && apiKey && apiKey === env['X-API-KEY']
 	validation = await validateTurnstileToken(/* ... */);
 }
 ```
+
+## Export Security
+
+### CSV Formula Injection Prevention
+
+CSV exports sanitize cells that start with formula-injection characters to prevent spreadsheet formula attacks:
+
+- Characters guarded: `=`, `+`, `-`, `@`, `\t`, `\r`
+- Mitigation: prefix with a single quote (`'`) which is invisible in most spreadsheet applications
+- Applied in `src/routes/analytics.ts` export endpoint
+
+### Header Fingerprint Hygiene
+
+The `buildHeaderSnapshot()` function in `src/lib/types.ts` excludes volatile and sensitive headers from the FNV-1a hash:
+
+- **Volatile** (change per-request): `cf-ray`, `cf-request-id`, `cf-connecting-ip`, `x-real-ip`, `x-forwarded-for`, `x-forwarded-proto`, `true-client-ip`, `cookie`, `authorization`
+- **Sensitive**: `x-api-key`
+- Including these would make every fingerprint unique, wasting the 7% header-fingerprint scoring weight
 
 ## Data Protection
 

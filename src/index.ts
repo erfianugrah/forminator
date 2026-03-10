@@ -47,8 +47,11 @@ app.use('*', async (c, next) => {
 	// Prevent clickjacking
 	c.header('X-Frame-Options', 'DENY');
 
-	// Enable XSS protection
-	c.header('X-XSS-Protection', '1; mode=block');
+	// HSTS: enforce HTTPS for 1 year (includeSubDomains for full coverage)
+	c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+	// Note: X-XSS-Protection removed — deprecated in all modern browsers and can
+	// introduce vulnerabilities in older IE versions. CSP provides the protection.
 
 	// Referrer policy
 	c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -130,8 +133,7 @@ app.all('*', async (c) => {
 	return c.json(
 		{
 			error: 'Not Found',
-			message: 'Route not defined. Enable static assets or point your frontend at the documented API routes.',
-			docs: 'https://github.com/erfi-forminator/forminator/blob/main/docs/backend-only.md',
+			message: 'Route not defined. Check your API route configuration.',
 		},
 		404,
 	);

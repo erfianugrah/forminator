@@ -42,7 +42,9 @@ forminator/
 │       ├── fraud-prevalidation.ts    # Pre-validation blacklist
 │       ├── ja4-fraud-detection.ts    # JA4 session hopping
 │       ├── logger.ts           # Pino logging
-│       └── types.ts            # TypeScript types + metadata extraction
+│       ├── types.ts            # TypeScript types + metadata extraction
+│       └── utils/
+│           └── timing-safe.ts  # Constant-time string comparison
 │
 ├── wrangler.jsonc              # Worker configuration
 ├── package.json                # Worker dependencies
@@ -736,12 +738,15 @@ Remote D1 usage provides consistency with production and avoids local/remote dat
 1. **Single-Use Tokens**: Prevents replay attacks
 2. **Token Hashing**: SHA256, not stored in plaintext
 3. **Fraud Detection**: Ephemeral ID + IP-based fallback
-4. **Input Validation**: Zod schemas client + server
+4. **Input Validation**: Zod schemas client + server (calendar date validation, Unicode name support)
 5. **SQL Injection**: Parameterized queries only
 6. **XSS Prevention**: Input sanitization
-7. **CORS**: Configured for specific domains
-8. **CSP Headers**: Prevents inline script injection
+7. **CORS**: Configured for specific domains (no wildcards)
+8. **Security Headers**: HSTS, CSP, X-Frame-Options, X-Content-Type-Options
 9. **Rate Limiting**: IP-based throttling
+10. **Timing-Safe Auth**: Constant-time API key comparison via `src/lib/utils/timing-safe.ts`
+11. **CSV Injection Protection**: Formula-prefix sanitization in exports
+12. **Analytics Fail-Closed**: Returns 503 when no API key configured (never open access)
 
 ## Monitoring
 

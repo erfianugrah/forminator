@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../lib/types';
+import { timingSafeCompare } from '../lib/utils/timing-safe';
 import {
 	getValidationStats,
 	getRecentSubmissions,
@@ -34,23 +35,20 @@ app.use('*', async (c, next) => {
 	const apiKey = c.req.header('X-API-KEY');
 	const expectedKey = c.env['X-API-KEY'];
 
-	// If no expected key is set, allow access (backward compatibility)
+	// If no expected key is configured, block all analytics access (fail-closed for PII)
 	if (!expectedKey) {
-		logger.warn('X-API-KEY not configured in environment - analytics unprotected');
-		return next();
+		logger.warn('X-API-KEY not configured in environment - analytics access denied');
+		return c.json(
+			{
+				success: false,
+				error: 'Analytics endpoint is not configured. Set X-API-KEY in environment.',
+			},
+			503,
+		);
 	}
 
-	// Check if API key matches (timing-safe comparison to prevent timing attacks)
-	// Workers runtime exposes timingSafeEqual on crypto.subtle (non-standard extension)
-	const encoder = new TextEncoder();
-	const apiKeyBytes = encoder.encode(apiKey || '');
-	const expectedKeyBytes = encoder.encode(expectedKey);
-	const keysMatch =
-		apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
-		(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean }).timingSafeEqual(
-			apiKeyBytes,
-			expectedKeyBytes,
-		);
+	// Constant-time comparison to prevent timing attacks (does not leak key length)
+	const keysMatch = timingSafeCompare(apiKey || '', expectedKey);
 
 	if (!apiKey || !keysMatch) {
 		logger.warn(
@@ -103,8 +101,33 @@ app.get('/submissions', async (c) => {
 		const db = c.env.DB;
 
 		// Parse pagination params
-		const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
-		const offset = c.req.query('offset') ? parseInt(c.req.query('offset')!, 10) : undefined;
+		const rawLimit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
+		const rawOffset = c.req.query('offset') ? parseInt(c.req.query('offset')!, 10) : undefined;
+
+		// Validate pagination params are valid numbers
+		if (rawLimit !== undefined && (isNaN(rawLimit) || rawLimit < 0)) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid parameter',
+					message: 'limit must be a non-negative integer',
+				},
+				400,
+			);
+		}
+		if (rawOffset !== undefined && (isNaN(rawOffset) || rawOffset < 0)) {
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid parameter',
+					message: 'offset must be a non-negative integer',
+				},
+				400,
+			);
+		}
+
+		const limit = rawLimit;
+		const offset = rawOffset;
 
 		// Parse sorting params
 		const sortBy = c.req.query('sortBy');
@@ -702,10 +725,15 @@ app.get('/export', async (c) => {
 				return headers.map((header) => {
 					const value = row[header];
 					if (value === null || value === undefined) return '';
-					if (typeof value === 'string' && value.includes(',')) {
-						return `"${value.replace(/"/g, '""')}"`;
+					let strValue = String(value);
+					// Prevent CSV formula injection: prefix dangerous characters with a single quote
+					if (/^[=+\-@\t\r]/.test(strValue)) {
+						strValue = `'${strValue}`;
 					}
-					return value;
+					if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+						return `"${strValue.replace(/"/g, '""')}"`;
+					}
+					return strValue;
 				});
 			});
 

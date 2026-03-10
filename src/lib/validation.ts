@@ -76,6 +76,12 @@ export const formSubmissionSchema = z.object({
 				.string()
 				.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
 				.refine((date) => {
+					// Validate the date is real (e.g. reject Feb 30)
+					const [year, month, day] = date.split('-').map(Number);
+					const parsed = new Date(year, month - 1, day);
+					return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+				}, 'Invalid calendar date')
+				.refine((date) => {
 					const birthDate = new Date(date);
 					const today = new Date();
 					const yearDiff = today.getFullYear() - birthDate.getFullYear();

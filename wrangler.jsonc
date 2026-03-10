@@ -84,7 +84,7 @@
 			"name": "forminator-staging",
 			"vars": {
 				"ENVIRONMENT": "staging",
-				"ALLOWED_ORIGINS": "*",
+				"ALLOWED_ORIGINS": "http://localhost:8787,http://localhost:4321",
 				"ALLOW_TESTING_BYPASS": "true",
 				"ROUTES": {
 					"submissions": "/api/submissions",

@@ -7,6 +7,7 @@
  */
 
 import type { Env } from './types';
+import logger from './logger';
 
 /**
  * Default configuration values
@@ -360,7 +361,7 @@ export function getConfig(env?: Env): FraudDetectionConfig {
 		// Deep merge with defaults
 		return mergeConfig(DEFAULT_CONFIG, customConfig);
 	} catch (error) {
-		console.warn('Failed to parse FRAUD_CONFIG, using defaults:', error);
+		logger.warn({ error }, 'Failed to parse FRAUD_CONFIG, using defaults');
 		return DEFAULT_CONFIG;
 	}
 }

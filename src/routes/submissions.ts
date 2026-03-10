@@ -19,6 +19,7 @@ import { calculateNormalizedRiskScore } from '../lib/scoring';
 import { checkEmailFraud } from '../lib/email-fraud-detection';
 import { extractField } from '../lib/field-mapper';
 import { getConfig } from '../lib/config';
+import { timingSafeCompare } from '../lib/utils/timing-safe';
 import { collectFingerprintSignals } from '../lib/fingerprint-signals';
 import {
 	ValidationError,
@@ -33,7 +34,11 @@ import { generateErfid, type ErfidConfig } from '../lib/erfid';
 import { toSQLiteDateTime } from '../lib/utils/datetime';
 
 /**
- * Get offense count for any identifier (email, ephemeral_id, ip_address)
+ * Get offense count for any identifier (email, ephemeral_id, ip_address).
+ *
+ * Note: Uses OR across identifiers which may overcount when different users share
+ * an IP (e.g., office NAT). This is intentional — overcounting leads to stricter
+ * progressive timeouts, which is the safe direction for fraud prevention.
  */
 async function getOffenseCount(
 	db: D1Database,
@@ -130,19 +135,8 @@ app.post('/', async (c) => {
 		const expectedKey = c.env['X-API-KEY'];
 		const allowBypass = c.env.ALLOW_TESTING_BYPASS === 'true';
 		const isProduction = c.env.ENVIRONMENT === 'production';
-		// Timing-safe comparison to prevent timing attacks on API key
-		let apiKeyValid = false;
-		if (apiKey && expectedKey) {
-			const encoder = new TextEncoder();
-			const apiKeyBytes = encoder.encode(apiKey);
-			const expectedKeyBytes = encoder.encode(expectedKey);
-			apiKeyValid =
-				apiKeyBytes.byteLength === expectedKeyBytes.byteLength &&
-				(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean }).timingSafeEqual(
-					apiKeyBytes,
-					expectedKeyBytes,
-				);
-		}
+		// Constant-time comparison to prevent timing attacks (does not leak key length)
+		const apiKeyValid = apiKey && expectedKey ? timingSafeCompare(apiKey, expectedKey) : false;
 		const skipTurnstile = Boolean(allowBypass && !isProduction && apiKeyValid);
 
 		if (skipTurnstile) {
@@ -356,39 +350,45 @@ app.post('/', async (c) => {
 		// All signal collectors are independent of each other (they only depend on Phase 1
 		// outputs: validation, metadata, sanitized). Run them concurrently to reduce latency.
 
-		const [emailFraudResult, ephemeralSignals, ja4Signals, ipRateLimitSignals, emailDiversitySignal, fingerprintSignals, existingSubmission] =
-			await Promise.all([
-				// 2.1: Email fraud signal (RPC to markov-mail)
-				sanitized.email ? checkEmailFraud(sanitized.email, c.env, c.req.raw) : Promise.resolve(null),
+		const [
+			emailFraudResult,
+			ephemeralSignals,
+			ja4Signals,
+			ipRateLimitSignals,
+			emailDiversitySignal,
+			fingerprintSignals,
+			existingSubmission,
+		] = await Promise.all([
+			// 2.1: Email fraud signal (RPC to markov-mail)
+			sanitized.email ? checkEmailFraud(sanitized.email, c.env, c.req.raw) : Promise.resolve(null),
 
-				// 2.2: Ephemeral ID signals
-				validation.ephemeralId ? collectEphemeralIdSignals(validation.ephemeralId, db, config) : Promise.resolve(null),
+			// 2.2: Ephemeral ID signals
+			validation.ephemeralId ? collectEphemeralIdSignals(validation.ephemeralId, db, config) : Promise.resolve(null),
 
-				// 2.3: JA4 signals
-				metadata.ja4
-					? collectJA4Signals(metadata.remoteIp, metadata.ja4, validation.ephemeralId || null, db, config)
-					: Promise.resolve(null),
+			// 2.3: JA4 signals
+			metadata.ja4 ? collectJA4Signals(metadata.remoteIp, metadata.ja4, validation.ephemeralId || null, db, config) : Promise.resolve(null),
 
-				// 2.4: IP Rate Limit signals
-				collectIPRateLimitSignals(metadata.remoteIp, db, config),
+			// 2.4: IP Rate Limit signals
+			collectIPRateLimitSignals(metadata.remoteIp, db, config),
 
-				// 2.4b: Email diversity per IP
-				collectEmailDiversitySignal(metadata.remoteIp, db, config),
+			// 2.4b: Email diversity per IP
+			collectEmailDiversitySignal(metadata.remoteIp, db, config),
 
-				// 2.5: Fingerprint-level signals (header reuse, TLS anomalies, latency mismatches)
-				collectFingerprintSignals(metadata, db, config),
+			// 2.5: Fingerprint-level signals (header reuse, TLS anomalies, latency mismatches)
+			collectFingerprintSignals(metadata, db, config),
 
-				// 2.6: Duplicate email check (no fail-open — duplicate detection is a correctness requirement)
-				db.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
-					.bind(sanitized.email)
-					.first<{ id: number; created_at: string }>()
-					.catch((err) => {
-						logger.error({ error: err }, 'Duplicate email check failed');
-						// Return null so scoring proceeds; the duplicate won't be caught this time
-						// but the submission will still be fraud-scored by other signals
-						return null;
-					}),
-			]);
+			// 2.6: Duplicate email check (no fail-open — duplicate detection is a correctness requirement)
+			db
+				.prepare('SELECT id, created_at FROM submissions WHERE email = ? LIMIT 1')
+				.bind(sanitized.email)
+				.first<{ id: number; created_at: string }>()
+				.catch((err) => {
+					logger.error({ error: err }, 'Duplicate email check failed');
+					// Return null so scoring proceeds; the duplicate won't be caught this time
+					// but the submission will still be fraud-scored by other signals
+					return null;
+				}),
+		]);
 
 		// Log signal results
 		if (emailFraudResult) {
@@ -744,48 +744,53 @@ app.post('/', async (c) => {
 					userMessage = `You have made too many submission attempts. Please wait ${waitTime} before trying again.`;
 			}
 
-			await addToBlacklist(db, {
-				email: sanitized.email,
-				ephemeralId: validation.ephemeralId || null,
-				ipAddress: metadata.remoteIp,
-				ja4: metadata.ja4 ?? null,
-				blockReason,
-				confidence: 'high',
-				expiresIn,
-				submissionCount: ephemeralSignals?.submissionCount || 1,
-				detectionType: detectionType || 'holistic_risk',
-				detectionMetadata: {
-					risk_score: finalRiskScore.total,
-					block_trigger: blockTrigger,
-					detection_type: detectionType,
-					warnings: allWarnings,
-					email_fraud: emailFraudResult
-						? {
-								pattern: emailFraudResult.signals.patternType,
-								markov_detected: emailFraudResult.signals.markovDetected,
-							}
-						: null,
-					ephemeral_signals: ephemeralSignals
-						? {
-								submissions: ephemeralSignals.submissionCount,
-								validations: ephemeralSignals.validationCount,
-								unique_ips: ephemeralSignals.uniqueIPCount,
-							}
-						: null,
-					ja4_signals: ja4Signals
-						? {
-								raw_score: ja4Signals.rawScore,
-								detection_layer: ja4Signals.detectionLayer,
-							}
-						: null,
-					fingerprint_signals: fingerprintSignals.details || null,
-					ip_rate_limit: ipRateLimitSignals || null,
-					detected_at: new Date().toISOString(),
-				},
-				erfid,
-				riskScore: finalRiskScore.total,
-				riskScoreBreakdown: finalRiskScore,
-			});
+			// Fail-open: blacklist write is non-fatal — the 429 response is still sent
+			try {
+				await addToBlacklist(db, {
+					email: sanitized.email,
+					ephemeralId: validation.ephemeralId || null,
+					ipAddress: metadata.remoteIp,
+					ja4: metadata.ja4 ?? null,
+					blockReason,
+					confidence: 'high',
+					expiresIn,
+					submissionCount: ephemeralSignals?.submissionCount || 1,
+					detectionType: detectionType || 'holistic_risk',
+					detectionMetadata: {
+						risk_score: finalRiskScore.total,
+						block_trigger: blockTrigger,
+						detection_type: detectionType,
+						warnings: allWarnings,
+						email_fraud: emailFraudResult
+							? {
+									pattern: emailFraudResult.signals.patternType,
+									markov_detected: emailFraudResult.signals.markovDetected,
+								}
+							: null,
+						ephemeral_signals: ephemeralSignals
+							? {
+									submissions: ephemeralSignals.submissionCount,
+									validations: ephemeralSignals.validationCount,
+									unique_ips: ephemeralSignals.uniqueIPCount,
+								}
+							: null,
+						ja4_signals: ja4Signals
+							? {
+									raw_score: ja4Signals.rawScore,
+									detection_layer: ja4Signals.detectionLayer,
+								}
+							: null,
+						fingerprint_signals: fingerprintSignals.details || null,
+						ip_rate_limit: ipRateLimitSignals || null,
+						detected_at: new Date().toISOString(),
+					},
+					erfid,
+					riskScore: finalRiskScore.total,
+					riskScoreBreakdown: finalRiskScore,
+				});
+			} catch (blacklistError) {
+				logger.error({ error: blacklistError, erfid }, 'Failed to add to blacklist — block still applied');
+			}
 
 			// Update early validation record (or insert new one if early log failed)
 			if (earlyValidationId) {

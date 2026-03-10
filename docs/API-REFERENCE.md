@@ -52,7 +52,7 @@ This document provides exhaustive details on every API endpoint, including reque
 **Protected endpoints (require X-API-KEY header):**
 
 - GET /api/analytics/\* (all analytics endpoints)
-- If `X-API-KEY` is **not** configured in the environment, analytics routes fall back to open access but log a warning (backward compatibility in code at `src/routes/analytics.ts`).
+- If `X-API-KEY` is **not** configured in the environment, analytics endpoints return **503 Service Unavailable** (fail-closed — PII is never exposed without authentication).
 
 **Implementation (middleware extract):**
 
@@ -61,11 +61,11 @@ const apiKey = c.req.header('X-API-KEY');
 const expectedKey = c.env['X-API-KEY'];
 
 if (!expectedKey) {
-	logger.warn('X-API-KEY not configured in environment - analytics unprotected');
-	return next();
+	logger.error('X-API-KEY not configured - analytics disabled');
+	return c.json({ success: false, error: 'Analytics unavailable - API key not configured' }, 503);
 }
 
-if (!apiKey || apiKey !== expectedKey) {
+if (!apiKey || !timingSafeCompare(apiKey, expectedKey)) {
 	return c.json({ success: false, error: 'Unauthorized - Invalid or missing X-API-KEY header' }, 401);
 }
 ```
@@ -90,7 +90,7 @@ if (!apiKey || apiKey !== expectedKey) {
 - Allowed headers: `Content-Type, X-API-KEY`
 - Exposed headers: `X-Request-Id` (mirrors the `erfid` for tracing)
 - `maxAge`: `86400` seconds
-- Security headers are added on **every** response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: geolocation=(), microphone=(), camera=()`, and a CSP of `default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;`.
+- Security headers are added on **every** response: `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: geolocation=(), microphone=(), camera=()`, and a CSP of `default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;`.
 
 ## Rate Limiting
 
@@ -481,10 +481,10 @@ Get user's country code based on IP geolocation.
 
 **Field details:**
 
-| Field       | Type    | Description                                                                                                     |
-| ----------- | ------- | --------------------------------------------------------------------------------------------------------------- |
-| success     | boolean | Always true                                                                                                     |
-| countryCode | string  | ISO 3166-1 alpha-2 country code (lowercase). Defaults to `"us"` when Cloudflare metadata is missing (local dev) |
+| Field       | Type    | Description                                                                                                               |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| success     | boolean | Always true                                                                                                               |
+| countryCode | string  | ISO 3166-1 alpha-2 country code (lowercase). Defaults to `"xx"` (unknown) when Cloudflare metadata is missing (local dev) |
 
 **Country codes:** See [ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)
 

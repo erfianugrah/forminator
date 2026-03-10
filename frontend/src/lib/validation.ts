@@ -46,12 +46,12 @@ export const formSchema = z.object({
 		.string()
 		.min(1, 'First name is required')
 		.max(50, 'First name must be less than 50 characters')
-		.regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
+		.regex(/^[\p{L}\s'-]+$/u, 'Only letters, spaces, hyphens, and apostrophes allowed'),
 	lastName: z
 		.string()
 		.min(1, 'Last name is required')
 		.max(50, 'Last name must be less than 50 characters')
-		.regex(/^[a-zA-Z\s'-]+$/, 'Only letters, spaces, hyphens, and apostrophes allowed'),
+		.regex(/^[\p{L}\s'-]+$/u, 'Only letters, spaces, hyphens, and apostrophes allowed'),
 	email: z.string().min(1, 'Email is required').email('Invalid email address').max(100, 'Email must be less than 100 characters'),
 	phone: z
 		.string()

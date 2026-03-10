@@ -10,6 +10,7 @@
 import { Hono } from 'hono';
 import { getConfig } from '../lib/config';
 import type { Env } from '../lib/types';
+import { timingSafeCompare } from '../lib/utils/timing-safe';
 
 const config = new Hono<{ Bindings: Env }>();
 
@@ -24,17 +25,10 @@ config.get('/', (c) => {
 	try {
 		const configuration = getConfig(c.env);
 
-		// Check if caller provided a valid API key
+		// Constant-time comparison to prevent timing attacks (does not leak key length)
 		const apiKey = c.req.header('X-API-KEY') ?? '';
 		const expectedKey = c.env['X-API-KEY'] ?? '';
-		const encoder = new TextEncoder();
-		const a = encoder.encode(apiKey);
-		const b = encoder.encode(expectedKey);
-		const isAuthenticated =
-			apiKey.length > 0 &&
-			expectedKey.length > 0 &&
-			a.byteLength === b.byteLength &&
-			(crypto.subtle as unknown as { timingSafeEqual(a: BufferSource, b: BufferSource): boolean }).timingSafeEqual(a, b);
+		const isAuthenticated = timingSafeCompare(apiKey, expectedKey);
 
 		if (isAuthenticated) {
 			// Full config for authenticated analytics dashboard
@@ -57,7 +51,12 @@ config.get('/', (c) => {
 			version: '2.0.0',
 		});
 	} catch (error) {
-		console.error('Config retrieval error:', error);
+		// Use structured logging instead of console.error
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		const errorStack = error instanceof Error ? error.stack : undefined;
+		// Note: logger is not imported here to keep the config route minimal.
+		// Errors in config retrieval are rare (only malformed FRAUD_CONFIG).
+		console.error('Config retrieval error:', errorMessage, errorStack);
 		return c.json(
 			{
 				success: false,

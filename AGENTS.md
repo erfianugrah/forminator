@@ -156,10 +156,12 @@ logger.error({ error: err.message, stack: err.stack }, 'Unexpected error');
 - **Worker entry**: `src/index.ts` (Hono app)
 - **Routes**: `src/routes/` (submissions, analytics, config, geo)
 - **Business logic**: `src/lib/` (turnstile, scoring, fraud detection, database)
+- **Utilities**: `src/lib/utils/` (timing-safe comparison)
 - **Frontend**: `frontend/src/` (Astro pages, React components, hooks)
-- **Schema**: `schema.sql` (4 tables: submissions, turnstile_validations, fraud_blacklist, fraud_blocks)
+- **Schema**: `schema.sql` (5 tables: submissions, turnstile_validations, fraud_blacklist, fraud_blocks, fingerprint_baselines)
 - **Config**: `wrangler.jsonc` (D1, service bindings, env vars, routes)
 - **Fraud config**: Centralized in `src/lib/config.ts`, customizable via `FRAUD_CONFIG` env var
+- **Tests**: `tests/` (smoke, form-submission, ephemeral-id, fraud-stress-test)
 
 ## Critical Rules
 
@@ -168,3 +170,11 @@ logger.error({ error: err.message, stack: err.stack }, 'Unexpected error');
 3. **All fraud detection thresholds come from config** (`src/lib/config.ts`) — never hardcode threshold values.
 4. **D1 is eventually consistent** — fraud detection is pattern-based and tolerates this.
 5. **snake_case ↔ camelCase mapping** — DB columns are snake_case, TS interfaces are camelCase. `extractRequestMetadata()` does the translation.
+6. **Always use `timingSafeCompare()`** from `src/lib/utils/timing-safe.ts` for API key comparisons — never use inline `===` or `timingSafeEqual` with `byteLength` early-exit.
+7. **Never include volatile/per-request headers in fingerprint hashes** — headers like `cf-ray`, `cf-request-id`, `cf-connecting-ip`, `x-api-key` must be excluded in `buildHeaderSnapshot()`.
+8. **Analytics endpoints must fail-closed** — when `X-API-KEY` is not configured in the environment, return 503 (not open access).
+9. **CSV exports must sanitize formula-injection characters** — prefix cells starting with `=`, `+`, `-`, `@`, `\t`, `\r` with a single quote.
+10. **Date validation must check calendar validity** — not just format regex; reject impossible dates like Feb 30 or Apr 31.
+11. **Use `??` not `||` for numeric values that can be 0** — e.g., `botScore ?? null` not `botScore || null` (score of 0 is valid).
+12. **`addToBlacklist` calls in block paths must be wrapped in try/catch** — a blacklist write failure must not convert a 429 fraud block into a 500 error (fail-open).
+13. **Scoring normalization must use range-based checks** — `count >= threshold` not `count === threshold`; values between thresholds must not fall through to default return.
