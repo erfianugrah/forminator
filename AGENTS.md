@@ -114,7 +114,7 @@ Custom error hierarchy in `src/lib/errors.ts`:
 - Route handlers: single `try/catch` wrapping entire handler, errors caught by `handleError(error, c)`.
 - `throw` typed errors — never return raw status codes manually.
 - Each error has a `userMessage` for client-facing responses.
-- **Fail-open**: all signal collectors including token reuse check, email fraud detection, ephemeral ID signals, fraud block logging. The Turnstile API still validates tokens cryptographically; the replay check degrades gracefully during DB outages.
+- **Fail-open**: all signal collectors including pre-validation blacklist check, token reuse check, email fraud detection, ephemeral ID signals, fraud block logging. The Turnstile API still validates tokens cryptographically; the replay check and blacklist check degrade gracefully during DB outages.
 
 ### Logging
 
@@ -161,7 +161,7 @@ logger.error({ error: err.message, stack: err.stack }, 'Unexpected error');
 - **Schema**: `schema.sql` (5 tables: submissions, turnstile_validations, fraud_blacklist, fraud_blocks, fingerprint_baselines)
 - **Config**: `wrangler.jsonc` (D1, service bindings, env vars, routes)
 - **Fraud config**: Centralized in `src/lib/config.ts`, customizable via `FRAUD_CONFIG` env var
-- **Tests**: `tests/` (smoke, form-submission, ephemeral-id, fraud-stress-test)
+- **Tests**: `tests/` (smoke, scoring, fraud-detection-e2e, form-submission, ephemeral-id, fraud-stress-test)
 
 ## Critical Rules
 

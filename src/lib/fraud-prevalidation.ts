@@ -63,14 +63,15 @@ export async function checkPreValidationBlock(
 	email: string | null, // Phase 2: Check email blacklist
 	db: D1Database,
 ): Promise<PreValidationResult> {
-	const now = toSQLiteDateTime(new Date());
+	try {
+		const now = toSQLiteDateTime(new Date());
 
-	// Check email blacklist first (if available)
-	// Phase 2: Email-based blacklisting for fraud detection
-	if (email) {
-		const emailBlacklistCheck = await db
-			.prepare(
-				`
+		// Check email blacklist first (if available)
+		// Phase 2: Email-based blacklisting for fraud detection
+		if (email) {
+			const emailBlacklistCheck = await db
+				.prepare(
+					`
 			SELECT * FROM fraud_blacklist
 			WHERE email = ?
 			AND expires_at > ?
@@ -78,43 +79,43 @@ export async function checkPreValidationBlock(
 			ORDER BY expires_at DESC
 			LIMIT 1
 		`,
-			)
-			.bind(email, now)
-			.first<BlacklistEntry>();
+				)
+				.bind(email, now)
+				.first<BlacklistEntry>();
 
-		if (emailBlacklistCheck) {
-			// Update last_seen_at
-			await db
-				.prepare(
-					`
+			if (emailBlacklistCheck) {
+				// Update last_seen_at
+				await db
+					.prepare(
+						`
 				UPDATE fraud_blacklist
 				SET last_seen_at = ?,
 					submission_count = submission_count + 1
 				WHERE id = ?
 			`,
-				)
-				.bind(now, emailBlacklistCheck.id)
-				.run();
+					)
+					.bind(now, emailBlacklistCheck.id)
+					.run();
 
-			const retryAfter = calculateCacheTime(emailBlacklistCheck.expires_at);
+				const retryAfter = calculateCacheTime(emailBlacklistCheck.expires_at);
 
-			return {
-				blocked: true,
-				reason: `Blacklisted email: ${emailBlacklistCheck.block_reason}`,
-				confidence: emailBlacklistCheck.detection_confidence,
-				cacheFor: retryAfter,
-				expiresAt: emailBlacklistCheck.expires_at,
-				retryAfter,
-				blacklistEntry: emailBlacklistCheck,
-			};
+				return {
+					blocked: true,
+					reason: `Blacklisted email: ${emailBlacklistCheck.block_reason}`,
+					confidence: emailBlacklistCheck.detection_confidence,
+					cacheFor: retryAfter,
+					expiresAt: emailBlacklistCheck.expires_at,
+					retryAfter,
+					blacklistEntry: emailBlacklistCheck,
+				};
+			}
 		}
-	}
 
-	// Check ephemeral ID blacklist (if available)
-	if (ephemeralId) {
-		const blacklistCheck = await db
-			.prepare(
-				`
+		// Check ephemeral ID blacklist (if available)
+		if (ephemeralId) {
+			const blacklistCheck = await db
+				.prepare(
+					`
 			SELECT * FROM fraud_blacklist
 			WHERE ephemeral_id = ?
 			AND expires_at > ?
@@ -122,43 +123,43 @@ export async function checkPreValidationBlock(
 			ORDER BY expires_at DESC
 			LIMIT 1
 		`,
-			)
-			.bind(ephemeralId, now)
-			.first<BlacklistEntry>();
+				)
+				.bind(ephemeralId, now)
+				.first<BlacklistEntry>();
 
-		if (blacklistCheck) {
-			// Update last_seen_at
-			await db
-				.prepare(
-					`
+			if (blacklistCheck) {
+				// Update last_seen_at
+				await db
+					.prepare(
+						`
 				UPDATE fraud_blacklist
 				SET last_seen_at = ?,
 					submission_count = submission_count + 1
 				WHERE id = ?
 			`,
-				)
-				.bind(now, blacklistCheck.id)
-				.run();
+					)
+					.bind(now, blacklistCheck.id)
+					.run();
 
-			const retryAfter = calculateCacheTime(blacklistCheck.expires_at);
+				const retryAfter = calculateCacheTime(blacklistCheck.expires_at);
 
-			return {
-				blocked: true,
-				reason: `Blacklisted ephemeral ID: ${blacklistCheck.block_reason}`,
-				confidence: blacklistCheck.detection_confidence,
-				cacheFor: retryAfter,
-				expiresAt: blacklistCheck.expires_at,
-				retryAfter,
-				blacklistEntry: blacklistCheck,
-			};
+				return {
+					blocked: true,
+					reason: `Blacklisted ephemeral ID: ${blacklistCheck.block_reason}`,
+					confidence: blacklistCheck.detection_confidence,
+					cacheFor: retryAfter,
+					expiresAt: blacklistCheck.expires_at,
+					retryAfter,
+					blacklistEntry: blacklistCheck,
+				};
+			}
 		}
-	}
 
-	// Check JA4 blacklist (if available)
-	if (ja4) {
-		const ja4BlacklistCheck = await db
-			.prepare(
-				`
+		// Check JA4 blacklist (if available)
+		if (ja4) {
+			const ja4BlacklistCheck = await db
+				.prepare(
+					`
 			SELECT * FROM fraud_blacklist
 			WHERE ja4 = ?
 			AND expires_at > ?
@@ -166,42 +167,42 @@ export async function checkPreValidationBlock(
 			ORDER BY expires_at DESC
 			LIMIT 1
 		`,
-			)
-			.bind(ja4, now)
-			.first<BlacklistEntry>();
+				)
+				.bind(ja4, now)
+				.first<BlacklistEntry>();
 
-		if (ja4BlacklistCheck) {
-			// Update last_seen_at
-			await db
-				.prepare(
-					`
+			if (ja4BlacklistCheck) {
+				// Update last_seen_at
+				await db
+					.prepare(
+						`
 				UPDATE fraud_blacklist
 				SET last_seen_at = ?,
 					submission_count = submission_count + 1
 				WHERE id = ?
 			`,
-				)
-				.bind(now, ja4BlacklistCheck.id)
-				.run();
+					)
+					.bind(now, ja4BlacklistCheck.id)
+					.run();
 
-			const retryAfter = calculateCacheTime(ja4BlacklistCheck.expires_at);
+				const retryAfter = calculateCacheTime(ja4BlacklistCheck.expires_at);
 
-			return {
-				blocked: true,
-				reason: `Blacklisted JA4 fingerprint: ${ja4BlacklistCheck.block_reason}`,
-				confidence: ja4BlacklistCheck.detection_confidence,
-				cacheFor: retryAfter,
-				expiresAt: ja4BlacklistCheck.expires_at,
-				retryAfter,
-				blacklistEntry: ja4BlacklistCheck,
-			};
+				return {
+					blocked: true,
+					reason: `Blacklisted JA4 fingerprint: ${ja4BlacklistCheck.block_reason}`,
+					confidence: ja4BlacklistCheck.detection_confidence,
+					cacheFor: retryAfter,
+					expiresAt: ja4BlacklistCheck.expires_at,
+					retryAfter,
+					blacklistEntry: ja4BlacklistCheck,
+				};
+			}
 		}
-	}
 
-	// Check IP blacklist
-	const ipBlacklistCheck = await db
-		.prepare(
-			`
+		// Check IP blacklist
+		const ipBlacklistCheck = await db
+			.prepare(
+				`
 		SELECT * FROM fraud_blacklist
 		WHERE ip_address = ?
 		AND expires_at > ?
@@ -209,41 +210,51 @@ export async function checkPreValidationBlock(
 		ORDER BY expires_at DESC
 		LIMIT 1
 	`,
-		)
-		.bind(remoteIp, now)
-		.first<BlacklistEntry>();
+			)
+			.bind(remoteIp, now)
+			.first<BlacklistEntry>();
 
-	if (ipBlacklistCheck) {
-		// Update last_seen_at
-		await db
-			.prepare(
-				`
+		if (ipBlacklistCheck) {
+			// Update last_seen_at
+			await db
+				.prepare(
+					`
 			UPDATE fraud_blacklist
 			SET last_seen_at = ?,
 				submission_count = submission_count + 1
 			WHERE id = ?
 		`,
-			)
-			.bind(now, ipBlacklistCheck.id)
-			.run();
+				)
+				.bind(now, ipBlacklistCheck.id)
+				.run();
 
-		const retryAfter = calculateCacheTime(ipBlacklistCheck.expires_at);
+			const retryAfter = calculateCacheTime(ipBlacklistCheck.expires_at);
 
+			return {
+				blocked: true,
+				reason: `Blacklisted IP: ${ipBlacklistCheck.block_reason}`,
+				confidence: ipBlacklistCheck.detection_confidence,
+				cacheFor: retryAfter,
+				expiresAt: ipBlacklistCheck.expires_at,
+				retryAfter,
+				blacklistEntry: ipBlacklistCheck,
+			};
+		}
+
+		// Not blacklisted
 		return {
-			blocked: true,
-			reason: `Blacklisted IP: ${ipBlacklistCheck.block_reason}`,
-			confidence: ipBlacklistCheck.detection_confidence,
-			cacheFor: retryAfter,
-			expiresAt: ipBlacklistCheck.expires_at,
-			retryAfter,
-			blacklistEntry: ipBlacklistCheck,
+			blocked: false,
+		};
+	} catch (error) {
+		// Fail-open: if D1 is unavailable, allow the request through.
+		// Other fraud detection layers (ephemeral ID, JA4, scoring) will still
+		// catch attackers downstream. A DB outage should degrade fraud detection,
+		// not block all legitimate users.
+		logger.error({ error, ephemeralId, remoteIp, ja4, email }, 'Pre-validation blacklist check failed — failing open');
+		return {
+			blocked: false,
 		};
 	}
-
-	// Not blacklisted
-	return {
-		blocked: false,
-	};
 }
 
 /**
@@ -363,7 +374,7 @@ export async function cleanupExpiredBlacklist(db: D1Database): Promise<number> {
 			.bind(now)
 			.run();
 
-		return result.meta?.changes || 0;
+		return result.meta?.changes ?? 0;
 	} catch (error) {
 		logger.error({ error }, 'Failed to cleanup blacklist');
 		return 0;

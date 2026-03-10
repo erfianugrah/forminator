@@ -322,11 +322,7 @@ async function queryJA4Activity(ja4: string, db: D1Database, timeWindowMinutes: 
  * @param currentEphemeralId Current request's ephemeral ID (to avoid double-counting)
  * @returns ClusteringAnalysis or null if no rows
  */
-function buildClusteringAnalysis(
-	ja4: string,
-	rows: JA4ActivityRow[],
-	currentEphemeralId?: string | null,
-): ClusteringAnalysis | null {
+function buildClusteringAnalysis(ja4: string, rows: JA4ActivityRow[], currentEphemeralId?: string | null): ClusteringAnalysis | null {
 	if (rows.length === 0) {
 		return null;
 	}
@@ -399,11 +395,7 @@ function analyzeJA4Clustering(
  * @param currentEphemeralId Current request's ephemeral ID
  * @returns Global clustering analysis or null
  */
-function analyzeJA4GlobalClustering(
-	ja4: string,
-	rows: JA4ActivityRow[],
-	currentEphemeralId?: string | null,
-): ClusteringAnalysis | null {
+function analyzeJA4GlobalClustering(ja4: string, rows: JA4ActivityRow[], currentEphemeralId?: string | null): ClusteringAnalysis | null {
 	return buildClusteringAnalysis(ja4, rows, currentEphemeralId);
 }
 
@@ -532,12 +524,12 @@ function generateWarnings(clustering: ClusteringAnalysis, velocity: VelocityAnal
 	// Global anomaly warnings
 	if (signals.highGlobalDistribution && clustering.ephemeralCount >= 2) {
 		warnings.push(
-			`Global anomaly: JA4 globally distributed (top ${((1 - (signals.ipsQuantile || 0)) * 100).toFixed(2)}%) but clustering locally`,
+			`Global anomaly: JA4 globally distributed (top ${((1 - (signals.ipsQuantile ?? 0)) * 100).toFixed(2)}%) but clustering locally`,
 		);
 	}
 
 	if (signals.highRequestVolume && clustering.ephemeralCount >= 2) {
-		warnings.push(`Bot pattern: High-volume JA4 (top ${((1 - (signals.reqsQuantile || 0)) * 100).toFixed(2)}%) with local clustering`);
+		warnings.push(`Bot pattern: High-volume JA4 (top ${((1 - (signals.reqsQuantile ?? 0)) * 100).toFixed(2)}%) with local clustering`);
 	}
 
 	return warnings;

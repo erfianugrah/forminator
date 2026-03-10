@@ -227,14 +227,14 @@ export async function collectEphemeralIdSignals(
 
 		// +1 for current attempt which hasn't been inserted into submissions yet
 		// (only the validation record exists at this point)
-		const submissionCount = (recentSubmissions?.count || 0) + 1;
+		const submissionCount = (recentSubmissions?.count ?? 0) + 1;
 
 		if (submissionCount >= config.detection.ephemeralIdSubmissionThreshold) {
 			warnings.push(`Multiple submissions detected (${submissionCount} total in 24h) - registration forms should only be submitted once`);
 		}
 
 		// No +1 needed — the early validation record is already counted
-		const validationCount = Math.max(1, recentValidations?.count || 0);
+		const validationCount = Math.max(1, recentValidations?.count ?? 0);
 
 		if (validationCount >= config.detection.validationFrequencyBlockThreshold) {
 			warnings.push(`Excessive validation attempts (${validationCount} in 1h) - possible automated attack`);
@@ -242,7 +242,7 @@ export async function collectEphemeralIdSignals(
 			warnings.push(`Multiple validation attempts detected (${validationCount} in 1h)`);
 		}
 
-		const ipCount = uniqueIps?.count || 0;
+		const ipCount = uniqueIps?.count ?? 0;
 
 		if (ipCount >= config.detection.ipDiversityThreshold && submissionCount > 0) {
 			warnings.push(`Multiple IPs for same ephemeral ID (${ipCount} IPs) - proxy rotation detected`);

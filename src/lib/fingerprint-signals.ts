@@ -2,6 +2,7 @@ import type { RequestMetadata } from './types';
 import type { FraudDetectionConfig } from './config';
 import logger from './logger';
 import { isFingerprintBaselineKnown, recordFingerprintBaseline } from './fingerprint-baseline';
+import { toSQLiteDateTime } from './utils/datetime';
 
 type FingerprintTrigger = 'header_fingerprint' | 'tls_anomaly' | 'latency_mismatch';
 
@@ -116,6 +117,7 @@ export async function collectFingerprintSignals(
 		// ---------------------------------------------------------------------
 		if (metadata.headersFingerprint) {
 			const { windowMinutes, minRequests, minDistinctIps, minDistinctJa4 } = config.fingerprint.headerReuse;
+			const windowStart = toSQLiteDateTime(new Date(Date.now() - windowMinutes * 60 * 1000));
 			const stats = await db
 				.prepare(
 					`WITH fp_samples AS (
@@ -124,13 +126,13 @@ export async function collectFingerprintSignals(
 						WHERE request_headers IS NOT NULL
 							AND extended_metadata IS NOT NULL
 							AND json_extract(extended_metadata, '$.headersFingerprint') = ?
-							AND created_at > datetime('now', ?)
+							AND created_at > ?
 						UNION ALL
 						SELECT remote_ip, ja4
 						FROM turnstile_validations
 						WHERE extended_metadata IS NOT NULL
 							AND json_extract(extended_metadata, '$.headersFingerprint') = ?
-							AND created_at > datetime('now', ?)
+							AND created_at > ?
 					)
 					SELECT
 						COUNT(*) as total,
@@ -138,7 +140,7 @@ export async function collectFingerprintSignals(
 						COUNT(DISTINCT ja4) as ja4_count
 					FROM fp_samples`,
 				)
-				.bind(metadata.headersFingerprint, `-${windowMinutes} minutes`, metadata.headersFingerprint, `-${windowMinutes} minutes`)
+				.bind(metadata.headersFingerprint, windowStart, metadata.headersFingerprint, windowStart)
 				.first<{ total: number | null; ip_count: number | null; ja4_count: number | null }>();
 
 			const total = stats?.total ?? 0;
@@ -147,7 +149,17 @@ export async function collectFingerprintSignals(
 			details.headerReuse = { total, ipCount, ja4Count };
 
 			if (total >= minRequests && ipCount >= minDistinctIps && ja4Count >= minDistinctJa4) {
-				headerFingerprintScore = 100;
+				// Gradient scoring: scale with how far above each threshold we are.
+				// Each factor starts at 1.0 (at threshold) and increases linearly.
+				// Combined multiplier produces 50-100 range instead of binary 0/100.
+				const totalFactor = Math.min(total / minRequests, 3); // cap at 3x
+				const ipFactor = Math.min(ipCount / minDistinctIps, 3);
+				const ja4Factor = Math.min(ja4Count / minDistinctJa4, 3);
+				// Average of factors: 1.0 → minimum (just met thresholds), 3.0 → maximum (3x all thresholds)
+				const avgFactor = (totalFactor + ipFactor + ja4Factor) / 3;
+				// Map factor range [1.0, 3.0] to score range [50, 100]
+				headerFingerprintScore = Math.round(50 + ((avgFactor - 1) / 2) * 50);
+				headerFingerprintScore = Math.min(100, Math.max(50, headerFingerprintScore));
 				warnings.push(
 					`Header fingerprint reused ${total} times across ${ipCount} IPs and ${ja4Count} JA4 fingerprints in ${windowMinutes} minutes`,
 				);
@@ -164,7 +176,7 @@ export async function collectFingerprintSignals(
 		const tlsFingerprintKey = metadata.tlsClientExtensionsSha1;
 		if (metadata.ja4 && tlsFingerprintKey) {
 			const { baselineHours, minJa4Observations } = config.fingerprint.tlsAnomaly;
-			const window = `-${baselineHours} hours`;
+			const windowStart = toSQLiteDateTime(new Date(Date.now() - baselineHours * 60 * 60 * 1000));
 
 			const baselineKnown = await isFingerprintBaselineKnown(db, 'tls', tlsFingerprintKey, metadata.ja4, metadata.asn);
 
@@ -177,17 +189,17 @@ export async function collectFingerprintSignals(
 								SELECT ja4
 								FROM submissions
 								WHERE ja4 = ?
-									AND created_at > datetime('now', ?)
+									AND created_at > ?
 								UNION ALL
 								SELECT ja4
 								FROM turnstile_validations
 								WHERE ja4 = ?
-									AND created_at > datetime('now', ?)
+									AND created_at > ?
 							)
 							SELECT COUNT(*) as count
 							FROM ja4_samples`,
 					)
-					.bind(metadata.ja4, window, metadata.ja4, window)
+					.bind(metadata.ja4, windowStart, metadata.ja4, windowStart)
 					.first<{ count: number | null }>();
 
 				const ja4Count = ja4CountResult?.count ?? 0;
@@ -201,27 +213,33 @@ export async function collectFingerprintSignals(
 									WHERE ja4 = ?
 										AND extended_metadata IS NOT NULL
 										AND json_extract(extended_metadata, '$.tlsClientExtensionsSha1') = ?
-										AND created_at > datetime('now', ?)
+										AND created_at > ?
 									UNION ALL
 									SELECT ja4
 									FROM turnstile_validations
 									WHERE ja4 = ?
 										AND extended_metadata IS NOT NULL
 										AND json_extract(extended_metadata, '$.tlsClientExtensionsSha1') = ?
-										AND created_at > datetime('now', ?)
+										AND created_at > ?
 								)
 								SELECT COUNT(*) as count
 								FROM tls_pairs`,
 						)
-						.bind(metadata.ja4, tlsFingerprintKey, window, metadata.ja4, tlsFingerprintKey, window)
+						.bind(metadata.ja4, tlsFingerprintKey, windowStart, metadata.ja4, tlsFingerprintKey, windowStart)
 						.first<{ count: number | null }>();
 
 					const pairCount = pairResult?.count ?? 0;
 					details.tlsAnomaly = { ja4Count, pairCount };
 
 					if (pairCount === 0) {
-						tlsAnomalyScore = 100;
-						warnings.push('TLS fingerprint does not match historical samples for this JA4');
+						// Gradient scoring: higher confidence when more baseline samples exist.
+						// With exactly minJa4Observations (5), score 70 (moderate confidence).
+						// At 2x observations (10+), score 100 (high confidence).
+						const observationRatio = Math.min(ja4Count / minJa4Observations, 2);
+						// Map ratio [1.0, 2.0] to score [70, 100]
+						tlsAnomalyScore = Math.round(70 + ((observationRatio - 1) / 1) * 30);
+						tlsAnomalyScore = Math.min(100, Math.max(70, tlsAnomalyScore));
+						warnings.push(`TLS fingerprint does not match historical samples for this JA4 (${ja4Count} baseline observations)`);
 					} else {
 						await recordFingerprintBaseline(db, 'tls', tlsFingerprintKey, metadata.ja4, metadata.asn, {
 							remoteIp: metadata.remoteIp,

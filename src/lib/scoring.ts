@@ -166,7 +166,7 @@ export function calculateNormalizedRiskScore(
 	};
 
 	// Email Fraud (markov-mail, already 0-100)
-	const emailScore = checks.emailRiskScore || 0;
+	const emailScore = checks.emailRiskScore ?? 0;
 	const emailWeight = config.risk.weights.emailFraud;
 	components.emailFraud = {
 		score: emailScore,
@@ -246,7 +246,7 @@ export function calculateNormalizedRiskScore(
 	};
 
 	// IP Rate Limit
-	const ipRateLimitScore = checks.ipRateLimitScore || 0; // Already normalized to 0-100
+	const ipRateLimitScore = checks.ipRateLimitScore ?? 0; // Already normalized to 0-100
 	const ipRateLimitWeight = config.risk.weights.ipRateLimit;
 	components.ipRateLimit = {
 		score: ipRateLimitScore,
@@ -265,8 +265,8 @@ export function calculateNormalizedRiskScore(
 	};
 
 	// Header Fingerprint Reuse (0-100 provided by collector)
-	const headerFingerprintScore = clampScore(checks.headerFingerprintScore || 0);
-	const headerWeight = config.risk.weights.headerFingerprint || 0;
+	const headerFingerprintScore = clampScore(checks.headerFingerprintScore ?? 0);
+	const headerWeight = config.risk.weights.headerFingerprint ?? 0;
 	components.headerFingerprint = {
 		score: headerFingerprintScore,
 		weight: headerWeight,
@@ -280,8 +280,8 @@ export function calculateNormalizedRiskScore(
 	};
 
 	// TLS Anomaly
-	const tlsAnomalyScore = clampScore(checks.tlsAnomalyScore || 0);
-	const tlsWeight = config.risk.weights.tlsAnomaly || 0;
+	const tlsAnomalyScore = clampScore(checks.tlsAnomalyScore ?? 0);
+	const tlsWeight = config.risk.weights.tlsAnomaly ?? 0;
 	components.tlsAnomaly = {
 		score: tlsAnomalyScore,
 		weight: tlsWeight,
@@ -295,8 +295,8 @@ export function calculateNormalizedRiskScore(
 	};
 
 	// Latency / Device mismatch
-	const latencyMismatchScore = clampScore(checks.latencyMismatchScore || 0);
-	const latencyWeight = config.risk.weights.latencyMismatch || 0;
+	const latencyMismatchScore = clampScore(checks.latencyMismatchScore ?? 0);
+	const latencyWeight = config.risk.weights.latencyMismatch ?? 0;
 	components.latencyMismatch = {
 		score: latencyMismatchScore,
 		weight: latencyWeight,

@@ -66,7 +66,7 @@ export async function collectEmailDiversitySignal(
 	db: D1Database,
 	config: FraudDetectionConfig,
 ): Promise<{ distinctEmails: number; riskScore: number; warning?: string }> {
-	const timeWindowSeconds = config.detection.ipRateLimitWindow || 3600;
+	const timeWindowSeconds = config.detection.ipRateLimitWindow ?? 3600;
 	const timeAgo = toSQLiteDateTime(new Date(Date.now() - timeWindowSeconds * 1000));
 
 	try {
@@ -80,7 +80,7 @@ export async function collectEmailDiversitySignal(
 			.bind(remoteIp, timeAgo)
 			.first<{ count: number }>();
 
-		const distinctEmails = (result?.count || 0) + 1; // +1 for current submission
+		const distinctEmails = (result?.count ?? 0) + 1; // +1 for current submission
 
 		let riskScore: number;
 		if (distinctEmails <= 1) {
@@ -108,8 +108,8 @@ export async function collectIPRateLimitSignals(
 	db: D1Database,
 	config: FraudDetectionConfig,
 ): Promise<IPRateLimitSignals> {
-	const timeWindowSeconds = config.detection.ipRateLimitWindow || 3600; // Default 1 hour
-	const threshold = config.detection.ipRateLimitThreshold || 3; // Default 3 for risk calculation
+	const timeWindowSeconds = config.detection.ipRateLimitWindow ?? 3600; // Default 1 hour
+	const threshold = config.detection.ipRateLimitThreshold ?? 3; // Default 3 for risk calculation
 
 	const timeAgo = toSQLiteDateTime(new Date(Date.now() - timeWindowSeconds * 1000));
 
@@ -127,22 +127,28 @@ export async function collectIPRateLimitSignals(
 			.bind(remoteIp, timeAgo, remoteIp, timeAgo)
 			.first<{ count: number }>();
 
-		const submissionCount = result?.count || 0;
+		const submissionCount = result?.count ?? 0;
 		const effectiveCount = submissionCount + 1; // +1 for current submission
 
-		// Calculate risk score (non-linear scaling for better sensitivity)
-		// count=1 → 0%, count=2 → 25%, count=3 → 50%, count=4 → 75%, count=5+ → 100%
+		// Calculate risk score relative to the configurable threshold.
+		// Steps are derived from `threshold` so that tuning the config actually
+		// changes scoring behaviour, not just warning text.
+		//   count <= 1           → 0%   (first-time visitor)
+		//   count == threshold-1 → 25%  (legitimate retry)
+		//   count == threshold   → 50%  (at threshold — suspicious)
+		//   count == threshold+1 → 75%  (above threshold — very suspicious)
+		//   count >= threshold+2 → 100% (well above — definite attack)
 		let riskScore: number;
-		if (effectiveCount === 1) {
+		if (effectiveCount <= 1) {
 			riskScore = 0; // First submission
-		} else if (effectiveCount === 2) {
-			riskScore = 25; // Legitimate retry
-		} else if (effectiveCount === 3) {
-			riskScore = 50; // Multiple retries (suspicious)
-		} else if (effectiveCount === 4) {
-			riskScore = 75; // High frequency (very suspicious)
+		} else if (effectiveCount < threshold) {
+			riskScore = 25; // Below threshold — legitimate retry
+		} else if (effectiveCount === threshold) {
+			riskScore = 50; // At threshold (suspicious)
+		} else if (effectiveCount === threshold + 1) {
+			riskScore = 75; // Above threshold (very suspicious)
 		} else {
-			riskScore = 100; // Extreme frequency (definite attack)
+			riskScore = 100; // Well above threshold (definite attack)
 		}
 
 		const warnings: string[] = [];

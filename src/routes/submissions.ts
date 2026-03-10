@@ -86,7 +86,7 @@ async function getOffenseCount(
 		.bind(...bindings, oneDayAgo)
 		.first<{ count: number }>();
 
-	return (result?.count || 0) + 1; // +1 for current offense
+	return (result?.count ?? 0) + 1; // +1 for current offense
 }
 
 /**
@@ -440,7 +440,7 @@ app.post('/', async (c) => {
 		// normalizations work correctly; here we focus on testable signals (ephemeral ID,
 		// email fraud, validation frequency, duplicate detection).
 		const combinedIpRiskScore = skipTurnstile ? 0 : rawCombinedIpRiskScore;
-		const effectiveJa4RawScore = skipTurnstile ? 0 : ja4Signals?.rawScore || 0;
+		const effectiveJa4RawScore = skipTurnstile ? 0 : (ja4Signals?.rawScore ?? 0);
 		const effectiveFingerprintSignals = skipTurnstile
 			? {
 					headerFingerprintScore: 0,
@@ -488,7 +488,7 @@ app.post('/', async (c) => {
 				.bind(sanitized.email, metadata.remoteIp, twentyFourHoursAgo)
 				.first<{ count: number }>();
 
-			const attemptCount = (duplicateAttempts?.count || 0) + 1;
+			const attemptCount = (duplicateAttempts?.count ?? 0) + 1;
 
 			if (attemptCount >= 3) {
 				// Repeated duplicate attempts (3+) = fraud pattern
@@ -602,7 +602,7 @@ app.post('/', async (c) => {
 		const riskScore = calculateNormalizedRiskScore(
 			{
 				tokenReplay: false, // Already handled in Phase 1
-				emailRiskScore: emailFraudResult?.riskScore || 0,
+				emailRiskScore: emailFraudResult?.riskScore ?? 0,
 				ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
 				validationCount: ephemeralSignals?.validationCount || 1,
 				uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
@@ -632,7 +632,7 @@ app.post('/', async (c) => {
 		let detectionType: string | null = null;
 
 		// Special case: validation burst with few submissions (many token attempts, few posts)
-		const validationBurst = (ephemeralSignals?.validationCount || 0) >= 5 && (ephemeralSignals?.submissionCount || 0) < 2;
+		const validationBurst = (ephemeralSignals?.validationCount ?? 0) >= 5 && (ephemeralSignals?.submissionCount ?? 0) < 2;
 
 		if (emailFraudResult && emailFraudResult.decision === 'block') {
 			blockTrigger = 'email_fraud';
@@ -666,7 +666,7 @@ app.post('/', async (c) => {
 			? calculateNormalizedRiskScore(
 					{
 						tokenReplay: false,
-						emailRiskScore: emailFraudResult?.riskScore || 0,
+						emailRiskScore: emailFraudResult?.riskScore ?? 0,
 						ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
 						validationCount: ephemeralSignals?.validationCount || 1,
 						uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
@@ -984,10 +984,10 @@ app.delete('/test-cleanup', async (c) => {
 		logger.info(
 			{
 				ip,
-				blacklistDeleted: blacklistResult.meta?.changes || 0,
-				blocksDeleted: blocksResult.meta?.changes || 0,
-				submissionsDeleted: submissionsResult.meta?.changes || 0,
-				validationsDeleted: validationsResult.meta?.changes || 0,
+				blacklistDeleted: blacklistResult.meta?.changes ?? 0,
+				blocksDeleted: blocksResult.meta?.changes ?? 0,
+				submissionsDeleted: submissionsResult.meta?.changes ?? 0,
+				validationsDeleted: validationsResult.meta?.changes ?? 0,
 			},
 			'Test cleanup completed',
 		);
@@ -995,10 +995,10 @@ app.delete('/test-cleanup', async (c) => {
 		return c.json({
 			success: true,
 			cleaned: {
-				blacklist: blacklistResult.meta?.changes || 0,
-				blocks: blocksResult.meta?.changes || 0,
-				submissions: submissionsResult.meta?.changes || 0,
-				validations: validationsResult.meta?.changes || 0,
+				blacklist: blacklistResult.meta?.changes ?? 0,
+				blocks: blocksResult.meta?.changes ?? 0,
+				submissions: submissionsResult.meta?.changes ?? 0,
+				validations: validationsResult.meta?.changes ?? 0,
 			},
 		});
 	} catch (error) {
