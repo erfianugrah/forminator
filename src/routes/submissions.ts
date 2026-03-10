@@ -251,8 +251,13 @@ app.post('/', async (c) => {
 
 			validation = await validateTurnstileToken(turnstileToken, metadata.remoteIp, secretKey);
 		} else {
-			validation = createMockValidation(metadata.remoteIp, 'localhost');
-			tokenHash = hashToken(`test-${Date.now()}`);
+			// In bypass mode, allow tests to pin the ephemeral ID via X-Test-Ephemeral-Id header.
+			// This enables integration tests to exercise ephemeral-ID-based fraud signals
+			// (submission count, validation frequency, IP diversity) which otherwise get unique
+			// IDs per call and always score at baseline.
+			const testEphemeralId = c.req.header('X-Test-Ephemeral-Id') || undefined;
+			validation = createMockValidation(metadata.remoteIp, 'localhost', testEphemeralId);
+			tokenHash = hashToken(`test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 		}
 
 		// Check Turnstile validation result (definitive if failed)
@@ -427,8 +432,25 @@ app.post('/', async (c) => {
 		}
 
 		// Combine IP rate limit with email diversity — take the higher risk signal
-		const combinedIpRiskScore = Math.max(ipRateLimitSignals.riskScore, emailDiversitySignal.riskScore);
+		const rawCombinedIpRiskScore = Math.max(ipRateLimitSignals.riskScore, emailDiversitySignal.riskScore);
 		const combinedIpWarnings = [...ipRateLimitSignals.warnings, ...(emailDiversitySignal.warning ? [emailDiversitySignal.warning] : [])];
+
+		// In bypass mode, suppress Cloudflare-dependent signals (JA4, IP rate, fingerprints)
+		// that can't be controlled or reset by tests. The scoring unit tests prove these
+		// normalizations work correctly; here we focus on testable signals (ephemeral ID,
+		// email fraud, validation frequency, duplicate detection).
+		const combinedIpRiskScore = skipTurnstile ? 0 : rawCombinedIpRiskScore;
+		const effectiveJa4RawScore = skipTurnstile ? 0 : ja4Signals?.rawScore || 0;
+		const effectiveFingerprintSignals = skipTurnstile
+			? {
+					headerFingerprintScore: 0,
+					tlsAnomalyScore: 0,
+					latencyMismatchScore: 0,
+					warnings: [] as string[],
+					trigger: undefined as string | undefined,
+					detectionType: undefined as string | undefined,
+				}
+			: fingerprintSignals;
 
 		logger.info(
 			{
@@ -584,11 +606,11 @@ app.post('/', async (c) => {
 				ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
 				validationCount: ephemeralSignals?.validationCount || 1,
 				uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
-				ja4RawScore: ja4Signals?.rawScore || 0,
+				ja4RawScore: effectiveJa4RawScore,
 				ipRateLimitScore: combinedIpRiskScore,
-				headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
-				tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
-				latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
+				headerFingerprintScore: effectiveFingerprintSignals.headerFingerprintScore,
+				tlsAnomalyScore: effectiveFingerprintSignals.tlsAnomalyScore,
+				latencyMismatchScore: effectiveFingerprintSignals.latencyMismatchScore,
 			},
 			config,
 		);
@@ -627,10 +649,10 @@ app.post('/', async (c) => {
 		} else if (ephemeralSignals && ephemeralSignals.uniqueIPCount >= config.detection.ipDiversityThreshold) {
 			blockTrigger = 'ip_diversity';
 			detectionType = 'ephemeral_id_tracking'; // Layer 2: Device tracking (IP diversity)
-		} else if (ja4Signals && ja4Signals.detectionType) {
+		} else if (!skipTurnstile && ja4Signals && ja4Signals.detectionType) {
 			blockTrigger = 'ja4_session_hopping';
 			detectionType = 'ja4_fingerprinting'; // Layer 4: TLS fingerprinting
-		} else if (fingerprintSignals.trigger) {
+		} else if (!skipTurnstile && fingerprintSignals.trigger) {
 			blockTrigger = fingerprintSignals.trigger;
 			detectionType = fingerprintSignals.detectionType || 'fingerprint_anomaly';
 		}
@@ -648,11 +670,11 @@ app.post('/', async (c) => {
 						ephemeralIdCount: ephemeralSignals?.submissionCount || 1,
 						validationCount: ephemeralSignals?.validationCount || 1,
 						uniqueIPCount: ephemeralSignals?.uniqueIPCount || 1,
-						ja4RawScore: ja4Signals?.rawScore || 0,
+						ja4RawScore: effectiveJa4RawScore,
 						ipRateLimitScore: combinedIpRiskScore,
-						headerFingerprintScore: fingerprintSignals.headerFingerprintScore,
-						tlsAnomalyScore: fingerprintSignals.tlsAnomalyScore,
-						latencyMismatchScore: fingerprintSignals.latencyMismatchScore,
+						headerFingerprintScore: effectiveFingerprintSignals.headerFingerprintScore,
+						tlsAnomalyScore: effectiveFingerprintSignals.tlsAnomalyScore,
+						latencyMismatchScore: effectiveFingerprintSignals.latencyMismatchScore,
 						blockTrigger,
 					},
 					config,
@@ -918,6 +940,67 @@ app.post('/', async (c) => {
 			},
 			201,
 		);
+	} catch (error) {
+		return handleError(error, c);
+	}
+});
+
+// ========== TEST CLEANUP ENDPOINT ==========
+// Only available when ALLOW_TESTING_BYPASS=true and NOT in production.
+// Clears fraud state for a given IP so e2e tests start with a clean slate.
+app.delete('/test-cleanup', async (c) => {
+	try {
+		const allowBypass = c.env.ALLOW_TESTING_BYPASS === 'true';
+		const isProduction = c.env.ENVIRONMENT === 'production';
+		const apiKey = c.req.header('X-API-KEY');
+		const expectedKey = c.env['X-API-KEY'];
+		const apiKeyValid = apiKey && expectedKey ? timingSafeCompare(apiKey, expectedKey) : false;
+
+		if (!allowBypass || isProduction || !apiKeyValid) {
+			return c.json({ error: 'Not available' }, 404);
+		}
+
+		// Default to the caller's own IP if not specified
+		const ip = c.req.query('ip') || c.req.header('CF-Connecting-IP') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+		if (!ip) {
+			return c.json({ error: 'Could not determine IP address' }, 400);
+		}
+
+		const db = c.env.DB;
+
+		// Order matters: turnstile_validations has FK → submissions, so delete validations first
+		// Clear turnstile validations from this IP to reset validation frequency
+		const validationsResult = await db.prepare('DELETE FROM turnstile_validations WHERE remote_ip = ?').bind(ip).run();
+
+		// Clear recent submissions from this IP to reset IP rate limiting
+		const submissionsResult = await db.prepare('DELETE FROM submissions WHERE remote_ip = ?').bind(ip).run();
+
+		// Clear blacklist entries for this IP
+		const blacklistResult = await db.prepare('DELETE FROM fraud_blacklist WHERE ip_address = ?').bind(ip).run();
+
+		// Clear fraud blocks for this IP
+		const blocksResult = await db.prepare('DELETE FROM fraud_blocks WHERE remote_ip = ?').bind(ip).run();
+
+		logger.info(
+			{
+				ip,
+				blacklistDeleted: blacklistResult.meta?.changes || 0,
+				blocksDeleted: blocksResult.meta?.changes || 0,
+				submissionsDeleted: submissionsResult.meta?.changes || 0,
+				validationsDeleted: validationsResult.meta?.changes || 0,
+			},
+			'Test cleanup completed',
+		);
+
+		return c.json({
+			success: true,
+			cleaned: {
+				blacklist: blacklistResult.meta?.changes || 0,
+				blocks: blocksResult.meta?.changes || 0,
+				submissions: submissionsResult.meta?.changes || 0,
+				validations: validationsResult.meta?.changes || 0,
+			},
+		});
 	} catch (error) {
 		return handleError(error, c);
 	}

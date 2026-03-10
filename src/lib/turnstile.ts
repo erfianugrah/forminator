@@ -185,39 +185,42 @@ export async function collectEphemeralIdSignals(
 			// The write-before-read pattern inserts into turnstile_validations, NOT submissions.
 			// The current request has NOT been inserted into submissions yet (that happens after
 			// scoring in submissions.ts), so we add +1 to account for the current attempt.
-			db.prepare(
-				`SELECT COUNT(*) as count
+			db
+				.prepare(
+					`SELECT COUNT(*) as count
 				 FROM submissions
 				 WHERE ephemeral_id = ?
 				 AND created_at > ?`,
-			)
+				)
 				.bind(ephemeralId, oneDayAgo)
 				.first<{ count: number }>(),
 
 			// Signal 2: Validation frequency (1h window for rapid-fire detection)
 			// The current request's validation record is already in the DB
 			// (write-before-read pattern) so the COUNT includes this request.
-			db.prepare(
-				`SELECT COUNT(*) as count
+			db
+				.prepare(
+					`SELECT COUNT(*) as count
 				 FROM turnstile_validations
 				 WHERE ephemeral_id = ?
 				 AND created_at > ?`,
-			)
+				)
 				.bind(ephemeralId, oneHourAgo)
 				.first<{ count: number }>(),
 
 			// Signal 3: IP diversity (24h window)
 			// Query both submissions AND turnstile_validations to catch proxy rotation
 			// attacks that may not result in successful submissions
-			db.prepare(
-				`SELECT COUNT(DISTINCT remote_ip) as count FROM (
+			db
+				.prepare(
+					`SELECT COUNT(DISTINCT remote_ip) as count FROM (
 					SELECT remote_ip FROM submissions
 					WHERE ephemeral_id = ? AND created_at > ?
 					UNION
 					SELECT remote_ip FROM turnstile_validations
 					WHERE ephemeral_id = ? AND created_at > ?
 				)`,
-			)
+				)
 				.bind(ephemeralId, oneDayAgo, ephemeralId, oneDayAgo)
 				.first<{ count: number }>(),
 		]);
@@ -281,9 +284,18 @@ export async function collectEphemeralIdSignals(
  * This allows automated testing without solving Turnstile CAPTCHA
  * while still running all fraud detection layers
  */
-export function createMockValidation(ip: string, hostname: string = 'test'): TurnstileValidationResult {
-	// Generate unique ephemeral ID for each test
-	const mockEphemeralId = `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+/**
+ * Create a mock Turnstile validation result for testing bypass mode.
+ *
+ * @param ip - Remote IP address
+ * @param hostname - Hostname for the mock validation (default: 'test')
+ * @param ephemeralId - Optional fixed ephemeral ID. When omitted, a unique ID is generated
+ *   per call. Pass a stable value to exercise ephemeral-ID-based fraud signals
+ *   (submission count, validation frequency, IP diversity) in integration tests.
+ * @returns Mock validation result matching TurnstileValidationResult shape
+ */
+export function createMockValidation(ip: string, hostname: string = 'test', ephemeralId?: string): TurnstileValidationResult {
+	const mockEphemeralId = ephemeralId || `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 	return {
 		valid: true,
