@@ -486,6 +486,7 @@ wrangler deploy
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Complete architecture and design decisions
 - **[docs/SECURITY.md](./docs/SECURITY.md)** - Security implementation details
 - **[docs/API-REFERENCE.md](./docs/API-REFERENCE.md)** - Complete API documentation for all endpoints
+- **[docs/abuse-ops.md](./docs/abuse-ops.md)** - Abuse-operations framework (facets/intents/first-principles), verified-gaps audit, and improvement roadmap
 
 ### Features (`docs/`)
 
