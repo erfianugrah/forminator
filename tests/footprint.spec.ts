@@ -24,7 +24,7 @@ import {
 	type Indicator,
 } from '../src/lib/footprint';
 
-// A 5-indicator cryptomining campaign footprint (cf. the Heroku Monero case:
+// A 5-indicator cryptomining campaign footprint (illustrative:
 // Tor exit at signup + free email provider + face-rolled email pattern +
 // identical app + CPU pegging). pivotFloor defaults to ceil(5*0.6)=3.
 const miner: Footprint = {
