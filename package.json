@@ -22,7 +22,8 @@
 		"test:basic": "playwright test tests/form-submission.spec.ts tests/ephemeral-id.spec.ts",
 		"test:e2e": "playwright test tests/fraud-detection-e2e.spec.ts",
 		"test:e2e:headed": "playwright test tests/fraud-detection-e2e.spec.ts --headed",
-		"test:scoring": "playwright test tests/scoring.spec.ts"
+		"test:scoring": "playwright test tests/scoring.spec.ts",
+		"test:footprint": "playwright test tests/footprint.spec.ts"
 	},
 	"dependencies": {
 		"hono": "^4.7.12",
