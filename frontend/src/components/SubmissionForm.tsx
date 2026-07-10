@@ -51,7 +51,7 @@ export default function SubmissionForm() {
 	} | null>(null);
 
 	const turnstileRef = useRef<TurnstileWidgetHandle>(null);
-	const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const hasSubmittedRef = useRef(false);
 	const pendingFormDataRef = useRef<FormData | null>(null);
 

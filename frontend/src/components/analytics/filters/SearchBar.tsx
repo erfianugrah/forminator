@@ -14,7 +14,7 @@ interface SearchBarProps {
  */
 export function SearchBar({ value, onChange, placeholder = 'Search by email, name, or IP...', className = '' }: SearchBarProps) {
 	const [localValue, setLocalValue] = useState(value);
-	const timerRef = useRef<NodeJS.Timeout | null>(null);
+	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Cleanup timer on unmount
 	useEffect(() => {
