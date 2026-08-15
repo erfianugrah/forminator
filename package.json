@@ -26,17 +26,17 @@
 		"test:footprint": "playwright test tests/footprint.spec.ts"
 	},
 	"dependencies": {
-		"hono": "^4.7.12",
-		"pino": "^9.7.0",
-		"prettier": "^3.8.1",
-		"zod": "^3.24.1"
+		"hono": "^4.13.1",
+		"pino": "^10.3.1",
+		"prettier": "^3.9.6",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20250107.0",
-		"@playwright/test": "^1.56.1",
+		"@cloudflare/workers-types": "^5.20260812.1",
+		"@playwright/test": "^1.62.1",
 		"playwright-extra": "^4.3.6",
 		"puppeteer-extra-plugin-stealth": "^2.11.2",
-		"typescript": "^5.9.3",
-		"wrangler": "^4.47.0"
+		"typescript": "^7.0.2",
+		"wrangler": "^4.121.0"
 	}
 }
